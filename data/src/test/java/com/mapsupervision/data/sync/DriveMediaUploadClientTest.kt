@@ -124,4 +124,21 @@ class DriveMediaUploadClientTest {
 
         assertEquals("1970-01-01 07.00.00 - 123 Tran Hung Dao Quan 1 - Ghi chu test.jpg", name)
     }
+
+    @Test
+    fun buildDriveFailureMessage_explainsServiceAccountQuotaLimit() {
+        val client = DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        val message = client.buildDriveFailureMessage(
+            action = "Failed to upload Drive media multipart",
+            statusCode = 403,
+            responseText = """{"error":{"errors":[{"reason":"storageQuotaExceeded","message":"Service Accounts do not have storage quota."}]}}"""
+        )
+
+        assertTrue(message.contains("Shared drive"))
+        assertTrue(message.contains("Service account cannot upload there"))
+    }
 }

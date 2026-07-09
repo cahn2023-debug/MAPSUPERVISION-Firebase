@@ -280,7 +280,7 @@ internal open class DriveMediaUploadClient(
         httpClient.newCall(request).execute().use { response ->
             val responseText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error("Failed to obtain Google Drive access token (${response.code}): $responseText")
+                error(buildDriveFailureMessage("Failed to obtain Google Drive access token", response.code, responseText))
             }
             val json = Json.parseToJsonElement(responseText).jsonObject
             return json["access_token"]?.jsonPrimitive?.content.orEmpty()
@@ -469,7 +469,7 @@ internal open class DriveMediaUploadClient(
         httpClient.newCall(requestBuilder.build()).execute().use { response ->
             val responseText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error("Failed to upload Drive media multipart (${response.code}): $responseText")
+                error(buildDriveFailureMessage("Failed to upload Drive media multipart", response.code, responseText))
             }
             return responseText
         }
@@ -514,10 +514,23 @@ internal open class DriveMediaUploadClient(
         httpClient.newCall(builder.build()).execute().use { response ->
             val responseText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                error("Google Drive request failed (${response.code}) for $url: $responseText")
+                error(buildDriveFailureMessage("Google Drive request failed for $url", response.code, responseText))
             }
             return responseText
         }
+    }
+
+    internal fun buildDriveFailureMessage(action: String, statusCode: Int, responseText: String): String {
+        if (
+            statusCode == 403 &&
+            (
+                responseText.contains("storageQuotaExceeded", ignoreCase = true) ||
+                    responseText.contains("Service Accounts do not have storage quota", ignoreCase = true)
+                )
+        ) {
+            return "$action ($statusCode): Google Drive root folder is in My Drive. Service account cannot upload there because it has no storage quota. Move root folder to a Shared drive and grant writer access to service account."
+        }
+        return "$action ($statusCode): $responseText"
     }
 
     private fun buildDriveListUrl(query: String): String =

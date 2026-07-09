@@ -58,7 +58,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
             )
         }.fold(
             onSuccess = { AppResult.Success(it) },
-            onFailure = { AppResult.Error(DatabaseException("Failed to push Firebase sync payload", it)) }
+            onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to push Firebase sync payload", it), it)) }
         )
     }
 
@@ -79,15 +79,22 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
             SyncBatchResult(pulled = pulled)
         }.fold(
             onSuccess = { AppResult.Success(it) },
-            onFailure = { AppResult.Error(DatabaseException("Failed to pull Firebase sync payload", it)) }
+            onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to pull Firebase sync payload", it), it)) }
         )
     }
 
     override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching { uploadPendingMediaInternal(projectId) }.fold(
             onSuccess = { AppResult.Success(it) },
-            onFailure = { AppResult.Error(DatabaseException("Failed to upload Firebase media", it)) }
+            onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to upload Firebase media", it), it)) }
         )
+    }
+
+    private fun buildSyncFailureMessage(prefix: String, error: Throwable): String {
+        val details = generateSequence(error) { it.cause }
+            .mapNotNull { it.message?.trim() }
+            .firstOrNull { it.isNotBlank() && it != prefix }
+        return if (details.isNullOrBlank()) prefix else "$prefix: $details"
     }
 
     private suspend fun uploadPendingMediaInternal(projectId: String): SyncBatchResult {

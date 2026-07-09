@@ -390,3 +390,31 @@ test("uploadProjectMedia accepts GOOGLE_DRIVE_ROOT_FOLDER_URL from env", async (
   assert.deepStrictEqual(firstProjectFolder.parents, ["1Kr-ZpdbFlh82CgTr-nvXv1Rpl4b-mJRN"]);
   delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_URL;
 });
+
+test("uploadProjectMedia accepts quoted GOOGLE_DRIVE_ROOT_FOLDER_ID from env", async () => {
+  process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = "'quoted-folder-12345'";
+  delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_URL;
+  setUploadProjectMediaMock(null);
+  const mockDrive = new MockDrive();
+  setDriveClientMock(mockDrive);
+
+  await uploadProjectMedia({
+    projectId: "proj-1",
+    projectName: "Du an Quoted",
+    photoId: "photo-quoted-env",
+    objectType: "NODE",
+    objectCode: "N-1",
+    mediaType: "IMAGE",
+    mimeType: "image/jpeg",
+    capturedAtEpochMs: Date.parse("2026-07-09T10:11:12+07:00"),
+    original: {
+      bytes: Buffer.from("content"),
+      extension: "jpg"
+    }
+  });
+
+  const firstProjectFolder = Array.from(mockDrive.db.values()).find((file) => file.name === "Du an Quoted");
+  assert.ok(firstProjectFolder);
+  assert.deepStrictEqual(firstProjectFolder.parents, ["quoted-folder-12345"]);
+  delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+});

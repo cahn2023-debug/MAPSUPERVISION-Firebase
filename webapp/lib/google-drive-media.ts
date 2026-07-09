@@ -39,8 +39,20 @@ const folderMimeType = "application/vnd.google-apps.folder";
 
 let cachedDrive: drive_v3.Drive | null = null;
 
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
+  const value = stripWrappingQuotes(process.env[name] || "");
   if (!value) {
     throw new Error(`${name} is not configured.`);
   }
@@ -48,7 +60,7 @@ function requiredEnv(name: string): string {
 }
 
 function normalizeDriveFolderInput(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = stripWrappingQuotes(value);
   if (!trimmed) {
     return "";
   }
@@ -71,12 +83,12 @@ function normalizeDriveFolderInput(value: string): string {
 }
 
 export function configuredRootFolderId(): string {
-  const folderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  const folderId = stripWrappingQuotes(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "");
   if (folderId) {
     return folderId;
   }
 
-  const folderUrl = process.env.GOOGLE_DRIVE_ROOT_FOLDER_URL?.trim();
+  const folderUrl = stripWrappingQuotes(process.env.GOOGLE_DRIVE_ROOT_FOLDER_URL || "");
   if (folderUrl) {
     return normalizeDriveFolderInput(folderUrl);
   }
@@ -85,7 +97,7 @@ export function configuredRootFolderId(): string {
 }
 
 function serviceAccountCredentials() {
-  const filePath = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
+  const filePath = stripWrappingQuotes(process.env.GOOGLE_SERVICE_ACCOUNT_FILE || "");
   if (filePath) {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
     if (typeof parsed.private_key === "string") {

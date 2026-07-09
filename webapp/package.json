@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:media": "tsx --test tests/media-route.test.ts",
     "bootstrap:admins": "node scripts/bootstrap-admin-claims.cjs",
     "migrate:drive-media": "node scripts/migrate-drive-media-names.cjs"
   },
@@ -23,6 +24,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.7.2"
   }
 }
