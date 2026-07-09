@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "bootstrap:admins": "node scripts/bootstrap-admin-claims.cjs"
+    "bootstrap:admins": "node scripts/bootstrap-admin-claims.cjs",
+    "migrate:drive-media": "node scripts/migrate-drive-media-names.cjs"
   },
   "dependencies": {
     "firebase": "^11.10.0",

@@ -167,6 +167,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
+    testImplementation("androidx.work:work-testing:2.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:rules:1.6.1")

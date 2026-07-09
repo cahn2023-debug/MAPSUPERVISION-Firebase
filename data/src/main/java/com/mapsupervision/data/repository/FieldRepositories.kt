@@ -11,6 +11,7 @@ import com.mapsupervision.data.db.dao.DailyLogPhotoDao
 import com.mapsupervision.data.db.dao.WorkVolumeProgressDao
 import com.mapsupervision.data.db.dao.NodeProgressDao
 import com.mapsupervision.data.db.dao.PhotoTagDao
+import com.mapsupervision.data.db.dao.ProjectDao
 import com.mapsupervision.data.db.dao.SitePhotoDao
 import com.mapsupervision.data.db.dao.SitePhotoProjection
 import com.mapsupervision.data.db.dao.MaterialProgressProjection
@@ -63,14 +64,25 @@ class ProgressRepositoryImpl @Inject constructor(
     ) }
 
     override suspend fun byProject(projectId: String): AppResult<List<NodeProgress>> = withContext(Dispatchers.IO) { runCatching {
-        hydrateNodeProgress(projectId, dao(projectId).byProject(projectId))
+        val rows = dao(projectId).byProject(projectId)
+        val resolvedRows = if (rows.isEmpty()) dao.byProject(projectId) else rows
+        hydrateNodeProgress(projectId, resolvedRows)
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to list progress", it)) }
     ) }
 
     override fun observeByProject(projectId: String): Flow<List<NodeProgress>> = flow {
-        emitAll(dao(projectId).observeByProject(projectId).map { rows -> hydrateNodeProgress(projectId, rows) }.distinctUntilChanged())
+        val scopedDao = dao(projectId)
+        emitAll(
+            combine(
+                scopedDao.observeByProject(projectId),
+                dao.observeByProject(projectId)
+            ) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                hydrateNodeProgress(projectId, resolvedRows)
+            }.distinctUntilChanged()
+        )
     }
 
     private suspend fun hydrateNodeProgress(projectId: String, entities: List<NodeProgressEntity>): List<NodeProgress> {
@@ -115,7 +127,8 @@ class ProgressRepositoryImpl @Inject constructor(
 
 class PhotoRepositoryImpl @Inject constructor(
     private val dao: SitePhotoDao,
-    private val projectScopedDatabaseProvider: ProjectScopedDatabaseProvider
+    private val projectScopedDatabaseProvider: ProjectScopedDatabaseProvider,
+    private val projectDao: ProjectDao
 ) : PhotoRepository {
     override suspend fun add(photo: SitePhoto): AppResult<Unit> = withContext(Dispatchers.IO) { runCatching {
         val normalized = photo.normalizeForStorage()
@@ -176,7 +189,9 @@ class PhotoRepositoryImpl @Inject constructor(
     ) }
 
     override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> = withContext(Dispatchers.IO) { runCatching {
-        hydratePhotos(projectId, dao(projectId).byProjectSummary(projectId))
+        val rows = dao(projectId).byProjectSummary(projectId)
+        val resolvedRows = if (rows.isEmpty()) dao.byProjectSummary(projectId) else rows
+        hydratePhotos(projectId, resolvedRows)
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to list photos", it)) }
@@ -186,8 +201,10 @@ class PhotoRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 val database = scopedDatabase(projectId)
-                val rows = (database?.sitePhotoDao() ?: dao).byObjectCodeSummary(projectId, objectCode)
-                hydratePhotos(projectId, rows, database)
+                val scopedDao = database?.sitePhotoDao() ?: dao
+                val rows = scopedDao.byObjectCodeSummary(projectId, objectCode)
+                val resolvedRows = if (rows.isEmpty()) dao.byObjectCodeSummary(projectId, objectCode) else rows
+                hydratePhotos(projectId, resolvedRows, database)
             }.fold(
                 onSuccess = { AppResult.Success(it) },
                 onFailure = { AppResult.Error(DatabaseException("Failed to list photos by object", it)) }
@@ -197,7 +214,32 @@ class PhotoRepositoryImpl @Inject constructor(
     override fun observeByProject(projectId: String): Flow<List<SitePhoto>> = flow {
         val database = scopedDatabase(projectId)
         val photoDao = database?.sitePhotoDao() ?: dao
-        emitAll(photoDao.observeByProjectSummary(projectId).map { rows -> hydratePhotos(projectId, rows, database) }.distinctUntilChanged())
+        emitAll(
+            combine(
+                photoDao.observeByProjectSummary(projectId),
+                dao.observeByProjectSummary(projectId)
+            ) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                hydratePhotos(projectId, resolvedRows, database)
+            }.distinctUntilChanged()
+        )
+    }
+
+    override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = withContext(Dispatchers.IO) {
+        runCatching {
+            buildList {
+                projectDao.list(includeArchived = true).forEach { project ->
+                    val projectId = project.id
+                    val scopedDao = scopedDatabase(projectId)?.sitePhotoDao()
+                    if ((scopedDao?.hasPendingUploads(projectId) == true) || dao.hasPendingUploads(projectId)) {
+                        add(projectId)
+                    }
+                }
+            }.distinct()
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to list pending upload projects", it)) }
+        )
     }
 
     private suspend fun dao(projectId: String): SitePhotoDao =
@@ -362,7 +404,9 @@ class DailyLogRepositoryImpl @Inject constructor(
     ) }
 
     override suspend fun byProject(projectId: String): AppResult<List<DailyLog>> = withContext(Dispatchers.IO) { runCatching {
-        hydrateDailyLogs(projectId, dao(projectId).byProject(projectId))
+        val rows = dao(projectId).byProject(projectId)
+        val resolvedRows = if (rows.isEmpty()) dao.byProject(projectId) else rows
+        hydrateDailyLogs(projectId, resolvedRows)
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to list daily logs", it)) }
@@ -371,7 +415,15 @@ class DailyLogRepositoryImpl @Inject constructor(
     override fun observeByProject(projectId: String): Flow<List<DailyLog>> = flow {
         val database = scopedDatabase(projectId)
         val dailyLogDao = database?.dailyLogDao() ?: dao
-        emitAll(dailyLogDao.observeByProject(projectId).map { rows -> hydrateDailyLogs(projectId, rows, database) }.distinctUntilChanged())
+        emitAll(
+            combine(
+                dailyLogDao.observeByProject(projectId),
+                dao.observeByProject(projectId)
+            ) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                hydrateDailyLogs(projectId, resolvedRows, database)
+            }.distinctUntilChanged()
+        )
     }
 
     private suspend fun scopedDatabase(projectId: String) =
@@ -585,14 +637,25 @@ class WorkVolumeProgressRepositoryImpl @Inject constructor(
     ) }
 
     override suspend fun byProject(projectId: String): AppResult<List<WorkVolumeProgress>> = withContext(Dispatchers.IO) { runCatching {
-        dao(projectId).byProjectSummary(projectId).map { it.toDomain(projectId) }
+        val rows = dao(projectId).byProjectSummary(projectId)
+        val resolvedRows = if (rows.isEmpty()) dao.byProjectSummary(projectId) else rows
+        resolvedRows.map { it.toDomain(projectId) }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to list material progress", it)) }
     ) }
 
     override fun observeByProject(projectId: String): Flow<List<WorkVolumeProgress>> = flow {
-        emitAll(dao(projectId).observeByProjectSummary(projectId).map { rows -> rows.map { it.toDomain(projectId) } }.distinctUntilChanged())
+        val scopedDao = dao(projectId)
+        emitAll(
+            combine(
+                scopedDao.observeByProjectSummary(projectId),
+                dao.observeByProjectSummary(projectId)
+            ) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                resolvedRows.map { it.toDomain(projectId) }
+            }.distinctUntilChanged()
+        )
     }
 
     private fun WorkVolumeProgress.toEntity() = MaterialProgressEntity(

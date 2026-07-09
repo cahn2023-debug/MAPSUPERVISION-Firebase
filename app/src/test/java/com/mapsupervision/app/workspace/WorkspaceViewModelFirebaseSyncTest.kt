@@ -2,6 +2,7 @@ package com.mapsupervision.app.workspace
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.mapsupervision.app.sync.FirebaseMediaUploadScheduler
 import com.mapsupervision.ai.core.AIFacade
 import com.mapsupervision.ai.core.AiDecision
 import com.mapsupervision.ai.core.AiDecisionSource
@@ -112,7 +113,8 @@ class WorkspaceViewModelFirebaseSyncTest {
             pullResult = SyncBatchResult(pulled = 3)
         )
         val projectSyncRepository = FakeProjectSyncRepository()
-        val viewModel = buildViewModel(firebaseRepo, projectSyncRepository)
+        val mediaUploadScheduler = FakeFirebaseMediaUploadScheduler()
+        val viewModel = buildViewModel(firebaseRepo, projectSyncRepository, mediaUploadScheduler)
 
         viewModel.syncFirebaseNow(projectId = "project-1", trigger = "manual")
         waitUntil { firebaseRepo.pushCalls == 1 }
@@ -140,9 +142,11 @@ class WorkspaceViewModelFirebaseSyncTest {
             pullResult = SyncBatchResult(pulled = 1)
         )
         val projectSyncRepository = FakeProjectSyncRepository()
-        val viewModel = buildViewModel(firebaseRepo, projectSyncRepository)
+        val mediaUploadScheduler = FakeFirebaseMediaUploadScheduler()
+        val viewModel = buildViewModel(firebaseRepo, projectSyncRepository, mediaUploadScheduler)
 
         viewModel._state.value = viewModel.state.value.copy(activeProjectId = "project-1")
+        val baselineScheduled = mediaUploadScheduler.reasons.size
         projectSyncRepository.notifyProjectChanged("project-1", "photo_saved")
         delay(300)
         projectSyncRepository.notifyProjectChanged("project-1", "photo_saved")
@@ -151,6 +155,7 @@ class WorkspaceViewModelFirebaseSyncTest {
 
         assertEquals(1, firebaseRepo.pushCalls)
         assertEquals("photo_saved", viewModel.state.value.firebaseSync.lastTrigger)
+        assertEquals(listOf("photo_saved", "photo_saved"), mediaUploadScheduler.reasons.drop(baselineScheduled))
 
         firebaseRepo.pushGate?.complete(Unit)
         waitUntil { firebaseRepo.pullCalls == 1 && !viewModel.state.value.firebaseSync.isSyncing }
@@ -161,7 +166,8 @@ class WorkspaceViewModelFirebaseSyncTest {
 
     private fun buildViewModel(
         firebaseSyncRepository: FakeFirebaseSyncRepository,
-        projectSyncRepository: FakeProjectSyncRepository
+        projectSyncRepository: FakeProjectSyncRepository,
+        firebaseMediaUploadScheduler: FirebaseMediaUploadScheduler = FakeFirebaseMediaUploadScheduler()
     ): WorkspaceViewModel {
         val activeProjectRepository = FakeActiveProjectRepository("project-1")
         val importedFileRepository = FakeImportedFileRepository()
@@ -216,6 +222,7 @@ class WorkspaceViewModelFirebaseSyncTest {
             materialHandoverRepository = materialHandoverRepository,
             firebaseAccessRepository = FakeFirebaseAccessRepository(),
             firebaseSyncRepository = firebaseSyncRepository,
+            firebaseMediaUploadScheduler = firebaseMediaUploadScheduler,
             observeWorkspaceSnapshot = observeWorkspaceSnapshot,
             migrationService = FakeProjectStorageMigrationService()
         )
@@ -247,6 +254,7 @@ private class FakeFirebaseAccessRepository : FirebaseAccessRepository {
     )
 
     override suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession> = AppResult.Success(session)
+    override suspend fun signInWithGoogle(idToken: String): AppResult<FirebaseUserSession> = AppResult.Success(session)
     override suspend fun signOut(): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun refreshAccess(): AppResult<FirebaseAccessState> = AppResult.Success(accessState.value)
     override suspend fun ensureUserProfile(): AppResult<Unit> = AppResult.Success(Unit)
@@ -341,7 +349,16 @@ private class FakePhotoRepository : PhotoRepository {
     override suspend fun add(photo: SitePhoto): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> = AppResult.Success(emptyList())
     override suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<SitePhoto>> = AppResult.Success(emptyList())
+    override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = AppResult.Success(emptyList())
     override fun observeByProject(projectId: String): Flow<List<SitePhoto>> = flowOf(emptyList())
+}
+
+private class FakeFirebaseMediaUploadScheduler : FirebaseMediaUploadScheduler {
+    val reasons = mutableListOf<String>()
+
+    override fun enqueue(reason: String) {
+        reasons += reason
+    }
 }
 
 private class FakeNoteRepository : NoteRepository {

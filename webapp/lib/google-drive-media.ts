@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import fs from "node:fs";
 import { google, type drive_v3 } from "googleapis";
 
 export type DriveMediaObjectType = "NODE" | "ROUTE";
@@ -6,11 +7,16 @@ export type DriveMediaType = "IMAGE" | "VIDEO";
 
 export type DriveMediaUpload = {
   projectId: string;
+  projectName: string;
+  rootFolderId?: string;
   photoId: string;
   objectType: DriveMediaObjectType;
   objectCode: string;
   mediaType: DriveMediaType;
   mimeType: string;
+  capturedAtEpochMs: number;
+  address?: string;
+  captureNote?: string;
   original: {
     bytes: Buffer;
     extension: string;
@@ -41,7 +47,52 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function normalizeDriveFolderInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  let folderId = trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    const folderMatch = parsed.pathname.match(/\/folders\/([^/?#]+)/);
+    folderId = folderMatch?.[1] ?? parsed.searchParams.get("id") ?? trimmed;
+  } catch {
+    const folderMatch = trimmed.match(/\/folders\/([^/?#]+)/);
+    folderId = folderMatch?.[1] ?? trimmed;
+  }
+
+  folderId = decodeURIComponent(folderId).trim();
+  if (!/^[A-Za-z0-9_-]{10,}$/.test(folderId)) {
+    throw new Error("Google Drive folder URL/ID is not valid.");
+  }
+  return folderId;
+}
+
+export function configuredRootFolderId(): string {
+  const folderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  if (folderId) {
+    return folderId;
+  }
+
+  const folderUrl = process.env.GOOGLE_DRIVE_ROOT_FOLDER_URL?.trim();
+  if (folderUrl) {
+    return normalizeDriveFolderInput(folderUrl);
+  }
+
+  throw new Error("GOOGLE_DRIVE_ROOT_FOLDER_ID or GOOGLE_DRIVE_ROOT_FOLDER_URL is not configured.");
+}
+
 function serviceAccountCredentials() {
+  const filePath = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
+  if (filePath) {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (typeof parsed.private_key === "string") {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+    }
+    return parsed;
+  }
   const parsed = JSON.parse(requiredEnv("GOOGLE_SERVICE_ACCOUNT_JSON"));
   if (typeof parsed.private_key === "string") {
     parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
@@ -49,7 +100,14 @@ function serviceAccountCredentials() {
   return parsed;
 }
 
-function driveClient(): drive_v3.Drive {
+// ponytail: mock drive client for testing
+let driveMock: any = null;
+export function setDriveClientMock(mock: any) {
+  driveMock = mock;
+}
+
+export function driveClient(): drive_v3.Drive {
+  if (process.env.NODE_ENV === "test" && driveMock) return driveMock;
   if (cachedDrive) return cachedDrive;
   const auth = new google.auth.GoogleAuth({
     credentials: serviceAccountCredentials(),
@@ -59,12 +117,21 @@ function driveClient(): drive_v3.Drive {
   return cachedDrive;
 }
 
-function escapeDriveQuery(value: string): string {
+export function escapeDriveQuery(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-function sanitizeSegment(value: string): string {
-  return value.trim().replace(/[\\/]+/g, "-").replace(/\s+/g, " ").slice(0, 120) || "unknown";
+export function sanitizeSegment(value: string, fallback = "unknown"): string {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || fallback;
+}
+
+function sanitizeOptionalSegment(value: string | undefined): string {
+  return value ? sanitizeSegment(value, "") : "";
 }
 
 function extensionForMime(mimeType: string, fallback: string): string {
@@ -112,7 +179,7 @@ async function ensureChildFolder(drive: drive_v3.Drive, parentId: string, name: 
   return id;
 }
 
-async function ensureFolderPath(drive: drive_v3.Drive, rootFolderId: string, segments: string[]): Promise<string> {
+export async function ensureFolderPath(drive: drive_v3.Drive, rootFolderId: string, segments: string[]): Promise<string> {
   let currentFolderId = rootFolderId;
   for (const segment of segments) {
     currentFolderId = await ensureChildFolder(drive, currentFolderId, segment);
@@ -120,11 +187,89 @@ async function ensureFolderPath(drive: drive_v3.Drive, rootFolderId: string, seg
   return currentFolderId;
 }
 
-async function findChildFile(drive: drive_v3.Drive, parentId: string, name: string): Promise<string | null> {
+export async function ensureProjectFolder(
+  drive: drive_v3.Drive,
+  rootFolderId: string,
+  projectId: string,
+  projectName: string
+): Promise<string> {
+  const query = [
+    `'${escapeDriveQuery(rootFolderId)}' in parents`,
+    `appProperties has { key='mapsupervisionProjectId' and value='${escapeDriveQuery(projectId)}' }`,
+    `mimeType = '${folderMimeType}'`,
+    "trashed = false"
+  ].join(" and ");
+
+  const listResponse = await drive.files.list({
+    q: query,
+    fields: "files(id,name)",
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+
+  const existingFolderId = listResponse.data.files?.[0]?.id;
+  if (existingFolderId) {
+    return existingFolderId;
+  }
+
+  const folderName = sanitizeSegment(projectName);
+  const existingByNameId = await findChildFolder(drive, rootFolderId, folderName);
+  if (existingByNameId) {
+    await drive.files.update({
+      fileId: existingByNameId,
+      requestBody: {
+        appProperties: {
+          mapsupervisionProjectId: projectId
+        }
+      },
+      fields: "id",
+      supportsAllDrives: true
+    });
+    return existingByNameId;
+  }
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: folderName,
+      mimeType: folderMimeType,
+      parents: [rootFolderId],
+      appProperties: {
+        mapsupervisionProjectId: projectId
+      }
+    },
+    fields: "id",
+    supportsAllDrives: true
+  });
+
+  const id = created.data.id;
+  if (!id) {
+    throw new Error(`Failed to create Project folder ${folderName}.`);
+  }
+  return id;
+}
+
+export async function findChildFile(drive: drive_v3.Drive, parentId: string, name: string): Promise<string | null> {
   const response = await drive.files.list({
     q: [
       `'${escapeDriveQuery(parentId)}' in parents`,
       `name = '${escapeDriveQuery(name)}'`,
+      `mimeType != '${folderMimeType}'`,
+      "trashed = false"
+    ].join(" and "),
+    fields: "files(id,name)",
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+  return response.data.files?.[0]?.id ?? null;
+}
+
+async function findChildFileByPhotoId(drive: drive_v3.Drive, parentId: string, photoId: string): Promise<string | null> {
+  const response = await drive.files.list({
+    q: [
+      `'${escapeDriveQuery(parentId)}' in parents`,
+      `appProperties has { key='mapsupervisionPhotoId' and value='${escapeDriveQuery(photoId)}' }`,
       `mimeType != '${folderMimeType}'`,
       "trashed = false"
     ].join(" and "),
@@ -162,6 +307,7 @@ async function ensurePublicReader(drive: drive_v3.Drive, fileId: string): Promis
 async function upsertFile(
   drive: drive_v3.Drive,
   parentId: string,
+  photoId: string,
   name: string,
   mimeType: string,
   bytes: Buffer
@@ -170,10 +316,16 @@ async function upsertFile(
     mimeType,
     body: Readable.from(bytes)
   };
-  const existingId = await findChildFile(drive, parentId, name);
+  const existingId = await findChildFileByPhotoId(drive, parentId, photoId);
   if (existingId) {
     await drive.files.update({
       fileId: existingId,
+      requestBody: {
+        name,
+        appProperties: {
+          mapsupervisionPhotoId: photoId
+        }
+      },
       media,
       fields: "id",
       supportsAllDrives: true
@@ -182,10 +334,23 @@ async function upsertFile(
     return existingId;
   }
 
+  let resolvedName = name;
+  let counter = 2;
+  while (await findChildFile(drive, parentId, resolvedName)) {
+    const parts = resolvedName.match(/^(.*?)(\.[^.]+)?$/);
+    const base = parts?.[1] || resolvedName;
+    const ext = parts?.[2] || "";
+    resolvedName = `${base} (${counter})${ext}`;
+    counter++;
+  }
+
   const created = await drive.files.create({
     requestBody: {
-      name,
-      parents: [parentId]
+      name: resolvedName,
+      parents: [parentId],
+      appProperties: {
+        mapsupervisionPhotoId: photoId
+      }
     },
     media,
     fields: "id",
@@ -199,22 +364,101 @@ async function upsertFile(
   return id;
 }
 
+function formatDriveTimestamp(epochMs: number): string {
+  const date = new Date(epochMs);
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Bangkok"
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day} ${map.hour}.${map.minute}.${map.second}`;
+}
+
+export function buildDriveMediaFileName(input: {
+  capturedAtEpochMs: number;
+  address?: string;
+  captureNote?: string;
+  extension: string;
+}): string {
+  const segments = [
+    formatDriveTimestamp(input.capturedAtEpochMs),
+    sanitizeOptionalSegment(input.address),
+    sanitizeOptionalSegment(input.captureNote)
+  ].filter(Boolean);
+  return `${segments.join(" - ")}.${input.extension.replace(/^\./, "")}`;
+}
+
+export function buildProjectMediaPreviewUrl(projectId: string, photoId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/media?photoId=${encodeURIComponent(photoId)}`;
+}
+
 function publicDriveUrl(fileId: string): string {
   return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
 }
 
+export function driveFileIdFromUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    const id = parsed.searchParams.get("id");
+    if (id) return id.trim();
+    const pathMatch = parsed.pathname.match(/\/d\/([^/]+)/);
+    return pathMatch?.[1]?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function downloadDriveFile(fileId: string): Promise<{ stream: Readable; contentType: string }> {
+  const response = await driveClient().files.get(
+    {
+      fileId,
+      alt: "media",
+      supportsAllDrives: true
+    },
+    { responseType: "stream" }
+  );
+  return {
+    stream: response.data as Readable,
+    contentType: response.headers["content-type"]?.split(";")[0] || "application/octet-stream"
+  };
+}
+
+// ponytail: test mock hooks
+let uploadMock: any = null;
+
+export function setUploadProjectMediaMock(mock: any) {
+  uploadMock = mock;
+}
+
 export async function uploadProjectMedia(input: DriveMediaUpload): Promise<DriveMediaUploadResult> {
+  if (process.env.NODE_ENV === "test" && uploadMock) {
+    return uploadMock(input);
+  }
   const drive = driveClient();
-  const projectFolder = sanitizeSegment(input.projectId);
+  const projectFolder = sanitizeSegment(input.projectName);
   const objectFolder = sanitizeSegment(input.objectCode);
-  const rootFolderId = requiredEnv("GOOGLE_DRIVE_ROOT_FOLDER_ID");
+  const rootFolderId = input.rootFolderId?.trim() || configuredRootFolderId();
+  const projectFolderId = await ensureProjectFolder(drive, rootFolderId, input.projectId, input.projectName);
   const folderSegments = input.mediaType === "VIDEO"
-    ? [projectFolder, "media", "videos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder]
-    : [projectFolder, "photos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder];
-  const parentId = await ensureFolderPath(drive, rootFolderId, folderSegments);
+    ? ["media", "videos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder]
+    : ["photos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder];
+  const parentId = await ensureFolderPath(drive, projectFolderId, folderSegments);
   const originalExtension = input.original.extension || extensionForMime(input.mimeType, input.mediaType === "VIDEO" ? "mp4" : "jpg");
-  const originalName = `${sanitizeSegment(input.photoId)}-original.${originalExtension}`;
-  const originalId = await upsertFile(drive, parentId, originalName, input.mimeType, input.original.bytes);
+  const originalName = buildDriveMediaFileName({
+    capturedAtEpochMs: input.capturedAtEpochMs,
+    address: input.address,
+    captureNote: input.captureNote,
+    extension: originalExtension
+  });
+  const originalId = await upsertFile(drive, parentId, input.photoId, originalName, input.mimeType, input.original.bytes);
 
   let thumbnailUrl: string | undefined;
   if (input.thumbnail) {
@@ -222,7 +466,13 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
     const thumbnailId = await upsertFile(
       drive,
       parentId,
-      `${sanitizeSegment(input.photoId)}-thumbnail.${thumbnailExtension}`,
+      `${input.photoId}__thumb`,
+      buildDriveMediaFileName({
+        capturedAtEpochMs: input.capturedAtEpochMs,
+        address: input.address,
+        captureNote: [input.captureNote, "thumbnail"].filter(Boolean).join(" - "),
+        extension: thumbnailExtension
+      }),
       input.thumbnail.mimeType,
       input.thumbnail.bytes
     );
@@ -233,6 +483,6 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
     remoteUrl: publicDriveUrl(originalId),
     thumbnailUrl,
     driveFileId: originalId,
-    drivePath: folderSegments.concat(originalName).join("/")
+    drivePath: [projectFolder, ...folderSegments, originalName].join("/")
   };
 }

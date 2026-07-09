@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FirebaseError } from "firebase/app";
 import dynamic from "next/dynamic";
+import type { SelectedObject } from "@/components/GisWebMap";
 import { db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
 import {
+  buildProjectMediaPreviewUrl,
   createDailyLogDocument,
   deleteProjectMemberRecord,
   createProjectDocument,
@@ -95,6 +97,69 @@ function errorMessage(error: unknown): string {
     return "Bạn thao tác quá nhiều lần. Vui lòng chờ một lúc rồi thử lại.";
   }
   return firebaseError?.message ?? "Có lỗi xảy ra trong quá trình kết nối.";
+}
+
+function driveLinkForPhoto(photo: Record<string, unknown>): string | undefined {
+  const url = String(photo.remoteUrl || photo.url || "").trim();
+  return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
+}
+
+function previewUrlForPhoto(projectId: string, photoId: string): string | undefined {
+  if (!projectId.trim() || !photoId.trim()) return undefined;
+  return buildProjectMediaPreviewUrl(projectId, photoId);
+}
+
+function SitePhotoPreview({
+  projectId,
+  photoId,
+  user,
+  alt,
+  className
+}: {
+  projectId: string;
+  photoId: string;
+  user: FirebaseUser | null;
+  alt?: string;
+  className?: string;
+}) {
+  const [src, setSrc] = useState<string>("");
+
+  useEffect(() => {
+    if (!user || !projectId || !photoId) return;
+    let active = true;
+    let objectUrl = "";
+
+    async function load() {
+      try {
+        const token = await user!.getIdToken();
+        const url = buildProjectMediaPreviewUrl(projectId, photoId);
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+        const blob = await response.blob();
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch (e) {
+        console.error("Failed to load photo preview:", e);
+      }
+    }
+
+    void load();
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [projectId, photoId, user]);
+
+  if (!src) {
+    return <div className="photo-placeholder animate-pulse" />;
+  }
+
+  return <img src={src} alt={alt} className={className} />;
 }
 
 function formatDateTime(value: unknown): string {
@@ -198,6 +263,11 @@ export default function HomePage() {
   const [writeState, setWriteState] = useState("");
   const [writeBusy, setWriteBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "media" | "admin">("overview");
+  const [selectedMapObject, setSelectedMapObject] = useState<SelectedObject>(null);
+  const [mapSearchQuery, setMapSearchQuery] = useState("");
+  const [mapFilterContractor, setMapFilterContractor] = useState("");
+  const [mapFilterWork, setMapFilterWork] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     return observeAuth((nextUser) => {
@@ -387,6 +457,16 @@ export default function HomePage() {
   const contractorOptions = useMemo(
     () => collectContractorOptions(collections),
     [collections]
+  );
+
+  const workNameOptions = useMemo(
+    () =>
+      visibleCollections.work_volume_progress
+        .map((row) => text(row, "workName", "categoryName", "name"))
+        .filter(Boolean)
+        .filter((value, index, array) => array.indexOf(value) === index)
+        .sort((left, right) => left.localeCompare(right, "vi")),
+    [visibleCollections.work_volume_progress]
   );
 
   const filteredUsers = useMemo(() => {
@@ -663,58 +743,83 @@ export default function HomePage() {
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Android x Firebase Realtime Bridge</p>
-          <h1>MapSupervision Dashboard</h1>
-          <p className="muted">
-            Bảng điều khiển đồng bộ hai chiều. Đọc dữ liệu thực địa từ thiết bị và chỉ định nhiệm vụ/nhật ký ngược về Firestore.
-          </p>
-        </div>
-        <div className="account-panel">
-          <span>{user.email ?? "Tài khoản Firebase"}</span>
-          <code>{user.uid}</code>
-          <button className="ghost-button" type="button" onClick={() => void handleSignOut()}>
-            Đăng xuất
+    <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      {sidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-expand-floating-btn"
+          onClick={() => setSidebarCollapsed(false)}
+          aria-label="Mở rộng sidebar"
+        >
+          ☰
+        </button>
+      )}
+
+      <aside className="sidebar-panel">
+        <div className="sidebar-header">
+          <div className="sidebar-title-wrapper">
+            <p className="eyebrow">Android x Firebase Bridge</p>
+            <h1>MapSupervision</h1>
+          </div>
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarCollapsed(true)}
+            aria-label="Thu gọn sidebar"
+          >
+            ◀
           </button>
         </div>
-      </header>
 
-      <section className="project-strip">
-        <label>
-          Chọn dự án hoạt động
-          <select value={selectedProjectId} onChange={(event) => { setSelectedProjectId(event.target.value); setAccessError(""); }}>
-            <option value="">Chưa chọn dự án</option>
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}{item.projectCode ? ` - ${item.projectCode}` : ""}
-              </option>
-            ))}
-          </select>
-          <span className="field-hint">{isAdmin ? "Admin" : "User"} - {projects.length} du an da tai</span>
-        </label>
-        <label>
-          Mở nhanh bằng Project ID
-          <div className="inline-control">
-            <input
-              value={manualProjectId}
-              placeholder="Nhập mã dự án..."
-              onChange={(event) => setManualProjectId(event.target.value)}
-            />
-            <button type="button" className="secondary-button" onClick={openManualProject}>
-              Mở
+        <div className="sidebar-content">
+          <div className="account-card">
+            <span className="account-email">{user.email ?? "Tài khoản Firebase"}</span>
+            <code className="account-uid">{user.uid}</code>
+            <button className="ghost-button" type="button" onClick={() => void handleSignOut()}>
+              Đăng xuất
             </button>
           </div>
-        </label>
-        <div className="status-box">
-          <span className={accessError ? "status-dot danger" : selectedProjectId ? "status-dot ok" : "status-dot"} />
-          <div>
-            <strong>{(project?.name ?? selectedProjectId) || "Chưa chọn dự án"}</strong>
-            <p>{accessError || (selectedProjectId ? `Cập nhật: ${formatDateTime(stats.latest)}` : "Đang chờ chọn dự án...")}</p>
+
+          <div className="sidebar-project-section">
+            <label>
+              Chọn dự án hoạt động
+              <select value={selectedProjectId} onChange={(event) => { setSelectedProjectId(event.target.value); setAccessError(""); }}>
+                <option value="">Chưa chọn dự án</option>
+                {projects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{item.projectCode ? ` - ${item.projectCode}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">{isAdmin ? "Admin" : "User"} - {projects.length} dự án đã tải</span>
+            </label>
+
+            <label>
+              Mở nhanh bằng Project ID
+              <div className="inline-control">
+                <input
+                  value={manualProjectId}
+                  placeholder="Nhập mã dự án..."
+                  onChange={(event) => setManualProjectId(event.target.value)}
+                />
+                <button type="button" className="secondary-button" onClick={openManualProject}>
+                  Mở
+                </button>
+              </div>
+            </label>
+
+            <div className="status-box">
+              <span className={accessError ? "status-dot danger" : selectedProjectId ? "status-dot ok" : "status-dot"} />
+              <div>
+                <strong>{(project?.name ?? selectedProjectId) || "Chưa chọn dự án"}</strong>
+                <p>{accessError || (selectedProjectId ? `Cập nhật: ${formatDateTime(stats.latest)}` : "Đang chờ chọn dự án...")}</p>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      </aside>
+
+      <main className="shell">
 
       {/* Tab selector */}
       <nav className="tab-container">
@@ -791,25 +896,77 @@ export default function HomePage() {
               </p>
             </section>
           ) : (
-            <>
-              {/* Stats Summary cards */}
-              <section className="stat-grid">
-                <StatCard label="Điểm thiết kế (Node)" value={visibleCollections.gis_node.length} detail={`${visibleCollections.gis_route.length} Tuyến cáp`} />
-                <StatCard label="Nhiệm vụ đang mở" value={stats.openTasks} detail={`${visibleCollections.task.length} Nhiệm vụ tổng`} />
-                <StatCard label="Nhật ký tuần" value={visibleCollections.daily_log.length} detail={`${visibleCollections.note.length} Ghi chú nhanh`} />
-                <StatCard label="Hình ảnh thực địa" value={visibleCollections.site_photos.length} detail={`${visibleCollections.material_handover.length} Phiếu bàn giao`} />
-                <StatCard label="Tiến độ thi công" value={`${stats.materialPercent.toFixed(1)}%`} detail={`${formatNumber(stats.actualQty)} / ${formatNumber(stats.plannedQty)}`} progress={stats.materialPercent} />
-              </section>
+            <div className="map-tab-container">
+              <div className="map-view-wrapper">
+                <div className="map-canvas-container">
+                  <GisWebMap
+                    nodes={visibleCollections.gis_node}
+                    routes={visibleCollections.gis_route}
+                    selected={selectedMapObject}
+                    onSelect={setSelectedMapObject}
+                    searchQuery={mapSearchQuery}
+                    onSearchQueryChange={setMapSearchQuery}
+                    filterContractor={mapFilterContractor}
+                    onFilterContractorChange={setMapFilterContractor}
+                    filterWork={mapFilterWork}
+                    onFilterWorkChange={setMapFilterWork}
+                    contractorOptions={contractorOptions}
+                    workNameOptions={workNameOptions}
+                  />
+                </div>
+              </div>
 
-              {/* MapLibre map and realtime table list */}
-              <section className="main-grid">
-                <Panel title="Sơ đồ điểm nút & tuyến thi công" subtitle="Bản đồ nền và dữ liệu GIS đồng bộ realtime từ Android">
-                  <div className="map-frame">
-                    <GisWebMap nodes={visibleCollections.gis_node} routes={visibleCollections.gis_route} />
+              <div className="map-right-panel">
+                {/* Stats Summary cards */}
+                <section className="stat-grid" style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+                  <StatCard label="Điểm thiết kế (Node)" value={visibleCollections.gis_node.length} detail={`${visibleCollections.gis_route.length} Tuyến cáp`} />
+                  <StatCard label="Nhiệm vụ đang mở" value={stats.openTasks} detail={`${visibleCollections.task.length} Nhiệm vụ tổng`} />
+                  <StatCard label="Nhật ký tuần" value={visibleCollections.daily_log.length} detail={`${visibleCollections.note.length} Ghi chú nhanh`} />
+                  <StatCard label="Hình ảnh thực địa" value={visibleCollections.site_photos.length} detail={`${visibleCollections.material_handover.length} Phiếu bàn giao`} />
+                  <StatCard label="Tiến độ thi công" value={`${stats.materialPercent.toFixed(1)}%`} detail={`${formatNumber(stats.actualQty)} / ${formatNumber(stats.plannedQty)}`} progress={stats.materialPercent} />
+                </section>
+
+                <Panel title="Danh sách đối tượng" subtitle="Nhấp vào để định vị trên bản đồ">
+                  <div className="object-list-scroller">
+                    {visibleCollections.gis_node.map((node) => {
+                      const code = text(node, "code", "nodeCode", "name");
+                      const contractor = text(node, "contractor", "contractorName");
+                      const isActive = selectedMapObject?.kind === "node" && selectedMapObject.code === code;
+                      return (
+                        <button
+                          key={`node-${code}`}
+                          type="button"
+                          className={`object-list-item ${isActive ? "active" : ""}`}
+                          onClick={() => setSelectedMapObject({ kind: "node", code })}
+                        >
+                          <span className="object-code">{code}</span>
+                          <span className="object-contractor">{contractor || "Không rõ"}</span>
+                        </button>
+                      );
+                    })}
+                    {visibleCollections.gis_route.map((route) => {
+                      const code = text(route, "code", "routeCode", "name");
+                      const contractor = text(route, "contractor", "contractorName");
+                      const isActive = selectedMapObject?.kind === "route" && selectedMapObject.code === code;
+                      return (
+                        <button
+                          key={`route-${code}`}
+                          type="button"
+                          className={`object-list-item ${isActive ? "active" : ""}`}
+                          onClick={() => setSelectedMapObject({ kind: "route", code })}
+                        >
+                          <span className="object-code">{code}</span>
+                          <span className="object-contractor">{contractor || "Không rõ"}</span>
+                        </button>
+                      );
+                    })}
+                    {(!visibleCollections.gis_node.length && !visibleCollections.gis_route.length) && (
+                      <div className="empty-state">Không có đối tượng nào.</div>
+                    )}
                   </div>
                 </Panel>
-              </section>
-            </>
+              </div>
+            </div>
           )}
         </>
       )}
@@ -951,14 +1108,31 @@ export default function HomePage() {
                   <div className="photo-grid">
                     {visibleCollections.site_photos.slice(0, 9).map((rawPhoto, index) => {
                       const photo = rawPhoto as SitePhotoRow;
-                      const url = text(photo, "remoteUrl", "url");
-                      const isRemote = url && (url.startsWith("http://") || url.startsWith("https://"));
+                      const driveUrl = driveLinkForPhoto(photo);
+                      const photoId = text(photo, "id");
+                      const projectId = text(photo, "projectId") || selectedProjectId;
+                      const previewUrl = previewUrlForPhoto(projectId, photoId);
                       return (
-                        <a key={text(photo, "id") || index} href={isRemote ? url : undefined} target={isRemote ? "_blank" : undefined} rel="noreferrer" className="photo-tile">
-                          {isRemote ? <img src={url} alt={text(photo, "objectCode", "caption") || "Ảnh hiện trường"} /> : <div className="photo-placeholder" />}
+                        <a
+                          key={photoId || index}
+                          href={driveUrl}
+                          target={driveUrl ? "_blank" : undefined}
+                          rel="noreferrer"
+                          className="photo-tile"
+                          data-photo-id={photoId}
+                          data-project-id={projectId}
+                        >
+                          {previewUrl ? (
+                            <SitePhotoPreview
+                              projectId={projectId}
+                              photoId={photoId}
+                              user={user}
+                              alt={text(photo, "objectCode", "caption") || "Ảnh hiện trường"}
+                            />
+                          ) : <div className="photo-placeholder" />}
                           <strong>{text(photo, "objectCode", "nodeCode", "routeCode") || "Ảnh chưa phân loại"}</strong>
                           <span>Kỹ sư: {text(photo, "engineer", "capturedBy") || "Không rõ"} · {formatDateTime(photo.capturedAtEpochMs ?? photo.updatedAtEpochMs)}</span>
-                          <span>Sync: {text(photo, "syncStatus") || (isRemote ? "DONE" : "PENDING")}</span>
+                          <span>Sync: {text(photo, "syncStatus") || (driveUrl ? "DONE" : "PENDING")}</span>
                         </a>
                       );
                     })}
@@ -1050,6 +1224,7 @@ export default function HomePage() {
         </>
       )}
     </main>
+    </div>
   );
 }
 

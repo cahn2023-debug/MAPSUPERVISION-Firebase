@@ -21,6 +21,14 @@ data class ProjectEntity(
     @ColumnInfo(defaultValue = "")
     val projectDbPath: String = "",
     val projectCode: String? = null,
+    @ColumnInfo(defaultValue = "GOOGLE_DRIVE")
+    val mediaStorageProvider: String = "GOOGLE_DRIVE",
+    @ColumnInfo(defaultValue = "")
+    val mediaStorageFolderId: String = "",
+    @ColumnInfo(defaultValue = "")
+    val mediaStorageFolderUrl: String = "",
+    @ColumnInfo(defaultValue = "0")
+    val mediaStorageUpdatedAtEpochMs: Long = 0L,
     @ColumnInfo(defaultValue = "0")
     val isDeleted: Boolean = false,
     val deletedAtEpochMs: Long? = null

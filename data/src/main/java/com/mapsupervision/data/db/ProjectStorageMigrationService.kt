@@ -72,7 +72,11 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
             metadataVersion = project.metadataVersion,
             updatedAtEpochMs = project.updatedAtEpochMs,
             storageMode = project.storageMode,
-            projectDbPath = project.projectDbPath
+            projectDbPath = project.projectDbPath,
+            mediaStorageProvider = project.mediaStorageProvider,
+            mediaStorageFolderId = project.mediaStorageFolderId,
+            mediaStorageFolderUrl = project.mediaStorageFolderUrl,
+            mediaStorageUpdatedAtEpochMs = project.mediaStorageUpdatedAtEpochMs
         )
         return migrateProjectEntityIfNeeded(entity)
     }

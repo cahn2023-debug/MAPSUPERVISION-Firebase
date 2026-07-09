@@ -13,12 +13,12 @@ import type { GeoJsonProperties, Geometry } from "geojson";
 type MapLayerType = "STREET" | "SATELLITE" | "SATELLITE_LABELS" | "DARK";
 type LabelField = "CODE" | "CONTRACTOR" | "COORDINATE";
 
-type WebMapPoint = {
+export type WebMapPoint = {
   lat: number;
   lon: number;
 };
 
-type WebMapNode = {
+export type WebMapNode = {
   id: string;
   code: string;
   contractor: string;
@@ -28,7 +28,7 @@ type WebMapNode = {
   raw: Record<string, unknown>;
 };
 
-type WebMapRoute = {
+export type WebMapRoute = {
   id: string;
   code: string;
   contractor: string;
@@ -38,9 +38,9 @@ type WebMapRoute = {
   raw: Record<string, unknown>;
 };
 
-type SelectedObject =
-  | { kind: "node"; item: WebMapNode }
-  | { kind: "route"; item: WebMapRoute }
+export type SelectedObject =
+  | { kind: "node"; code: string }
+  | { kind: "route"; code: string }
   | null;
 
 type FeatureCollection = GeoJSON.FeatureCollection<Geometry, GeoJsonProperties>;
@@ -275,10 +275,30 @@ function hasSource(map: MapLibreMap, sourceId: string): boolean {
 
 export function GisWebMap({
   nodes,
-  routes
+  routes,
+  selected,
+  onSelect,
+  searchQuery,
+  onSearchQueryChange,
+  filterContractor,
+  onFilterContractorChange,
+  filterWork,
+  onFilterWorkChange,
+  contractorOptions,
+  workNameOptions
 }: {
   nodes: Record<string, unknown>[];
   routes: Record<string, unknown>[];
+  selected: SelectedObject;
+  onSelect: (selected: SelectedObject) => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  filterContractor: string;
+  onFilterContractorChange: (contractor: string) => void;
+  filterWork: string;
+  onFilterWorkChange: (work: string) => void;
+  contractorOptions: string[];
+  workNameOptions: string[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -286,7 +306,7 @@ export function GisWebMap({
   const routesByCodeRef = useRef(new Map<string, WebMapRoute>());
   const measureEnabledRef = useRef(false);
   const lastAutoFitSignatureRef = useRef("");
-  const [baseMap, setBaseMap] = useState<MapLayerType>("STREET");
+  const [baseMap, setBaseMap] = useState<MapLayerType>("DARK");
   const [showNodes, setShowNodes] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
@@ -294,7 +314,6 @@ export function GisWebMap({
   const [colorByContractor, setColorByContractor] = useState(true);
   const [measureEnabled, setMeasureEnabled] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<WebMapPoint[]>([]);
-  const [selected, setSelected] = useState<SelectedObject>(null);
   const [styleLoaded, setStyleLoaded] = useState(0);
 
   const prepared = useMemo(() => {
@@ -364,7 +383,7 @@ export function GisWebMap({
         signalStrokeColor: node.signalStatus === "HAS_SIGNAL" ? "#22c55e" : node.signalStatus === "NO_SIGNAL" ? "#ef4444" : "#ffffff",
         signalStrokeWidth: node.signalStatus === "HAS_SIGNAL" || node.signalStatus === "NO_SIGNAL" ? 4 : 2,
         signalRadius: node.signalStatus === "HAS_SIGNAL" ? 11.5 : node.signalStatus === "NO_SIGNAL" ? 11 : 10,
-        selected: selected?.kind === "node" && selected.item.id === node.id
+        selected: selected?.kind === "node" && selected.code === node.code
       }
     }))
   }), [colorByContractor, labelField, prepared.nodes, selected, showLabels]);
@@ -380,7 +399,7 @@ export function GisWebMap({
       properties: {
         code: route.code,
         contractor: route.contractor,
-        selected: selected?.kind === "route" && selected.item.id === route.id
+        selected: selected?.kind === "route" && selected.code === route.code
       }
     }))
   }), [prepared.routes, selected]);
@@ -438,7 +457,7 @@ export function GisWebMap({
 
   function syncMapPresentation() {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
     if (hasSource(map, NODES_SOURCE_ID)) {
       (map.getSource(NODES_SOURCE_ID) as GeoJSONSource).setData(nodeGeoJsonRef.current);
@@ -487,20 +506,19 @@ export function GisWebMap({
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
 
     const handleStyleReady = () => {
-      if (!map.isStyleLoaded()) return;
       syncMapPresentation();
       setStyleLoaded((value) => value + 1);
     };
 
     map.on("load", handleStyleReady);
-    map.on("styledata", handleStyleReady);
+    map.on("style.load", handleStyleReady);
     map.on("click", (event) => {
       if (!map.isStyleLoaded()) return;
 
       if (measureEnabledRef.current) {
         const nextPoint = { lat: event.lngLat.lat, lon: event.lngLat.lng };
         setMeasurePoints((current) => (current.length >= 2 ? [nextPoint] : [...current, nextPoint]));
-        setSelected(null);
+        onSelect(null);
         return;
       }
 
@@ -517,7 +535,7 @@ export function GisWebMap({
       const nodeCode = getFeatureCode(nodeFeatures[0]);
       const node = nodesByCodeRef.current.get(nodeCode);
       if (node) {
-        setSelected({ kind: "node", item: node });
+        onSelect({ kind: "node", code: node.code });
         map.easeTo({ center: [node.point.lon, node.point.lat], zoom: Math.max(map.getZoom(), 18) });
         return;
       }
@@ -534,7 +552,7 @@ export function GisWebMap({
       const routeCode = getFeatureCode(routeFeatures[0]);
       const route = routesByCodeRef.current.get(routeCode);
       if (route) {
-        setSelected({ kind: "route", item: route });
+        onSelect({ kind: "route", code: route.code });
         fitRoute(map, route);
       }
     });
@@ -555,13 +573,29 @@ export function GisWebMap({
   }, [baseMap, hasRenderableData]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selected) return;
+    if (selected.kind === "node") {
+      const node = nodesByCodeRef.current.get(selected.code);
+      if (node) {
+        map.easeTo({ center: [node.point.lon, node.point.lat], zoom: Math.max(map.getZoom(), 17) });
+      }
+    } else if (selected.kind === "route") {
+      const route = routesByCodeRef.current.get(selected.code);
+      if (route) {
+        fitRoute(map, route);
+      }
+    }
+  }, [selected]);
+
+  useEffect(() => {
     syncMapPresentation();
   }, [measureGeoJson, nodeGeoJson, routeGeoJson, measureEnabled, showLabels, showNodes, showRoutes]);
 
   useEffect(() => {
     const map = mapRef.current;
     const bounds = mapBounds(prepared.nodes, prepared.routes);
-    if (!map || !bounds || !map.isStyleLoaded()) return;
+    if (!map || !bounds) return;
 
     const signature = `${prepared.nodes.length}:${prepared.routes.length}:${prepared.nodes[0]?.id ?? ""}:${prepared.routes[0]?.id ?? ""}`;
     if (lastAutoFitSignatureRef.current === signature) return;
@@ -595,6 +629,85 @@ export function GisWebMap({
   return (
     <div className="web-map-shell">
       <div className="web-map-toolbar" aria-label="Công cụ bản đồ">
+        {/* Bộ lọc & Tìm kiếm trực tiếp trên toolbar */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginRight: "8px", borderRight: "1px solid rgba(255,255,255,0.08)", paddingRight: "8px" }}>
+          <input
+            type="text"
+            value={searchQuery}
+            placeholder="Tìm kiếm đối tượng (mã)..."
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            className="filter-input"
+            style={{
+              minHeight: "34px",
+              fontSize: "11px",
+              width: "180px",
+              padding: "0 10px",
+              background: "var(--surface-soft)",
+              border: "1px solid var(--line)",
+              borderRadius: "6px",
+              color: "var(--ink)",
+              outline: "none"
+            }}
+          />
+          
+          <select
+            value={filterContractor}
+            onChange={(e) => onFilterContractorChange(e.target.value)}
+            style={{
+              minHeight: "34px",
+              fontSize: "11px",
+              padding: "0 10px",
+              background: "var(--surface-soft)",
+              border: "1px solid var(--line)",
+              borderRadius: "6px",
+              color: "var(--ink)",
+              outline: "none",
+              cursor: "pointer"
+            }}
+          >
+            <option value="">Tất cả nhà thầu</option>
+            {contractorOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterWork}
+            onChange={(e) => onFilterWorkChange(e.target.value)}
+            style={{
+              minHeight: "34px",
+              fontSize: "11px",
+              padding: "0 10px",
+              background: "var(--surface-soft)",
+              border: "1px solid var(--line)",
+              borderRadius: "6px",
+              color: "var(--ink)",
+              outline: "none",
+              cursor: "pointer"
+            }}
+          >
+            <option value="">Tất cả công việc</option>
+            {workNameOptions.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+
+          {(searchQuery || filterContractor || filterWork) && (
+            <button
+              type="button"
+              className="tiny-button"
+              onClick={() => {
+                onSearchQueryChange("");
+                onFilterContractorChange("");
+                onFilterWorkChange("");
+              }}
+              style={{ minHeight: "34px", padding: "0 10px", margin: 0 }}
+            >
+              Xóa
+            </button>
+          )}
+        </div>
+
         <button type="button" className="map-icon-button" onClick={zoomIn} aria-label="Phóng to">
           +
         </button>
@@ -653,7 +766,7 @@ export function GisWebMap({
       ) : null}
 
       {selected ? (
-        <SelectedCard selected={selected} onClose={() => setSelected(null)} />
+        <SelectedCardWrapper selected={selected} prepared={prepared} onClose={() => onSelect(null)} />
       ) : null}
     </div>
   );
@@ -665,10 +778,22 @@ function fitRoute(map: MapLibreMap, route: WebMapRoute) {
   map.fitBounds(bounds, { padding: 84, maxZoom: 18, duration: 650 });
 }
 
-function SelectedCard({ selected, onClose }: { selected: SelectedObject; onClose: () => void }) {
+function SelectedCardWrapper({
+  selected,
+  prepared,
+  onClose
+}: {
+  selected: SelectedObject;
+  prepared: { nodes: WebMapNode[]; routes: WebMapRoute[] };
+  onClose: () => void;
+}) {
   if (!selected) return null;
   const isNode = selected.kind === "node";
-  const item = selected.item;
+  const item = isNode
+    ? prepared.nodes.find((n) => n.code === selected.code)
+    : prepared.routes.find((r) => r.code === selected.code);
+  if (!item) return null;
+
   return (
     <article className="web-map-selected">
       <div className="web-map-selected-heading">
@@ -689,22 +814,22 @@ function SelectedCard({ selected, onClose }: { selected: SelectedObject; onClose
           <>
             <div>
               <dt>Tọa độ</dt>
-              <dd>{`${selected.item.point.lat.toFixed(6)}, ${selected.item.point.lon.toFixed(6)}`}</dd>
+              <dd>{`${(item as WebMapNode).point.lat.toFixed(6)}, ${(item as WebMapNode).point.lon.toFixed(6)}`}</dd>
             </div>
             <div>
               <dt>Trạng thái tín hiệu</dt>
-              <dd>{selected.item.signalStatus || "UNKNOWN"}</dd>
+              <dd>{(item as WebMapNode).signalStatus || "UNKNOWN"}</dd>
             </div>
           </>
         ) : (
           <>
             <div>
               <dt>Đầu tuyến</dt>
-              <dd>{selected.item.startNodeCode || "Không rõ"}</dd>
+              <dd>{(item as WebMapRoute).startNodeCode || "Không rõ"}</dd>
             </div>
             <div>
               <dt>Cuối tuyến</dt>
-              <dd>{selected.item.endNodeCode || "Không rõ"}</dd>
+              <dd>{(item as WebMapRoute).endNodeCode || "Không rõ"}</dd>
             </div>
           </>
         )}

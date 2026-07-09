@@ -870,7 +870,7 @@ class ProjectScopedDatabaseProviderTest {
     }
 
     @Test
-    fun `databaseFor migrates legacy scoped db from version 24 to 46`() = runBlocking {
+    fun `databaseFor migrates legacy scoped db from version 24 to 47`() = runBlocking {
         val scopedFile = File(tempDir, "legacy-v24/project.sqlite")
         val project = projectEntity("project-legacy-24", scopedFile)
         sharedDatabase.projectDao().upsert(project)
@@ -881,7 +881,7 @@ class ProjectScopedDatabaseProviderTest {
         openedDatabases += scopedDatabase!!
 
         val version = scopedDatabase.openHelper.readableDatabase.version
-        assertEquals(46, version)
+        assertEquals(47, version)
         scopedDatabase.openHelper.readableDatabase.query("PRAGMA table_info(`work_plan`)").use { cursor ->
             var found = false
             val nameIndex = cursor.getColumnIndex("name")
@@ -899,7 +899,7 @@ class ProjectScopedDatabaseProviderTest {
     }
 
     @Test
-    fun `databaseFor migrates legacy scoped db from version 23 to 46`() = runBlocking {
+    fun `databaseFor migrates legacy scoped db from version 23 to 47`() = runBlocking {
         val scopedFile = File(tempDir, "legacy-v23/project.sqlite")
         val project = projectEntity("project-legacy-23", scopedFile)
         sharedDatabase.projectDao().upsert(project)
@@ -910,7 +910,7 @@ class ProjectScopedDatabaseProviderTest {
         openedDatabases += scopedDatabase!!
 
         val version = scopedDatabase.openHelper.readableDatabase.version
-        assertEquals(46, version)
+        assertEquals(47, version)
         assertTrue(tableExists(scopedDatabase, "material_handover"))
         assertTrue(tableExists(scopedDatabase, "material_declaration"))
         assertTrue(tableExists(scopedDatabase, "rag_document_embedding"))

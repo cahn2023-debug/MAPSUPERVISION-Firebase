@@ -230,6 +230,7 @@ class ObserveWorkspaceSnapshotUseCaseTest {
                 override suspend fun add(photo: SitePhoto): AppResult<Unit> = AppResult.Success(Unit)
                 override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> = AppResult.Success(emptyList())
                 override suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<SitePhoto>> = AppResult.Success(emptyList())
+                override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = AppResult.Success(emptyList())
                 override fun observeByProject(projectId: String): Flow<List<SitePhoto>> = flowOf(emptyList())
             },
             materialHandoverRepository = object : MaterialHandoverRepository {
@@ -324,6 +325,7 @@ private class FakePhotoRepository(
     override suspend fun add(photo: SitePhoto): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> = AppResult.Success(flow.value)
     override suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<SitePhoto>> = AppResult.Success(flow.value)
+    override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = AppResult.Success(emptyList())
     override fun observeByProject(projectId: String): Flow<List<SitePhoto>> = flow
 }
 

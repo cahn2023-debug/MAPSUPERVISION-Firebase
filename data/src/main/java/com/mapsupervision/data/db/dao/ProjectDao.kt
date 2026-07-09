@@ -24,6 +24,9 @@ interface ProjectDao {
     @Query("UPDATE projects SET projectDbPath = :projectDbPath WHERE id = :projectId")
     suspend fun updateProjectDbPath(projectId: String, projectDbPath: String)
 
+    @Query("UPDATE projects SET mediaStorageProvider = 'GOOGLE_DRIVE', mediaStorageFolderId = :folderId, mediaStorageFolderUrl = :folderUrl, mediaStorageUpdatedAtEpochMs = :updatedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId")
+    suspend fun updateMediaStorage(projectId: String, folderId: String, folderUrl: String, updatedAtEpochMs: Long)
+
     @Query("UPDATE projects SET isArchived = 1 WHERE id = :projectId")
     suspend fun archive(projectId: String)
 

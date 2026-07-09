@@ -20,6 +20,10 @@ data class Project(
     val updatedAtEpochMs: Long = createdAtEpochMs,
     val storageMode: ProjectStorageMode = ProjectStorageMode.LEGACY_SHARED,
     val projectDbPath: String = "",
+    val mediaStorageProvider: String = "GOOGLE_DRIVE",
+    val mediaStorageFolderId: String = "",
+    val mediaStorageFolderUrl: String = "",
+    val mediaStorageUpdatedAtEpochMs: Long = 0L,
     val isDeleted: Boolean = false,
     val deletedAtEpochMs: Long? = null
 )

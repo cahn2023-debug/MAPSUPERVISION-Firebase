@@ -92,22 +92,25 @@ Android media upload uses the webapp API route and stores the returned public Go
 Android `.env`:
 
 ```properties
-MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:3000
+MEDIA_UPLOAD_BASE_URL=https://your-webapp-domain.example
 ```
 
 Web `webapp/.env.local`:
 
 ```properties
 FIREBASE_SERVICE_ACCOUNT_JSON={...}
+FIREBASE_SERVICE_ACCOUNT_FILE=../mapsupervision-xxxx.json
 GOOGLE_DRIVE_ROOT_FOLDER_ID=...
+GOOGLE_DRIVE_ROOT_FOLDER_URL=https://drive.google.com/drive/folders/...
 GOOGLE_SERVICE_ACCOUNT_JSON={...}
+GOOGLE_SERVICE_ACCOUNT_FILE=../mapsupervision-xxxx.json
 ```
 
 Requirements:
 
 - The Firebase service account can verify ID tokens and read `projects/{projectId}/projectMembers`.
 - The Google service account has writer access to `GOOGLE_DRIVE_ROOT_FOLDER_ID`.
-- Uploaded Drive files are shared as public reader files so Android and webapp can display the public URL.
+- Android device must reach `MEDIA_UPLOAD_BASE_URL` directly. For real devices, use deployed HTTPS domain or reachable LAN/tunnel URL, not `127.0.0.1`.
 - The route creates folders under the root as `{projectId}/photos/Nodes`, `{projectId}/photos/Routes`, `{projectId}/media/videos/Nodes`, and `{projectId}/media/videos/Routes`.
 
 ## 6. Bootstrap global admin claim

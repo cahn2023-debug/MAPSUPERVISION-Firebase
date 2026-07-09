@@ -15,6 +15,7 @@ import com.mapsupervision.domain.repository.GisRepository
 import javax.inject.Inject
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -84,26 +85,44 @@ class GisRepositoryImpl @Inject constructor(
         ) }
 
     override suspend fun searchNodes(projectId: String, query: String): AppResult<List<GisNode>> = withContext(Dispatchers.IO) { runCatching {
-        val dao = nodeDao(projectId)
+        val scopedDao = nodeDao(projectId)
         val trimmedQuery = query.trim()
         val rows = when {
-            trimmedQuery.isBlank() -> dao.byProject(projectId)
-            else -> dao.searchFast(projectId, trimmedQuery).ifEmpty { dao.search(projectId, trimmedQuery) }
+            trimmedQuery.isBlank() -> scopedDao.byProject(projectId)
+            else -> scopedDao.searchFast(projectId, trimmedQuery).ifEmpty { scopedDao.search(projectId, trimmedQuery) }
         }
-        rows.map { it.toDomain() }
+        val resolvedRows = if (rows.isEmpty()) {
+            when {
+                trimmedQuery.isBlank() -> sharedDatabase.gisNodeDao().byProject(projectId)
+                else -> sharedDatabase.gisNodeDao().searchFast(projectId, trimmedQuery)
+                    .ifEmpty { sharedDatabase.gisNodeDao().search(projectId, trimmedQuery) }
+            }
+        } else {
+            rows
+        }
+        resolvedRows.map { it.toDomain() }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to search nodes", it)) }
     ) }
 
     override suspend fun searchRoutes(projectId: String, query: String): AppResult<List<GisRoute>> = withContext(Dispatchers.IO) { runCatching {
-        val dao = routeDao(projectId)
+        val scopedDao = routeDao(projectId)
         val trimmedQuery = query.trim()
         val rows = when {
-            trimmedQuery.isBlank() -> dao.byProject(projectId)
-            else -> dao.searchFast(projectId, trimmedQuery).ifEmpty { dao.search(projectId, trimmedQuery) }
+            trimmedQuery.isBlank() -> scopedDao.byProject(projectId)
+            else -> scopedDao.searchFast(projectId, trimmedQuery).ifEmpty { scopedDao.search(projectId, trimmedQuery) }
         }
-        rows.map { it.toDomain() }
+        val resolvedRows = if (rows.isEmpty()) {
+            when {
+                trimmedQuery.isBlank() -> sharedDatabase.gisRouteDao().byProject(projectId)
+                else -> sharedDatabase.gisRouteDao().searchFast(projectId, trimmedQuery)
+                    .ifEmpty { sharedDatabase.gisRouteDao().search(projectId, trimmedQuery) }
+            }
+        } else {
+            rows
+        }
+        resolvedRows.map { it.toDomain() }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to search routes", it)) }
@@ -118,15 +137,27 @@ class GisRepositoryImpl @Inject constructor(
     ) }
 
     override fun observeNodes(projectId: String, query: String): Flow<List<GisNode>> = flow {
-        val dao = nodeDao(projectId)
-        val source = if (query.isBlank()) dao.observeByProject(projectId) else dao.observeSearch(projectId, query)
-        emitAll(source.map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged())
+        val scopedDao = nodeDao(projectId)
+        val scopedSource = if (query.isBlank()) scopedDao.observeByProject(projectId) else scopedDao.observeSearch(projectId, query)
+        val sharedSource = if (query.isBlank()) sharedDatabase.gisNodeDao().observeByProject(projectId) else sharedDatabase.gisNodeDao().observeSearch(projectId, query)
+        emitAll(
+            combine(scopedSource, sharedSource) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                resolvedRows.map { it.toDomain() }
+            }.distinctUntilChanged()
+        )
     }
 
     override fun observeRoutes(projectId: String, query: String): Flow<List<GisRoute>> = flow {
-        val dao = routeDao(projectId)
-        val source = if (query.isBlank()) dao.observeByProject(projectId) else dao.observeSearch(projectId, query)
-        emitAll(source.map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged())
+        val scopedDao = routeDao(projectId)
+        val scopedSource = if (query.isBlank()) scopedDao.observeByProject(projectId) else scopedDao.observeSearch(projectId, query)
+        val sharedSource = if (query.isBlank()) sharedDatabase.gisRouteDao().observeByProject(projectId) else sharedDatabase.gisRouteDao().observeSearch(projectId, query)
+        emitAll(
+            combine(scopedSource, sharedSource) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                resolvedRows.map { it.toDomain() }
+            }.distinctUntilChanged()
+        )
     }
 
     private fun GisNode.toEntity() = GisNodeEntity(

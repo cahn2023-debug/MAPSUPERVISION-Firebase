@@ -90,11 +90,7 @@ class ProjectViewModel @Inject constructor(
             var activeId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
             val allProjects = (projectRepository.list(false) as? AppResult.Success)?.data.orEmpty()
             val accessState = firebaseAccessRepository.accessState.value
-            val projects = when {
-                accessState.session?.isAdmin == true -> allProjects
-                accessState.session != null -> allProjects.filter { it.id in accessState.allowedProjectIds }
-                else -> emptyList()
-            }
+            val projects = resolveVisibleProjects(allProjects, accessState)
 
             if ((activeId.isNullOrBlank() || projects.none { it.id == activeId }) && projects.isNotEmpty()) {
                 val defaultProjectId = projects.first().id
@@ -178,6 +174,25 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun updateProjectMediaStorage(projectId: String, folderInput: String) {
+        viewModelScope.launch {
+            val normalized = runCatching { normalizeGoogleDriveFolderInput(folderInput) }.getOrElse { error ->
+                _uiState.value = _uiState.value.copy(message = error.message ?: "Google Drive folder khong hop le")
+                return@launch
+            }
+            when (val res = projectRepository.updateMediaStorage(projectId, normalized.first, normalized.second)) {
+                is AppResult.Success -> {
+                    projectSyncRepository.notifyProjectChanged(projectId, "project_media_storage_updated")
+                    _uiState.value = _uiState.value.copy(message = "Da cap nhat thu muc Google Drive media")
+                }
+                is AppResult.Error -> {
+                    _uiState.value = _uiState.value.copy(message = "Khong the cap nhat thu muc media: ${res.throwable.message}")
+                }
+            }
+            refresh()
+        }
+    }
+
     fun importFiles(uris: List<Uri>) {
         viewModelScope.launch {
             val projectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return@launch
@@ -236,6 +251,10 @@ class ProjectViewModel @Inject constructor(
                     put("updatedAtEpochMs", project.updatedAtEpochMs)
                     put("storageMode", project.storageMode.name)
                     put("projectDbPath", project.projectDbPath)
+                    put("mediaStorageProvider", project.mediaStorageProvider)
+                    put("mediaStorageFolderId", project.mediaStorageFolderId)
+                    put("mediaStorageFolderUrl", project.mediaStorageFolderUrl)
+                    put("mediaStorageUpdatedAtEpochMs", project.mediaStorageUpdatedAtEpochMs)
                 })
                 put("nodes", JSONArray().apply {
                     nodes.forEach { n ->
@@ -543,7 +562,11 @@ class ProjectViewModel @Inject constructor(
                     metadataVersion = projJson.optInt("metadataVersion", json.optInt("metadataVersion", 3)),
                     updatedAtEpochMs = projJson.optLong("updatedAtEpochMs", json.optLong("updatedAtEpochMs", System.currentTimeMillis())),
                     storageMode = ProjectStorageMode.PROJECT_DB,
-                    projectDbPath = ""
+                    projectDbPath = "",
+                    mediaStorageProvider = projJson.optString("mediaStorageProvider", "GOOGLE_DRIVE"),
+                    mediaStorageFolderId = projJson.optString("mediaStorageFolderId", ""),
+                    mediaStorageFolderUrl = projJson.optString("mediaStorageFolderUrl", ""),
+                    mediaStorageUpdatedAtEpochMs = projJson.optLong("mediaStorageUpdatedAtEpochMs", 0L)
                 )
                 projectRepository.importProject(projObj)
 
@@ -805,6 +828,34 @@ data class ProjectUiState(
     val duplicateProjectToResolve: Project? = null,
     val duplicateZipUri: Uri? = null
 )
+
+private fun normalizeGoogleDriveFolderInput(value: String): Pair<String, String> {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) throw IllegalArgumentException("Google Drive folder URL/ID khong duoc de trong")
+    val folderId = Regex("""/folders/([^/?#]+)""").find(trimmed)?.groupValues?.getOrNull(1)
+        ?: Regex("""[?&]id=([^&#]+)""").find(trimmed)?.groupValues?.getOrNull(1)
+        ?: trimmed
+    val decoded = java.net.URLDecoder.decode(folderId.trim(), Charsets.UTF_8.name())
+    if (!Regex("""^[A-Za-z0-9_-]{10,}$""").matches(decoded)) {
+        throw IllegalArgumentException("Google Drive folder URL/ID khong hop le")
+    }
+    return decoded to "https://drive.google.com/drive/folders/$decoded"
+}
+
+internal fun resolveVisibleProjects(
+    allProjects: List<Project>,
+    accessState: com.mapsupervision.domain.model.FirebaseAccessState
+): List<Project> {
+    val allowedProjectIds = accessState.allowedProjectIds
+    val session = accessState.session
+    if (session == null || session.isAdmin || allowedProjectIds.isEmpty()) {
+        return allProjects
+    }
+    return allProjects.sortedWith(
+        compareByDescending<Project> { it.id in allowedProjectIds }
+            .thenByDescending { it.updatedAtEpochMs }
+    )
+}
 
 private fun JSONObject.optNullableDouble(name: String): Double? =
     if (!has(name) || isNull(name)) null else optDouble(name).takeIf { !it.isNaN() }

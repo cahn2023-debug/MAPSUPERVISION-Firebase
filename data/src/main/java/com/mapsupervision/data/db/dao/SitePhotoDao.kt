@@ -239,6 +239,20 @@ interface SitePhotoDao {
     @Query("SELECT * FROM site_photos WHERE projectId = :projectId AND updatedAtEpochMs > :updatedAfterEpochMs ORDER BY updatedAtEpochMs ASC")
     suspend fun changedSince(projectId: String, updatedAfterEpochMs: Long): List<SitePhotoEntity>
 
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1
+            FROM site_photos
+            WHERE projectId = :projectId
+              AND isDeleted = 0
+              AND (syncStatus != 'DONE' OR remoteUrl IS NULL OR TRIM(remoteUrl) = '')
+            LIMIT 1
+        )
+        """
+    )
+    suspend fun hasPendingUploads(projectId: String): Boolean
+
     @Query("DELETE FROM site_photos WHERE projectId = :projectId AND isDeleted = 1 AND deletedAtEpochMs IS NOT NULL AND deletedAtEpochMs < :deletedBeforeEpochMs")
     suspend fun purgeDeletedBefore(projectId: String, deletedBeforeEpochMs: Long): Int
 }

@@ -10,6 +10,7 @@ plugins {
 
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.Base64
 
 
 android {
@@ -32,12 +33,31 @@ android {
         val firebaseStorageBucket = envProperties.getProperty("FIREBASE_STORAGE_BUCKET") ?: ""
         val firebaseAuthDomain = envProperties.getProperty("FIREBASE_AUTH_DOMAIN") ?: ""
         val mediaUploadBaseUrl = envProperties.getProperty("MEDIA_UPLOAD_BASE_URL") ?: ""
+        val driveDirectUploadEnabled = (envProperties.getProperty("DRIVE_DIRECT_UPLOAD_ENABLED") ?: "false").toBoolean()
+        val driveRootFolderId = envProperties.getProperty("GOOGLE_DRIVE_ROOT_FOLDER_ID") ?: ""
+        val driveServiceAccountJson = when {
+            !envProperties.getProperty("GOOGLE_SERVICE_ACCOUNT_JSON").isNullOrBlank() ->
+                envProperties.getProperty("GOOGLE_SERVICE_ACCOUNT_JSON") ?: ""
+            !envProperties.getProperty("GOOGLE_SERVICE_ACCOUNT_FILE").isNullOrBlank() -> {
+                val serviceAccountFile = rootProject.file(envProperties.getProperty("GOOGLE_SERVICE_ACCOUNT_FILE")!!)
+                if (serviceAccountFile.exists()) serviceAccountFile.readText() else ""
+            }
+            else -> ""
+        }
+        val driveServiceAccountJsonBase64 = if (driveServiceAccountJson.isBlank()) {
+            ""
+        } else {
+            Base64.getEncoder().encodeToString(driveServiceAccountJson.toByteArray(Charsets.UTF_8))
+        }
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"$firebaseStorageBucket\"")
         buildConfigField("String", "FIREBASE_AUTH_DOMAIN", "\"$firebaseAuthDomain\"")
         buildConfigField("String", "MEDIA_UPLOAD_BASE_URL", "\"$mediaUploadBaseUrl\"")
+        buildConfigField("boolean", "DRIVE_DIRECT_UPLOAD_ENABLED", driveDirectUploadEnabled.toString())
+        buildConfigField("String", "GOOGLE_DRIVE_ROOT_FOLDER_ID", "\"$driveRootFolderId\"")
+        buildConfigField("String", "GOOGLE_SERVICE_ACCOUNT_JSON_BASE64", "\"$driveServiceAccountJsonBase64\"")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

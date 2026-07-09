@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mapsupervision.app.sync.FirebaseMediaUploadScheduler
 import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.core.result.AppResult
 import com.mapsupervision.domain.ai.AiOrchestrator
@@ -102,6 +103,7 @@ class WorkspaceViewModel @Inject constructor(
     internal val materialHandoverRepository: MaterialHandoverRepository,
     internal val firebaseAccessRepository: FirebaseAccessRepository,
     internal val firebaseSyncRepository: FirebaseSyncRepository,
+    private val firebaseMediaUploadScheduler: FirebaseMediaUploadScheduler,
     private val observeWorkspaceSnapshot: ObserveWorkspaceSnapshotUseCase,
     private val migrationService: com.mapsupervision.domain.service.ProjectStorageMigrationService
 ) : ViewModel() {
@@ -128,6 +130,7 @@ class WorkspaceViewModel @Inject constructor(
     private var lastAiOpsInput: AiOpsInput? = null
     private var lastMigrationProjectId: String? = null
     private var lastRawSnapshot: WorkspaceSnapshot? = null
+    internal var lastAutoUploadScheduledProjectId: String? = null
     internal val directCaptureSaveDeduper = DirectCaptureSaveDeduper()
     internal var firebaseSyncJob: Job? = null
 
@@ -349,11 +352,15 @@ class WorkspaceViewModel @Inject constructor(
                     )
                 }
             } else {
+                firebaseMediaUploadScheduler.enqueue("sync_failed:$trigger")
                 AppLogger.e(
                     IllegalStateException(mergedState.lastError),
                     "firebase.sync.failed projectId=$resolvedProjectId trigger=$trigger"
                 )
                 showMessage("Firebase sync loi: ${mergedState.lastError}")
+            }
+            if (mergedState.failed > 0) {
+                firebaseMediaUploadScheduler.enqueue("sync_partial_failed:$trigger")
             }
         }
     }
@@ -372,6 +379,7 @@ class WorkspaceViewModel @Inject constructor(
                 }
                 .collectLatest { snapshot ->
                     if (snapshot == null) {
+                        lastAutoUploadScheduledProjectId = null
                         _state.value = WorkspaceState(
                             importUi = ImportUiState(
                                 status = ImportStatus.IDLE,
@@ -379,6 +387,10 @@ class WorkspaceViewModel @Inject constructor(
                             )
                         )
                         return@collectLatest
+                    }
+                    if (lastAutoUploadScheduledProjectId != snapshot.projectId) {
+                        lastAutoUploadScheduledProjectId = snapshot.projectId
+                        firebaseMediaUploadScheduler.enqueue("workspace_loaded:" + snapshot.projectId)
                     }
                     applySnapshot(snapshot)
                 }
@@ -394,6 +406,7 @@ class WorkspaceViewModel @Inject constructor(
                     "design_import_completed" -> showMessage("Đã cập nhật dữ liệu thiết kế")
                     "photo_saved" -> {
                         showMessage("Đã lưu ảnh hiện trường")
+                        firebaseMediaUploadScheduler.enqueue("photo_saved")
                         syncFirebaseNow(activeProjectId, trigger = "photo_saved")
                     }
                     "project_imported" -> showMessage("Đã nhập dự án")
@@ -700,9 +713,14 @@ private fun summarizeNodeCoordinates(nodes: List<GisNode>): WorkspaceCoordinateS
     )
 }
 
-private fun WorkspaceSnapshot.filterForAccess(accessState: FirebaseAccessState): WorkspaceSnapshot {
+internal fun WorkspaceSnapshot.filterForAccess(accessState: FirebaseAccessState): WorkspaceSnapshot {
     val session = accessState.session ?: return this
     if (session.isAdmin) return this
+    val hasResolvedProjectPermissions = accessState.allowedProjectIds.isNotEmpty() ||
+        accessState.permissionsByProject.isNotEmpty()
+    if (!hasResolvedProjectPermissions) {
+        return this
+    }
     val projectAccess = accessState.permissionsByProject[projectId] ?: return copy(
         designNodes = emptyList(),
         designRoutes = emptyList(),

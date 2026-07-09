@@ -14,7 +14,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           exists(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)).data.isActive == true
+          get(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)).data.isActive != false
         )
       );
     }

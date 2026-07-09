@@ -403,6 +403,8 @@ fun WorkspaceAppShell(
                         projectViewModel.importProject(context, uri, overwrite, createCopy)
                     },
                     onDismissDuplicateDialog = projectViewModel::dismissDuplicateDialog,
+                    onUpdateProjectStoragePath = projectViewModel::updateProjectStoragePath,
+                    onUpdateProjectMediaStorage = projectViewModel::updateProjectMediaStorage,
                     selectedNodePhotos = workspaceState.selectedNodePhotos,
                     onDismissPhotoPopup = workspaceViewModel::clearSelectedNodePhotos,
                     selectedObjectNotes = workspaceState.selectedObjectNotes,

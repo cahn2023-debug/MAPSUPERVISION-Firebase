@@ -9,6 +9,7 @@ import com.mapsupervision.domain.model.ImportedFile
 import com.mapsupervision.domain.repository.ImportedFileRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -42,24 +43,38 @@ class ImportedFileRepositoryImpl @Inject constructor(
     ) }
 
     override suspend fun byProject(projectId: String): AppResult<List<ImportedFile>> = withContext(Dispatchers.IO) { runCatching {
-        dao(projectId).byProject(projectId).map { it.toDomain() }
+        val rows = dao(projectId).byProject(projectId)
+        val resolvedRows = if (rows.isEmpty()) dao.byProject(projectId) else rows
+        resolvedRows.map { it.toDomain() }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to load imported files", it)) }
     ) }
 
     override suspend fun deleteById(id: String): AppResult<Unit> = withContext(Dispatchers.IO) { runCatching {
-        val activeProjectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
-        val scopedDao = if (activeProjectId.isNullOrBlank()) dao else dao(activeProjectId)
+        val projectId = resolveProjectIdForDelete(id)
         val now = System.currentTimeMillis()
-        scopedDao.deleteById(id, now, now)
+        val scopedDao = projectId?.let { projectScopedDatabaseProvider.databaseFor(it)?.importedFileDao() }
+        writeToSharedAndScoped(
+            sharedWrite = { dao.deleteById(id, now, now) },
+            scopedWrite = { scopedDao?.deleteById(id, now, now) }
+        )
     }.fold(
         onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(DatabaseException("Failed to delete imported file", it)) }
     ) }
 
     override fun observeByProject(projectId: String): Flow<List<ImportedFile>> = flow {
-        emitAll(dao(projectId).observeByProject(projectId).map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged())
+        val scopedDao = dao(projectId)
+        emitAll(
+            combine(
+                scopedDao.observeByProject(projectId),
+                dao.observeByProject(projectId)
+            ) { scopedRows, sharedRows ->
+                val resolvedRows = if (scopedRows.isEmpty()) sharedRows else scopedRows
+                resolvedRows.map { it.toDomain() }
+            }.distinctUntilChanged()
+        )
     }
 
     private fun ImportedFile.toEntity() = ImportedFileEntity(
@@ -90,4 +105,37 @@ class ImportedFileRepositoryImpl @Inject constructor(
 
     private suspend fun dao(projectId: String): ImportedFileDao =
         projectScopedDatabaseProvider.databaseFor(projectId)?.importedFileDao() ?: dao
+
+    private suspend fun resolveProjectIdForDelete(id: String): String? {
+        val sharedMatch = dao.findById(id)
+        if (sharedMatch != null) {
+            return sharedMatch.projectId
+        }
+
+        val activeProjectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
+        if (activeProjectId.isNullOrBlank()) {
+            return null
+        }
+
+        val scopedDao = projectScopedDatabaseProvider.databaseFor(activeProjectId)?.importedFileDao() ?: return null
+        return scopedDao.findById(id)?.projectId
+    }
+
+    private suspend fun writeToSharedAndScoped(
+        sharedWrite: suspend () -> Unit,
+        scopedWrite: suspend () -> Unit?
+    ) {
+        val failures = mutableListOf<Throwable>()
+        var success = false
+        runCatching { sharedWrite() }
+            .onSuccess { success = true }
+            .onFailure { failures += it }
+        runCatching { scopedWrite() }
+            .onSuccess { if (it != null) success = true }
+            .onFailure { failures += it }
+
+        if (!success && failures.isNotEmpty()) {
+            throw failures.first()
+        }
+    }
 }

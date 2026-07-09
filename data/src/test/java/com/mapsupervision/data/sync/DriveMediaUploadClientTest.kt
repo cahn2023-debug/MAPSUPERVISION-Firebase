@@ -39,10 +39,15 @@ class DriveMediaUploadClientTest {
         val original = File(tempDir, "photo.jpg").apply { writeText("image") }
         val thumbnail = File(tempDir, "photo-thumb.jpg").apply { writeText("thumb") }
 
-        val url = DriveMediaUploadClient(OkHttpClient()).upload(
+        val url = DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        ).upload(
             server.url("/").toString(),
             DriveMediaUploadRequest(
                 projectId = "project1",
+                projectName = "Project Alpha",
+                rootFolderId = "drive-folder-123",
                 token = "token1",
                 photoId = "photo1",
                 objectType = DriveMediaObjectType.ROUTE,
@@ -50,6 +55,8 @@ class DriveMediaUploadClientTest {
                 mediaType = MediaType.IMAGE,
                 mimeType = "image/jpeg",
                 capturedAtEpochMs = 123L,
+                address = "Hanoi",
+                captureNote = "test note",
                 originalFile = original,
                 thumbnailFile = thumbnail
             )
@@ -77,10 +84,15 @@ class DriveMediaUploadClientTest {
         )
         val original = File(tempDir, "photo.jpg").apply { writeText("image") }
 
-        DriveMediaUploadClient(OkHttpClient()).upload(
+        DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        ).upload(
             server.url("/").toString(),
             DriveMediaUploadRequest(
                 projectId = "project1",
+                projectName = "Project Alpha",
+                rootFolderId = "drive-folder-123",
                 token = "token1",
                 photoId = "photo1",
                 objectType = DriveMediaObjectType.NODE,
@@ -88,9 +100,28 @@ class DriveMediaUploadClientTest {
                 mediaType = MediaType.IMAGE,
                 mimeType = "image/jpeg",
                 capturedAtEpochMs = 123L,
+                address = null,
+                captureNote = null,
                 originalFile = original,
                 thumbnailFile = null
             )
         )
+    }
+
+    @Test
+    fun buildMediaFileName_formatsTimestampAddressAndNote() {
+        val client = DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        val name = client.buildMediaFileName(
+            capturedAtEpochMs = 0L,
+            address = "123 Tran Hung Dao / Quan 1",
+            captureNote = "Ghi chu: test",
+            extension = "jpg"
+        )
+
+        assertEquals("1970-01-01 07.00.00 - 123 Tran Hung Dao Quan 1 - Ghi chu test.jpg", name)
     }
 }

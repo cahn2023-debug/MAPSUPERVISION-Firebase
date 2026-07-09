@@ -12,4 +12,6 @@ interface ProjectRepository {
     suspend fun clearProject(projectId: String): AppResult<Unit>
     suspend fun touch(projectId: String): AppResult<Unit>
     suspend fun updateStoragePath(projectId: String, newPath: String): AppResult<Unit>
+    suspend fun updateMediaStorage(projectId: String, folderId: String, folderUrl: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Project media storage update is not supported"))
 }

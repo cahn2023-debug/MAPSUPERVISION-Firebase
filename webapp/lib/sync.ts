@@ -33,6 +33,10 @@ export type ProjectDoc = {
   name: string;
   slug: string;
   projectCode: string | null;
+  mediaStorageProvider: "GOOGLE_DRIVE";
+  mediaStorageFolderId: string;
+  mediaStorageFolderUrl: string;
+  mediaStorageUpdatedAtEpochMs: number;
   updatedAtEpochMs: number;
   isDeleted: boolean;
 };
@@ -53,6 +57,10 @@ export type ProjectRow = {
   updatedAtEpochMs: number;
   storageMode: "PROJECT_DB";
   projectDbPath: string;
+  mediaStorageProvider: "GOOGLE_DRIVE";
+  mediaStorageFolderId: string;
+  mediaStorageFolderUrl: string;
+  mediaStorageUpdatedAtEpochMs: number;
   isDeleted: boolean;
   deletedAtEpochMs: number | null;
 };
@@ -134,10 +142,24 @@ export type SitePhotoRow = {
   engineer: string;
   capturedAtEpochMs: number;
   updatedAtEpochMs: number;
+  address: string | null;
+  captureNote: string | null;
   remoteUrl: string | null;
   syncStatus: string;
   mimeType: string;
   mediaType: string;
+  isDeleted: boolean;
+};
+
+export type ReportDraftRow = {
+  id: string;
+  projectId: string;
+  title: string;
+  executiveSummary: string;
+  riskSection: string;
+  recommendedActionsCsv: string;
+  createdAtEpochMs: number;
+  updatedAtEpochMs: number;
   isDeleted: boolean;
 };
 
@@ -151,7 +173,8 @@ export type SyncTableName =
   | "site_photos"
   | "work_volume_progress"
   | "material_declaration"
-  | "material_handover";
+  | "material_handover"
+  | "report_draft";
 
 export const syncTables: SyncTableName[] = [
   "gis_node",
@@ -163,7 +186,8 @@ export const syncTables: SyncTableName[] = [
   "site_photos",
   "work_volume_progress",
   "material_declaration",
-  "material_handover"
+  "material_handover",
+  "report_draft"
 ];
 
 export type ProjectCollections = Record<SyncTableName, Record<string, unknown>[]>;
@@ -178,7 +202,8 @@ export const emptyProjectCollections = (): ProjectCollections => ({
   site_photos: [],
   work_volume_progress: [],
   material_declaration: [],
-  material_handover: []
+  material_handover: [],
+  report_draft: []
 });
 
 export function unpackEnvelope<T extends Record<string, unknown>>(
@@ -226,6 +251,50 @@ function slugifyProjectName(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
+export function normalizeGoogleDriveFolderInput(value: string): { folderId: string; folderUrl: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return { folderId: "", folderUrl: "" };
+
+  let folderId = trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    const folderMatch = parsed.pathname.match(/\/folders\/([^/?#]+)/);
+    folderId = folderMatch?.[1] ?? parsed.searchParams.get("id") ?? trimmed;
+  } catch {
+    const folderMatch = trimmed.match(/\/folders\/([^/?#]+)/);
+    folderId = folderMatch?.[1] ?? trimmed;
+  }
+
+  folderId = decodeURIComponent(folderId).trim();
+  if (!/^[A-Za-z0-9_-]{10,}$/.test(folderId)) {
+    throw new Error("Google Drive folder URL/ID khong hop le.");
+  }
+
+  return {
+    folderId,
+    folderUrl: `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`
+  };
+}
+
+export function buildProjectMediaPreviewUrl(projectId: string, photoId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/media?photoId=${encodeURIComponent(photoId)}`;
+}
+
+function projectDocFromRaw(id: string, raw: Record<string, unknown>): ProjectDoc {
+  return {
+    id,
+    name: String(raw.name ?? id),
+    slug: String(raw.slug ?? ""),
+    projectCode: raw.projectCode ? String(raw.projectCode) : null,
+    mediaStorageProvider: "GOOGLE_DRIVE",
+    mediaStorageFolderId: raw.mediaStorageFolderId ? String(raw.mediaStorageFolderId) : "",
+    mediaStorageFolderUrl: raw.mediaStorageFolderUrl ? String(raw.mediaStorageFolderUrl) : "",
+    mediaStorageUpdatedAtEpochMs: Number(raw.mediaStorageUpdatedAtEpochMs ?? 0),
+    updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
+    isDeleted: Boolean(raw.isDeleted ?? false)
+  };
+}
+
 export async function createProjectDocument(
   firestore: Firestore,
   creator: { uid: string; email?: string | null; displayName?: string | null },
@@ -246,6 +315,10 @@ export async function createProjectDocument(
     updatedAtEpochMs: now,
     storageMode: "PROJECT_DB",
     projectDbPath: "",
+    mediaStorageProvider: "GOOGLE_DRIVE",
+    mediaStorageFolderId: "",
+    mediaStorageFolderUrl: "",
+    mediaStorageUpdatedAtEpochMs: 0,
     isDeleted: false,
     deletedAtEpochMs: null
   };
@@ -281,9 +354,32 @@ export async function createProjectDocument(
     name: payload.name,
     slug: payload.slug,
     projectCode: payload.projectCode,
+    mediaStorageProvider: payload.mediaStorageProvider,
+    mediaStorageFolderId: payload.mediaStorageFolderId,
+    mediaStorageFolderUrl: payload.mediaStorageFolderUrl,
+    mediaStorageUpdatedAtEpochMs: payload.mediaStorageUpdatedAtEpochMs,
     updatedAtEpochMs: payload.updatedAtEpochMs,
     isDeleted: payload.isDeleted
   };
+}
+
+export async function updateProjectMediaStorage(
+  firestore: Firestore,
+  projectId: string,
+  folderInput: string
+): Promise<void> {
+  const now = Date.now();
+  const normalized = normalizeGoogleDriveFolderInput(folderInput);
+  const ref = doc(firestore, "projects", projectId);
+  await updateDoc(ref, {
+    "data.mediaStorageProvider": "GOOGLE_DRIVE",
+    "data.mediaStorageFolderId": normalized.folderId,
+    "data.mediaStorageFolderUrl": normalized.folderUrl,
+    "data.mediaStorageUpdatedAtEpochMs": now,
+    "data.updatedAtEpochMs": now,
+    updatedAtEpochMs: now,
+    lastSyncedAtEpochMs: now
+  });
 }
 
 export async function upsertUserProfile(
@@ -460,14 +556,7 @@ export function subscribeProjects(
       const rows = snapshot.docs
         .map((projectDoc) => {
           const raw = unpackEnvelope<Record<string, unknown>>(projectDoc.id, projectDoc.data());
-          return {
-            id: projectDoc.id,
-            name: String(raw.name ?? projectDoc.id),
-            slug: String(raw.slug ?? ""),
-            projectCode: raw.projectCode ? String(raw.projectCode) : null,
-            updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
-            isDeleted: Boolean(raw.isDeleted ?? false)
-          };
+          return projectDocFromRaw(projectDoc.id, raw);
         })
         .filter((project) => !project.isDeleted)
         .sort((left, right) => right.updatedAtEpochMs - left.updatedAtEpochMs);
@@ -491,14 +580,7 @@ export function subscribeProjectDocument(
         return;
       }
       const raw = unpackEnvelope<Record<string, unknown>>(snapshot.id, snapshot.data());
-      onProject({
-        id: snapshot.id,
-        name: String(raw.name ?? snapshot.id),
-        slug: String(raw.slug ?? ""),
-        projectCode: raw.projectCode ? String(raw.projectCode) : null,
-        updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
-        isDeleted: Boolean(raw.isDeleted ?? false)
-      });
+      onProject(projectDocFromRaw(snapshot.id, raw));
     },
     onError
   );
@@ -512,11 +594,12 @@ export function subscribeProjectTable(
   onError: (tableName: SyncTableName, error: Error) => void
 ): Unsubscribe {
   return onSnapshot(
-    query(collection(doc(firestore, "projects", projectId), tableName), orderBy("updatedAtEpochMs", "desc")),
+    collection(doc(firestore, "projects", projectId), tableName),
     (snapshot: QuerySnapshot<DocumentData>) => {
       const rows = snapshot.docs
         .map((rowDoc) => unpackEnvelope<Record<string, unknown>>(rowDoc.id, rowDoc.data()))
-        .filter((row) => !Boolean(row.isDeleted));
+        .filter((row) => !Boolean(row.isDeleted))
+        .sort((left, right) => Number(right.updatedAtEpochMs ?? 0) - Number(left.updatedAtEpochMs ?? 0));
       onRows(tableName, rows);
     },
     (error) => onError(tableName, error)
@@ -587,7 +670,8 @@ export async function createDailyLogDocument(
     unit: string;
     categoryName: string;
     weather: string;
-  }
+  },
+  customEpochDay?: number
 ): Promise<void> {
   const now = Date.now();
   const ref = doc(collection(doc(collection(firestore, "projects"), projectId), "daily_log"));
@@ -600,7 +684,7 @@ export async function createDailyLogDocument(
     createdAtEpochMs: now,
     weather: draft.weather.trim(),
     temperature: 0,
-    dateEpochDay: Math.floor(now / 86400000),
+    dateEpochDay: customEpochDay ?? Math.floor(now / 86400000),
     volume: Number(draft.volume || 0),
     unit: draft.unit.trim(),
     categoryName: draft.categoryName.trim(),

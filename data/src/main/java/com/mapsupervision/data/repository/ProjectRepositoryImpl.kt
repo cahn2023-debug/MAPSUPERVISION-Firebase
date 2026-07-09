@@ -86,6 +86,10 @@ class ProjectRepositoryImpl @Inject constructor(
             updatedAtEpochMs = resolved.updatedAtEpochMs,
             storageMode = resolved.storageMode,
             projectDbPath = resolved.projectDbPath,
+            mediaStorageProvider = resolved.mediaStorageProvider,
+            mediaStorageFolderId = resolved.mediaStorageFolderId,
+            mediaStorageFolderUrl = resolved.mediaStorageFolderUrl,
+            mediaStorageUpdatedAtEpochMs = resolved.mediaStorageUpdatedAtEpochMs,
             isDeleted = resolved.isDeleted,
             deletedAtEpochMs = resolved.deletedAtEpochMs
         )
@@ -188,6 +192,23 @@ class ProjectRepositoryImpl @Inject constructor(
         onFailure = { AppResult.Error(DatabaseException("Failed to update storage path", it)) }
     )
 
+    override suspend fun updateMediaStorage(projectId: String, folderId: String, folderUrl: String): AppResult<Unit> = runCatching {
+        val normalizedFolderId = folderId.trim()
+        val normalizedFolderUrl = folderUrl.trim()
+        if (normalizedFolderId.isBlank()) {
+            throw IllegalArgumentException("Google Drive folder ID is required")
+        }
+        projectDao.updateMediaStorage(
+            projectId = projectId,
+            folderId = normalizedFolderId,
+            folderUrl = normalizedFolderUrl,
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to update media storage", it)) }
+    )
+
     private fun copyDirectory(source: java.io.File, destination: java.io.File) {
         if (!source.exists()) return
         if (!destination.exists()) {
@@ -220,6 +241,10 @@ class ProjectRepositoryImpl @Inject constructor(
         updatedAtEpochMs = updatedAtEpochMs,
         storageMode = storageMode,
         projectDbPath = projectDbPath,
+        mediaStorageProvider = mediaStorageProvider,
+        mediaStorageFolderId = mediaStorageFolderId,
+        mediaStorageFolderUrl = mediaStorageFolderUrl,
+        mediaStorageUpdatedAtEpochMs = mediaStorageUpdatedAtEpochMs,
         isDeleted = isDeleted,
         deletedAtEpochMs = deletedAtEpochMs
     )

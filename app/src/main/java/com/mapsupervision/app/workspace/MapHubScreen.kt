@@ -202,6 +202,7 @@ fun MapHubScreen(
     onResolveDuplicateProject: (Uri, Boolean, Boolean) -> Unit = { _, _, _ -> },
     onDismissDuplicateDialog: () -> Unit = {},
     onUpdateProjectStoragePath: (String, String) -> Unit = { _, _ -> },
+    onUpdateProjectMediaStorage: (String, String) -> Unit = { _, _ -> },
     session: FirebaseUserSession,
     onSignOut: () -> Unit,
     firebaseSyncState: FirebaseSyncState,
@@ -234,6 +235,7 @@ fun MapHubScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var selectedProjectForSettings by remember { mutableStateOf<com.mapsupervision.domain.model.Project?>(null) }
     var editedStoragePath by remember { mutableStateOf("") }
+    var editedMediaStorageInput by remember { mutableStateOf("") }
     val storageFolderPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -428,6 +430,7 @@ fun MapHubScreen(
                                             IconButton(onClick = {
                                                 selectedProjectForSettings = p
                                                 editedStoragePath = p.projectDbPath.substringBeforeLast("/db/")
+                                                editedMediaStorageInput = p.mediaStorageFolderUrl.ifBlank { p.mediaStorageFolderId }
                                                 showSettingsDialog = true
                                             }) {
                                                 Icon(
@@ -1316,6 +1319,27 @@ fun MapHubScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        androidx.compose.material3.OutlinedTextField(
+                            value = editedMediaStorageInput,
+                            onValueChange = { editedMediaStorageInput = it },
+                            label = { Text("Thu muc Google Drive media", color = secondaryTextColor) },
+                            placeholder = { Text("https://drive.google.com/drive/folders/...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium,
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textColor,
+                                unfocusedTextColor = textColor,
+                                focusedBorderColor = orangeColor,
+                                unfocusedBorderColor = secondaryTextColor,
+                                cursorColor = orangeColor
+                            )
+                        )
+                        Text(
+                            "Share folder Google Drive cho service account voi quyen writer de dong bo media.",
+                            color = secondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             androidx.compose.material3.OutlinedTextField(
                                 value = editedStoragePath,
@@ -1346,8 +1370,11 @@ fun MapHubScreen(
                         onClick = {
                             if (editedStoragePath.isNotBlank()) {
                                 onUpdateProjectStoragePath(project.id, editedStoragePath)
-                                showSettingsDialog = false
                             }
+                            if (editedMediaStorageInput.isNotBlank()) {
+                                onUpdateProjectMediaStorage(project.id, editedMediaStorageInput)
+                            }
+                            showSettingsDialog = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor)
                     ) {

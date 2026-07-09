@@ -8,5 +8,6 @@ interface PhotoRepository {
     suspend fun add(photo: SitePhoto): AppResult<Unit>
     suspend fun byProject(projectId: String): AppResult<List<SitePhoto>>
     suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<SitePhoto>>
+    suspend fun listProjectsWithPendingUploads(): AppResult<List<String>>
     fun observeByProject(projectId: String): Flow<List<SitePhoto>>
 }

@@ -12,6 +12,7 @@ import com.mapsupervision.data.db.ProjectScopedDatabaseProvider
 import com.mapsupervision.data.db.entity.GisNodeEntity
 import com.mapsupervision.data.db.entity.GisRouteEntity
 import com.mapsupervision.data.db.entity.ProjectEntity
+import com.mapsupervision.data.db.entity.SitePhotoEntity
 import com.mapsupervision.domain.model.MediaType
 import com.mapsupervision.domain.model.PhotoLocationStatus
 import com.mapsupervision.domain.model.ProjectStorageMode
@@ -57,7 +58,7 @@ class PhotoRepositoryImplTest {
             .allowMainThreadQueries()
             .build()
         provider = ProjectScopedDatabaseProvider(context, sharedDatabase, storageManager)
-        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider)
+        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao())
     }
 
     @After
@@ -160,6 +161,33 @@ class PhotoRepositoryImplTest {
         assertNotNull(photo.thumbnailPath)
     }
 
+    @Test
+    fun `listProjectsWithPendingUploads returns projects from scoped and shared storage`() = runBlocking {
+        val scopedProject = projectEntity("project-scoped", File(tempDir, "scoped/project.sqlite"))
+        val sharedProject = scopedProject.copy(
+            id = "project-shared",
+            name = "project-shared",
+            slug = "project-shared",
+            storageMode = ProjectStorageMode.LEGACY_SHARED,
+            projectDbPath = ""
+        )
+        sharedDatabase.projectDao().upsert(scopedProject)
+        sharedDatabase.projectDao().upsert(sharedProject)
+
+        val scopedDatabase = provider.databaseFor(scopedProject.id)
+        openedDatabases += scopedDatabase!!
+        scopedDatabase.sitePhotoDao().upsert(sitePhotoEntity(projectId = scopedProject.id, objectCode = "NODE-1"))
+        sharedDatabase.sitePhotoDao().upsert(sitePhotoEntity(projectId = sharedProject.id, objectCode = "NODE-2"))
+
+        val result = repository.listProjectsWithPendingUploads()
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(
+            setOf(scopedProject.id, sharedProject.id),
+            (result as AppResult.Success).data.toSet()
+        )
+    }
+
     private fun projectEntity(projectId: String, scopedFile: File) = ProjectEntity(
         id = projectId,
         name = projectId,
@@ -196,6 +224,27 @@ class PhotoRepositoryImplTest {
         mediaType = mediaType,
         mimeType = mimeType,
         durationMs = durationMs,
+        syncStatus = SitePhotoSyncStatus.PENDING
+    )
+
+    private fun sitePhotoEntity(projectId: String, objectCode: String) = SitePhotoEntity(
+        id = "entity-$projectId-$objectCode",
+        projectId = projectId,
+        objectCode = objectCode,
+        tagCodesCsv = "",
+        filePath = "D:/captures/$objectCode.jpg",
+        thumbnailPath = "D:/captures/$objectCode-thumb.jpg",
+        latitude = 21.028,
+        longitude = 105.854,
+        locationAccuracyM = 3f,
+        isGpsMocked = false,
+        locationStatus = PhotoLocationStatus.OK,
+        engineer = "Field",
+        capturedAtEpochMs = 1_000L,
+        matchedAtEpochMs = 1_000L,
+        matchingTimeOffsetMs = 0L,
+        mediaType = MediaType.IMAGE,
+        mimeType = "image/jpeg",
         syncStatus = SitePhotoSyncStatus.PENDING
     )
 

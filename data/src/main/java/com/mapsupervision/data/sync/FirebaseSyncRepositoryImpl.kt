@@ -8,6 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.mapsupervision.core.error.DatabaseException
+import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.core.result.AppResult
 import com.mapsupervision.data.BuildConfig
 import com.mapsupervision.data.db.MapSupervisionDatabase
@@ -31,8 +32,10 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
 ) : FirebaseSyncRepository {
     private val appContext = context.applicationContext
     private val metadataStore = FirebaseSyncMetadataStore(appContext)
-    private val firebaseRuntime = FirebaseRuntime(appContext)
-    private val driveMediaUploadClient = DriveMediaUploadClient()
+    
+    // ponytail: mutable internal fields for testing without heavy mock libraries
+    internal var firebaseRuntime = FirebaseRuntime(appContext)
+    internal var driveMediaUploadClient = DriveMediaUploadClient()
 
     override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
@@ -115,7 +118,8 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                     )
                     upsertSitePhoto(projectId, updated)
                     uploaded += 1
-                } catch (_: Throwable) {
+                } catch (error: Throwable) {
+                    AppLogger.e(error, "firebase.media_upload.failed projectId=$projectId photoId=${photo.id}")
                     val updated = photo.copy(
                         syncStatus = SitePhotoSyncStatus.FAILED,
                         lastSyncAttemptEpochMs = now,
@@ -133,8 +137,10 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         photo: SitePhotoEntity,
         routeCodes: Set<String>
     ): String {
-        val user = firebaseRuntime.auth().currentUser ?: error("Firebase user is not signed in.")
-        val token = user.getIdToken(false).await().token ?: error("Firebase ID token missing.")
+        val token = firebaseRuntime.getFirebaseToken()
+        val project = sharedDatabase.projectDao().get(projectId)
+        val projectName = project?.name?.trim().orEmpty().ifBlank { projectId }
+        val rootFolderId = project?.mediaStorageFolderId?.trim().orEmpty().ifBlank { null }
 
         val objectType = if (photo.matchedRouteId != null || photo.objectCode.trim().uppercase() in routeCodes) {
             DriveMediaObjectType.ROUTE
@@ -145,6 +151,8 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
             BuildConfig.MEDIA_UPLOAD_BASE_URL,
             DriveMediaUploadRequest(
                 projectId = projectId,
+                projectName = projectName,
+                rootFolderId = rootFolderId,
                 token = token,
                 photoId = photo.id,
                 objectType = objectType,
@@ -152,6 +160,8 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                 mediaType = photo.mediaType,
                 mimeType = photo.mimeType,
                 capturedAtEpochMs = photo.capturedAtEpochMs,
+                address = photo.address,
+                captureNote = photo.captureNote,
                 originalFile = java.io.File(photo.filePath),
                 thumbnailFile = java.io.File(photo.thumbnailPath)
             )
@@ -256,10 +266,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         if (rowsToApply.isEmpty()) return 0
         val targetDatabases = databasesForWrite(projectId, table)
         rowsToApply.forEach { envelope ->
-            val row = envelope.data + mapOf(
-                table.idColumn to envelope.id,
-                "projectId" to envelope.projectId
-            )
+            val row = mergeEnvelopeRow(table, envelope)
             targetDatabases.forEach { database ->
                 upsertRow(database.openHelper.writableDatabase, table.tableName, row)
             }
@@ -366,5 +373,17 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
 
     companion object {
         private const val FIRESTORE_BATCH_LIMIT = 500
+    }
+}
+
+internal fun mergeEnvelopeRow(
+    table: FirebaseSyncTable,
+    envelope: SyncEnvelope<Map<String, Any?>>
+): Map<String, Any?> {
+    val baseRow = envelope.data + mapOf(table.idColumn to envelope.id)
+    return if (table.tableName == "projects") {
+        baseRow
+    } else {
+        baseRow + mapOf("projectId" to envelope.projectId)
     }
 }
