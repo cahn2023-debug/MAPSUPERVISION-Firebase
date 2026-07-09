@@ -1,0 +1,5 @@
+# Placeholder for Discrepancy Detection TFLite Model
+# This file should be replaced with an actual trained model
+# Model should be trained using Random Forest/XGBoost converted to TFLite
+# Input: 10 features (distance, contractor_match, etc.)
+# Output: 2 classes (Normal, Abnormal)

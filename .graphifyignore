@@ -1,0 +1,27 @@
+# Ignore folders
+docs/
+BAK/
+.agents/
+.git/
+.gradle/
+.idea/
+build/
+_gradle-photo/
+_gradle-app/
+webapp/public/
+app/src/main/res/
+
+# Ignore document/image formats in root and subfolders
+*.md
+*.html
+*.txt
+**/*.md
+**/*.txt
+**/*.pdf
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.ico
+

@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isProjectMember(projectId) {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        firestore.exists(/databases/(default)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid))
+      );
+    }
+
+    match /projects/{projectId}/media/{photoId}/{fileName} {
+      allow read, write: if isProjectMember(projectId);
+    }
+  }
+}

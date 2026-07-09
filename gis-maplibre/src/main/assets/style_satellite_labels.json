@@ -1,0 +1,61 @@
+{
+  "version": 8,
+  "name": "Satellite Labels",
+  "glyphs": "https://orangemug.github.io/font-glyphs/glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "base_raster": {
+      "type": "raster",
+      "tiles": ["https://mt1.google.com/vt/lyrs=y&hl=vi&x={x}&y={y}&z={z}"],
+      "tileSize": 256,
+      "minzoom": 0,
+      "maxzoom": 20
+    },
+    "nodes_source": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "routes_source": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "measure_source": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
+  },
+  "layers": [
+    { "id": "base", "type": "raster", "source": "base_raster" },
+    { "id": "routes", "type": "line", "source": "routes_source", "paint": { "line-color": "#1a73e8", "line-width": 4 } },
+    {
+      "id": "measure_line",
+      "type": "line",
+      "source": "measure_source",
+      "paint": {
+        "line-color": "#ef4444",
+        "line-width": 3,
+        "line-dasharray": [2, 2]
+      }
+    },
+    {
+      "id": "nodes",
+      "type": "circle",
+      "source": "nodes_source",
+      "paint": {
+        "circle-color": ["coalesce", ["get", "color"], "#f97316"],
+        "circle-radius": ["coalesce", ["get", "signalRadius"], 10],
+        "circle-stroke-color": ["coalesce", ["get", "signalStrokeColor"], "#ffffff"],
+        "circle-stroke-width": ["coalesce", ["get", "signalStrokeWidth"], 2.5]
+      }
+    },
+    {
+      "id": "nodes_labels",
+      "type": "symbol",
+      "source": "nodes_source",
+      "layout": {
+        "text-field": ["get", "label"],
+        "text-font": ["Roboto Regular"],
+        "text-size": 11,
+        "text-offset": [0, 0],
+        "text-anchor": "center",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      },
+      "paint": {
+        "text-color": "#ffffff",
+        "text-halo-color": "#ffffff",
+        "text-halo-width": 0.0
+      }
+    }
+  ]
+}

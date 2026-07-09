@@ -1,0 +1,622 @@
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  writeBatch,
+  type DocumentData,
+  type Firestore,
+  type QuerySnapshot,
+  type Unsubscribe
+} from "firebase/firestore";
+
+export type SyncEnvelope<T extends Record<string, unknown>> = {
+  id?: string;
+  projectId?: string;
+  tableName?: string;
+  data?: T;
+  updatedAtEpochMs?: number;
+  isDeleted?: boolean;
+  sourceDeviceId?: string;
+  lastSyncedAtEpochMs?: number;
+};
+
+export type ProjectDoc = {
+  id: string;
+  name: string;
+  slug: string;
+  projectCode: string | null;
+  updatedAtEpochMs: number;
+  isDeleted: boolean;
+};
+
+export type ProjectDraft = {
+  name: string;
+  projectCode?: string;
+};
+
+export type ProjectRow = {
+  id: string;
+  name: string;
+  slug: string;
+  projectCode: string | null;
+  isArchived: boolean;
+  createdAtEpochMs: number;
+  metadataVersion: 3;
+  updatedAtEpochMs: number;
+  storageMode: "PROJECT_DB";
+  projectDbPath: string;
+  isDeleted: boolean;
+  deletedAtEpochMs: number | null;
+};
+
+export type ContractorScope = "ALL" | "SCOPED";
+
+export type UserProfileRow = {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  emailVerified: boolean;
+  createdAtEpochMs: number;
+  lastLoginAtEpochMs: number;
+  updatedAtEpochMs: number;
+  isDisabled: boolean;
+  projectIds: string[];
+};
+
+export type ProjectMemberRow = {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  role: "MEMBER";
+  isActive: boolean;
+  contractorScope: ContractorScope;
+  allowedContractors: string[];
+  grantedByUid: string;
+  grantedAtEpochMs: number;
+  updatedAtEpochMs: number;
+};
+
+export type TaskRow = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: "TODO" | "IN_PROGRESS" | "DONE" | string;
+  createdAtEpochMs: number;
+  completedAtEpochMs: number | null;
+  objectNodeId: string | null;
+  objectRouteId: string | null;
+  updatedAtEpochMs: number;
+  isDeleted: boolean;
+  deletedAtEpochMs: number | null;
+};
+
+export type DailyLogRow = {
+  id: string;
+  projectId: string;
+  workItem: string;
+  manpower: number;
+  note: string;
+  createdAtEpochMs: number;
+  weather: string;
+  temperature: number;
+  dateEpochDay: number;
+  volume: number;
+  unit: string;
+  categoryName: string;
+  batchGroupId: string;
+  linkedWorkPlanId: string | null;
+  plannedWorkName: string;
+  plannedQuantity: number;
+  plannedUnit: string;
+  photoMatchOffsetMinutes: number;
+  nodeId: string | null;
+  routeId: string | null;
+  plannedNodeId: string | null;
+  plannedRouteId: string | null;
+  updatedAtEpochMs: number;
+  isDeleted: boolean;
+  deletedAtEpochMs: number | null;
+};
+
+export type SitePhotoRow = {
+  id: string;
+  projectId: string;
+  objectCode: string;
+  engineer: string;
+  capturedAtEpochMs: number;
+  updatedAtEpochMs: number;
+  remoteUrl: string | null;
+  syncStatus: string;
+  mimeType: string;
+  mediaType: string;
+  isDeleted: boolean;
+};
+
+export type SyncTableName =
+  | "gis_node"
+  | "gis_route"
+  | "task"
+  | "note"
+  | "work_plan"
+  | "daily_log"
+  | "site_photos"
+  | "work_volume_progress"
+  | "material_declaration"
+  | "material_handover";
+
+export const syncTables: SyncTableName[] = [
+  "gis_node",
+  "gis_route",
+  "task",
+  "note",
+  "work_plan",
+  "daily_log",
+  "site_photos",
+  "work_volume_progress",
+  "material_declaration",
+  "material_handover"
+];
+
+export type ProjectCollections = Record<SyncTableName, Record<string, unknown>[]>;
+
+export const emptyProjectCollections = (): ProjectCollections => ({
+  gis_node: [],
+  gis_route: [],
+  task: [],
+  note: [],
+  work_plan: [],
+  daily_log: [],
+  site_photos: [],
+  work_volume_progress: [],
+  material_declaration: [],
+  material_handover: []
+});
+
+export function unpackEnvelope<T extends Record<string, unknown>>(
+  documentId: string,
+  source: DocumentData
+): T {
+  const envelope = source as SyncEnvelope<T>;
+  const data = envelope.data ?? (source as T);
+  return {
+    ...data,
+    id: String(data.id ?? envelope.id ?? documentId),
+    projectId: String(data.projectId ?? envelope.projectId ?? ""),
+    updatedAtEpochMs: Number(data.updatedAtEpochMs ?? envelope.updatedAtEpochMs ?? 0),
+    isDeleted: Boolean(data.isDeleted ?? envelope.isDeleted ?? false)
+  } as T;
+}
+
+export function createEnvelope<T extends Record<string, unknown>>(
+  tableName: string,
+  projectId: string,
+  id: string,
+  data: T,
+  now: number
+): SyncEnvelope<T> & { createdAt: ReturnType<typeof serverTimestamp> } {
+  return {
+    id,
+    projectId,
+    tableName,
+    data,
+    updatedAtEpochMs: now,
+    isDeleted: Boolean(data.isDeleted),
+    sourceDeviceId: "webapp",
+    lastSyncedAtEpochMs: now,
+    createdAt: serverTimestamp()
+  };
+}
+
+function slugifyProjectName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export async function createProjectDocument(
+  firestore: Firestore,
+  creator: { uid: string; email?: string | null; displayName?: string | null },
+  draft: ProjectDraft
+): Promise<ProjectDoc> {
+  const now = Date.now();
+  const ref = doc(collection(firestore, "projects"));
+  const name = draft.name.trim();
+  const projectCode = draft.projectCode?.trim() || null;
+  const payload: ProjectRow = {
+    id: ref.id,
+    name,
+    slug: slugifyProjectName(name) || ref.id.toLowerCase(),
+    projectCode,
+    isArchived: false,
+    createdAtEpochMs: now,
+    metadataVersion: 3,
+    updatedAtEpochMs: now,
+    storageMode: "PROJECT_DB",
+    projectDbPath: "",
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  const batch = writeBatch(firestore);
+  batch.set(ref, createEnvelope("projects", ref.id, ref.id, payload, now));
+  batch.set(doc(firestore, "projects", ref.id, "projectMembers", creator.uid), {
+    uid: creator.uid,
+    email: creator.email?.trim() || "",
+    displayName: creator.displayName?.trim() || null,
+    role: "MEMBER",
+    isActive: true,
+    contractorScope: "ALL",
+    allowedContractors: [],
+    grantedByUid: creator.uid,
+    grantedAtEpochMs: now,
+    createdAtEpochMs: now,
+    updatedAtEpochMs: now
+  });
+  batch.set(doc(firestore, "users", creator.uid), {
+    uid: creator.uid,
+    email: creator.email?.trim() || "",
+    displayName: creator.displayName?.trim() || null,
+    emailVerified: true,
+    createdAtEpochMs: now,
+    lastLoginAtEpochMs: now,
+    updatedAtEpochMs: now,
+    isDisabled: false,
+    projectIds: arrayUnion(ref.id)
+  }, { merge: true });
+  await batch.commit();
+  return {
+    id: ref.id,
+    name: payload.name,
+    slug: payload.slug,
+    projectCode: payload.projectCode,
+    updatedAtEpochMs: payload.updatedAtEpochMs,
+    isDeleted: payload.isDeleted
+  };
+}
+
+export async function upsertUserProfile(
+  firestore: Firestore,
+  user: { uid: string; email?: string | null; displayName?: string | null; emailVerified: boolean }
+): Promise<void> {
+  const now = Date.now();
+  await setDoc(
+    doc(firestore, "users", user.uid),
+    {
+      uid: user.uid,
+      email: user.email?.trim() || "",
+      displayName: user.displayName?.trim() || null,
+      emailVerified: user.emailVerified,
+      createdAtEpochMs: now,
+      lastLoginAtEpochMs: now,
+      updatedAtEpochMs: now,
+      isDisabled: false
+    },
+    { merge: true }
+  );
+}
+
+export function subscribeUsersDirectory(
+  firestore: Firestore,
+  onRows: (rows: UserProfileRow[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(firestore, "users"), orderBy("lastLoginAtEpochMs", "desc")),
+    (snapshot) => {
+      const rows = snapshot.docs.map((userDoc) => {
+        const raw = userDoc.data();
+        return {
+          uid: userDoc.id,
+          email: String(raw.email ?? ""),
+          displayName: raw.displayName ? String(raw.displayName) : null,
+          emailVerified: Boolean(raw.emailVerified ?? false),
+          createdAtEpochMs: Number(raw.createdAtEpochMs ?? 0),
+          lastLoginAtEpochMs: Number(raw.lastLoginAtEpochMs ?? 0),
+          updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
+          isDisabled: Boolean(raw.isDisabled ?? false),
+          projectIds: Array.isArray(raw.projectIds) ? raw.projectIds.map((value) => String(value)) : []
+        } satisfies UserProfileRow;
+      });
+      onRows(rows);
+    },
+    onError
+  );
+}
+
+export function subscribeProjectMembers(
+  firestore: Firestore,
+  projectId: string,
+  onRows: (rows: ProjectMemberRow[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(firestore, "projects", projectId, "projectMembers"), orderBy("updatedAtEpochMs", "desc")),
+    (snapshot) => {
+      const rows = snapshot.docs.map((memberDoc) => {
+        const raw = memberDoc.data();
+        return {
+          uid: memberDoc.id,
+          email: String(raw.email ?? ""),
+          displayName: raw.displayName ? String(raw.displayName) : null,
+          role: "MEMBER",
+          isActive: Boolean(raw.isActive ?? true),
+          contractorScope: raw.contractorScope === "SCOPED" ? "SCOPED" : "ALL",
+          allowedContractors: Array.isArray(raw.allowedContractors) ? raw.allowedContractors.map((value) => String(value)) : [],
+          grantedByUid: String(raw.grantedByUid ?? ""),
+          grantedAtEpochMs: Number(raw.grantedAtEpochMs ?? 0),
+          updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0)
+        } satisfies ProjectMemberRow;
+      });
+      onRows(rows);
+    },
+    onError
+  );
+}
+
+export function subscribeCurrentProjectMember(
+  firestore: Firestore,
+  projectId: string,
+  uid: string,
+  onRow: (row: ProjectMemberRow | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(firestore, "projects", projectId, "projectMembers", uid),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onRow(null);
+        return;
+      }
+      const raw = snapshot.data();
+      onRow({
+        uid: snapshot.id,
+        email: String(raw.email ?? ""),
+        displayName: raw.displayName ? String(raw.displayName) : null,
+        role: "MEMBER",
+        isActive: Boolean(raw.isActive ?? true),
+        contractorScope: raw.contractorScope === "SCOPED" ? "SCOPED" : "ALL",
+        allowedContractors: Array.isArray(raw.allowedContractors) ? raw.allowedContractors.map((value) => String(value)) : [],
+        grantedByUid: String(raw.grantedByUid ?? ""),
+        grantedAtEpochMs: Number(raw.grantedAtEpochMs ?? 0),
+        updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0)
+      });
+    },
+    onError
+  );
+}
+
+export async function saveProjectMember(
+  firestore: Firestore,
+  projectId: string,
+  adminUid: string,
+  member: ProjectMemberRow
+): Promise<void> {
+  const now = Date.now();
+  await setDoc(
+    doc(firestore, "projects", projectId, "projectMembers", member.uid),
+    {
+      uid: member.uid,
+      email: member.email.trim(),
+      displayName: member.displayName?.trim() || null,
+      role: "MEMBER",
+      isActive: member.isActive,
+      contractorScope: member.contractorScope,
+      allowedContractors: member.contractorScope === "SCOPED" ? member.allowedContractors.map((value) => value.trim()).filter(Boolean) : [],
+      grantedByUid: member.grantedByUid || adminUid,
+      grantedAtEpochMs: member.grantedAtEpochMs || now,
+      updatedAtEpochMs: now
+    },
+    { merge: true }
+  );
+  await setDoc(
+    doc(firestore, "users", member.uid),
+    {
+      uid: member.uid,
+      email: member.email.trim(),
+      displayName: member.displayName?.trim() || null,
+      updatedAtEpochMs: now,
+      projectIds: arrayUnion(projectId)
+    },
+    { merge: true }
+  );
+}
+
+export async function deleteProjectMemberRecord(
+  firestore: Firestore,
+  projectId: string,
+  uid: string
+): Promise<void> {
+  await deleteDoc(doc(firestore, "projects", projectId, "projectMembers", uid));
+  await setDoc(
+    doc(firestore, "users", uid),
+    {
+      projectIds: arrayRemove(projectId),
+      updatedAtEpochMs: Date.now()
+    },
+    { merge: true }
+  );
+}
+
+export function subscribeProjects(
+  firestore: Firestore,
+  onRows: (rows: ProjectDoc[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(firestore, "projects"),
+    (snapshot) => {
+      const rows = snapshot.docs
+        .map((projectDoc) => {
+          const raw = unpackEnvelope<Record<string, unknown>>(projectDoc.id, projectDoc.data());
+          return {
+            id: projectDoc.id,
+            name: String(raw.name ?? projectDoc.id),
+            slug: String(raw.slug ?? ""),
+            projectCode: raw.projectCode ? String(raw.projectCode) : null,
+            updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
+            isDeleted: Boolean(raw.isDeleted ?? false)
+          };
+        })
+        .filter((project) => !project.isDeleted)
+        .sort((left, right) => right.updatedAtEpochMs - left.updatedAtEpochMs);
+      onRows(rows);
+    },
+    onError
+  );
+}
+
+export function subscribeProjectDocument(
+  firestore: Firestore,
+  projectId: string,
+  onProject: (project: ProjectDoc | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(firestore, "projects", projectId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onProject(null);
+        return;
+      }
+      const raw = unpackEnvelope<Record<string, unknown>>(snapshot.id, snapshot.data());
+      onProject({
+        id: snapshot.id,
+        name: String(raw.name ?? snapshot.id),
+        slug: String(raw.slug ?? ""),
+        projectCode: raw.projectCode ? String(raw.projectCode) : null,
+        updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0),
+        isDeleted: Boolean(raw.isDeleted ?? false)
+      });
+    },
+    onError
+  );
+}
+
+export function subscribeProjectTable(
+  firestore: Firestore,
+  projectId: string,
+  tableName: SyncTableName,
+  onRows: (tableName: SyncTableName, rows: Record<string, unknown>[]) => void,
+  onError: (tableName: SyncTableName, error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(doc(firestore, "projects", projectId), tableName), orderBy("updatedAtEpochMs", "desc")),
+    (snapshot: QuerySnapshot<DocumentData>) => {
+      const rows = snapshot.docs
+        .map((rowDoc) => unpackEnvelope<Record<string, unknown>>(rowDoc.id, rowDoc.data()))
+        .filter((row) => !Boolean(row.isDeleted));
+      onRows(tableName, rows);
+    },
+    (error) => onError(tableName, error)
+  );
+}
+
+export async function createTaskDocument(
+  firestore: Firestore,
+  projectId: string,
+  title: string,
+  description: string
+): Promise<void> {
+  const now = Date.now();
+  const ref = doc(collection(doc(collection(firestore, "projects"), projectId), "task"));
+  const payload: TaskRow = {
+    id: ref.id,
+    projectId,
+    title: title.trim(),
+    description: description.trim(),
+    status: "TODO",
+    createdAtEpochMs: now,
+    completedAtEpochMs: null,
+    objectNodeId: null,
+    objectRouteId: null,
+    updatedAtEpochMs: now,
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  await setDoc(ref, createEnvelope("task", projectId, ref.id, payload, now));
+}
+
+export async function updateTaskStatusDocument(
+  firestore: Firestore,
+  projectId: string,
+  task: Record<string, unknown>,
+  status: TaskRow["status"]
+): Promise<void> {
+  const id = String(task.id ?? "");
+  if (!id) return;
+  const now = Date.now();
+  const nextData = {
+    ...task,
+    id,
+    projectId,
+    status,
+    completedAtEpochMs: status === "DONE" ? now : null,
+    updatedAtEpochMs: now,
+    isDeleted: Boolean(task.isDeleted ?? false),
+    deletedAtEpochMs: task.deletedAtEpochMs ?? null
+  };
+  await updateDoc(doc(firestore, "projects", projectId, "task", id), {
+    data: nextData,
+    updatedAtEpochMs: now,
+    isDeleted: Boolean(nextData.isDeleted),
+    sourceDeviceId: "webapp",
+    lastSyncedAtEpochMs: now
+  });
+}
+
+export async function createDailyLogDocument(
+  firestore: Firestore,
+  projectId: string,
+  draft: {
+    workItem: string;
+    note: string;
+    manpower: string;
+    volume: string;
+    unit: string;
+    categoryName: string;
+    weather: string;
+  }
+): Promise<void> {
+  const now = Date.now();
+  const ref = doc(collection(doc(collection(firestore, "projects"), projectId), "daily_log"));
+  const payload: DailyLogRow = {
+    id: ref.id,
+    projectId,
+    workItem: draft.workItem.trim(),
+    manpower: Number(draft.manpower || 0),
+    note: draft.note.trim(),
+    createdAtEpochMs: now,
+    weather: draft.weather.trim(),
+    temperature: 0,
+    dateEpochDay: Math.floor(now / 86400000),
+    volume: Number(draft.volume || 0),
+    unit: draft.unit.trim(),
+    categoryName: draft.categoryName.trim(),
+    batchGroupId: ref.id,
+    linkedWorkPlanId: null,
+    plannedWorkName: "",
+    plannedQuantity: 0,
+    plannedUnit: "",
+    photoMatchOffsetMinutes: 0,
+    nodeId: null,
+    routeId: null,
+    plannedNodeId: null,
+    plannedRouteId: null,
+    updatedAtEpochMs: now,
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  await setDoc(ref, createEnvelope("daily_log", projectId, ref.id, payload, now));
+}

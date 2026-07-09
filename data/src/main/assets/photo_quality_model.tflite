@@ -1,0 +1,5 @@
+# Placeholder for Photo Quality TFLite Model
+# This file should be replaced with an actual trained model
+# Model should be trained using Teachable Machine or Vertex AI
+# Input: 224x224 RGB image
+# Output: 3 classes (Blurry, No_Subject, Good_Quality)

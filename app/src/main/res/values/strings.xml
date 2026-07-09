@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MapSupervision</string>
+    <string name="widget_title">Nhat ky lich thang</string>
+    <string name="widget_description">Widget theo doi nhat ky giam sat cong trinh theo ngay va mo nhanh man hinh ghi nhat ky.</string>
+</resources>

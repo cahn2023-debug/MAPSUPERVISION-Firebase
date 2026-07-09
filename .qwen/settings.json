@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(d:\\Code Antinigaty\\MAPSUPERVISION- excess title bars from all tabs in the Android app. Let me first explore the project structure to understand the codebase and locate the relevant UI components.\n<tool_call>list_directory\n<arg_key>path</arg_key>\n<arg_value>d:\\Code Antinigaty\\MAPSUPERVISION-NonAuth\\app\\src/**)",
+      "Read(d:\\Code Antinigy\\MAPSUPERVISION-NonAuth\\app\\src\\main\\java/**)"
+    ]
+  },
+  "$version": 4
+}

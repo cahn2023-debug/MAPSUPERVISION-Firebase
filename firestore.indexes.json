@@ -1,0 +1,45 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "daily_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAtEpochMs", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "daily_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "data.dateEpochDay", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "site_photos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "data.capturedAtEpochMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "work_plan",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "data.plannedDateEpochDay", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "task",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAtEpochMs", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

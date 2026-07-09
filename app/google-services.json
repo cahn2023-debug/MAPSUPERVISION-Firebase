@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "735767087959",
+    "project_id": "mapsupervision",
+    "storage_bucket": "mapsupervision.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:735767087959:android:ea6eecaafb9f124b388c12",
+        "android_client_info": {
+          "package_name": "com.mapsupervision"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXDvKOyrzK82_4Rs8R4Gg4VbDtqZdKDas"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

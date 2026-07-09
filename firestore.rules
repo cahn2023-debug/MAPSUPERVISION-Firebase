@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isProjectMember(projectId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)).data.isActive == true
+        )
+      );
+    }
+
+    function isOwnUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function validUserProfileShape(uid) {
+      return request.resource.data.keys().hasOnly([
+        "uid",
+        "email",
+        "displayName",
+        "emailVerified",
+        "createdAtEpochMs",
+        "lastLoginAtEpochMs",
+        "updatedAtEpochMs",
+        "isDisabled",
+        "projectIds"
+      ]) && request.resource.data.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwnUser(uid) || isAdmin();
+      allow create: if (
+        isOwnUser(uid) &&
+        validUserProfileShape(uid) &&
+        request.resource.data.isDisabled == false
+      ) || isAdmin();
+      allow update: if (
+        isOwnUser(uid) &&
+        validUserProfileShape(uid) &&
+        request.resource.data.isDisabled == resource.data.isDisabled &&
+        request.resource.data.projectIds == resource.data.projectIds
+      ) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow read, write: if isProjectMember(projectId);
+
+      match /projectMembers/{memberId} {
+        allow read: if isProjectMember(projectId);
+        allow write: if isAdmin();
+      }
+
+      match /{collectionName}/{documentId} {
+        allow read, write: if isProjectMember(projectId);
+      }
+    }
+  }
+}

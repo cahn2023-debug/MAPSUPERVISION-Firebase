@@ -1,0 +1,39 @@
+# Local secrets and machine config
+.env
+.env.*
+!.env.example
+local.properties
+
+# Logs
+*.log
+firebase-debug.log
+
+# Gradle / Android outputs
+.gradle/
+.gradle-local/
+.gradle-sharecheck/
+.kotlin/
+build/
+**/build/
+_gradle-*/
+
+# Java / Kotlin / Android local files
+*.class
+*.apk
+*.ap_
+*.aab
+*.dex
+*.iml
+.idea/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Local tooling caches and generated reports
+.codegraph/
+graphify-out/
+BAK/
