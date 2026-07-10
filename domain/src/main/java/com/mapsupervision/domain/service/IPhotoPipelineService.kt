@@ -3,6 +3,7 @@ package com.mapsupervision.domain.service
 import com.mapsupervision.domain.model.CaptureStamp
 import com.mapsupervision.domain.model.CameraAspectRatio
 import com.mapsupervision.domain.model.ProjectStorageRef
+import com.mapsupervision.domain.model.VideoStampTimelineSample
 import java.io.File
 
 enum class CaptureFolderType {
@@ -53,5 +54,15 @@ interface IPhotoPipelineService {
         stamp: CaptureStamp,
         tileBitmap: Any? = null // Platform specific Bitmap (e.g. android.graphics.Bitmap)
     )
+
+    suspend fun exportVideoStamp(
+        file: File,
+        samples: List<VideoStampTimelineSample>
+    ) {
+        val firstSample = requireNotNull(samples.firstOrNull()) {
+            "Missing video stamp timeline samples for video export"
+        }
+        exportVideoStamp(file, firstSample.stamp, firstSample.tileBitmap)
+    }
 }
 

@@ -125,7 +125,7 @@ class MapSupervisionDatabaseMigrationTest {
     }
 
     @Test
-    fun `every legacy schema from 9 to 31 migrates to version 47`() {
+    fun `every legacy schema from 9 to 31 migrates to version 48`() {
         for (version in 9..31) {
             val dbName = "legacy-version-$version.sqlite"
             val dbFile = File(tempDir, dbName)
@@ -133,7 +133,7 @@ class MapSupervisionDatabaseMigrationTest {
 
             val database = migratingDatabase(dbName).build()
             try {
-                assertEquals("Legacy version $version did not migrate to 47", 47, database.openHelper.writableDatabase.version)
+                assertEquals("Legacy version $version did not migrate to 48", 48, database.openHelper.writableDatabase.version)
                 assertLatestSchema(database)
             } finally {
                 database.close()

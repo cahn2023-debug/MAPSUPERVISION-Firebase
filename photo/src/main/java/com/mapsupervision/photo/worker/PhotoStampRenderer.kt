@@ -476,14 +476,13 @@ object PhotoStampRenderer {
         }
     }
 
-    private fun resolveStampTileBitmap(
+    internal fun resolveStampTileBitmap(
         stamp: CaptureStamp,
         tileBitmap: Bitmap?,
         viewport: MinimapViewport?
     ): Bitmap? {
         if (viewport == null) return null
-        val hasScopedMap = !stamp.mapScene?.nodes.isNullOrEmpty() || !stamp.mapScene?.routes.isNullOrEmpty()
-        if (tileBitmap != null && !hasScopedMap && viewport.zoom == MINIMAP_MAX_ZOOM) {
+        if (tileBitmap != null && viewport.zoom == MINIMAP_MAX_ZOOM) {
             return tileBitmap
         }
         return fetchOsmTile(viewport.centerLat, viewport.centerLng, zoom = viewport.zoom)

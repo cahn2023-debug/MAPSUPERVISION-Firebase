@@ -14,28 +14,30 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 interface FirebaseMediaUploadScheduler {
-    fun enqueue(reason: String)
+    fun enqueue(reason: String, projectId: String? = null)
 }
 
 @Singleton
 class WorkManagerFirebaseMediaUploadScheduler @Inject constructor(
     @ApplicationContext private val context: Context
 ) : FirebaseMediaUploadScheduler {
-    override fun enqueue(reason: String) {
-        FirebaseMediaUploadWorker.enqueue(context, reason)
+    override fun enqueue(reason: String, projectId: String?) {
+        FirebaseMediaUploadWorker.enqueue(context, reason, projectId)
     }
 }
 
 internal object FirebaseMediaUploadWorkRequest {
     const val UNIQUE_WORK_NAME = "firebase-media-auto-upload"
     const val KEY_REASON = "reason"
+    const val KEY_PROJECT_ID = "projectId"
     const val TAG = "FirebaseMediaUpload"
 
-    fun enqueue(context: Context, reason: String) {
+    fun enqueue(context: Context, reason: String, projectId: String? = null) {
         val request = OneTimeWorkRequestBuilder<FirebaseMediaUploadWorker>()
             .setInputData(
                 Data.Builder()
                     .putString(KEY_REASON, reason)
+                    .putString(KEY_PROJECT_ID, projectId.orEmpty())
                     .build()
             )
             .setConstraints(
@@ -48,9 +50,12 @@ internal object FirebaseMediaUploadWorkRequest {
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
-            UNIQUE_WORK_NAME,
+            uniqueWorkName(projectId),
             ExistingWorkPolicy.KEEP,
             request
         )
     }
+
+    private fun uniqueWorkName(projectId: String?): String =
+        projectId?.takeIf { it.isNotBlank() }?.let { "$UNIQUE_WORK_NAME:$it" } ?: UNIQUE_WORK_NAME
 }

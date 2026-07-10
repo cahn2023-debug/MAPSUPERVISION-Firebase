@@ -3,6 +3,7 @@ package com.mapsupervision.app
 import com.mapsupervision.domain.model.CameraAspectRatio
 import com.mapsupervision.domain.model.PhotoLocationSnapshot
 import com.mapsupervision.domain.model.PhotoLocationStatus
+import com.mapsupervision.domain.model.VideoStampTimelineSample
 import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.service.IPhotoPipelineService
 import org.junit.Assert.assertEquals
@@ -133,6 +134,46 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `build video stamp timeline sample keeps live preview fields`() {
+        val location = PhotoLocationSnapshot(
+            latitude = 10.12345,
+            longitude = 106.98765,
+            accuracyM = 2f,
+            isMock = false,
+            status = PhotoLocationStatus.OK
+        )
+        val node = com.mapsupervision.domain.model.GisNode(
+            id = "node1",
+            projectId = "project1",
+            code = "N1",
+            contractor = "contractor1",
+            latitude = 10.123,
+            longitude = 106.987
+        )
+
+        val sample = buildVideoStampTimelineSample(
+            recordingStartElapsedMs = 1_000L,
+            nowElapsedMs = 1_275L,
+            location = location,
+            address = "123 Street",
+            note = "Video note",
+            bearingDeg = 87.6f,
+            nodes = listOf(node),
+            tileBitmap = "tile"
+        )
+
+        assertEquals(275L, sample.elapsedMs)
+        assertEquals("tile", sample.tileBitmap)
+        assertEquals(10.12345, sample.stamp.latitude)
+        assertEquals(106.98765, sample.stamp.longitude)
+        assertEquals("123 Street", sample.stamp.address)
+        assertEquals("Video note", sample.stamp.note)
+        assertEquals(87.6f, sample.stamp.bearingDeg)
+        assertEquals(10.12345, sample.stamp.mapScene!!.cameraLatitude)
+        assertEquals(106.98765, sample.stamp.mapScene!!.cameraLongitude)
+    }
+
+    @Test
     fun `post process recorded video exports before save when stamp enabled`() = runBlocking {
         val order = mutableListOf<String>()
         val contextFile = File.createTempFile("camera-video", ".mp4").apply { writeText("raw") }
@@ -140,6 +181,13 @@ class CameraOverlayHelpersTest {
             timestampMs = 1234L,
             location = null,
             bearingDeg = 0f
+        )
+        val timelineSamples = listOf(
+            VideoStampTimelineSample(
+                elapsedMs = 0L,
+                stamp = stamp,
+                tileBitmap = "tile"
+            )
         )
 
         val pipeline = object : IPhotoPipelineService {
@@ -173,7 +221,11 @@ class CameraOverlayHelpersTest {
             override fun createThumbnail(storageRef: com.mapsupervision.domain.model.ProjectStorageRef, sourceFile: File) = error("unused")
             override fun applyStamp(file: File, stamp: com.mapsupervision.domain.model.CaptureStamp, ratio: com.mapsupervision.domain.model.CameraAspectRatio, tileBitmap: Any?) = error("unused")
             override suspend fun exportVideoStamp(file: File, stamp: com.mapsupervision.domain.model.CaptureStamp, tileBitmap: Any?) {
-                order += "export"
+                order += "legacy-export"
+            }
+            override suspend fun exportVideoStamp(file: File, samples: List<VideoStampTimelineSample>) {
+                order += "timeline-export"
+                assertEquals(timelineSamples, samples)
                 file.writeText("stamped")
             }
         }
@@ -183,6 +235,7 @@ class CameraOverlayHelpersTest {
             stampEnabled = true,
             stampAtRecordStart = stamp,
             tileBitmap = null,
+            timelineSamples = timelineSamples,
             photoPipelineService = pipeline,
             setProcessingVideoStamp = { },
             onSavePhoto = {
@@ -193,7 +246,7 @@ class CameraOverlayHelpersTest {
         )
 
         assertTrue(saved)
-        assertEquals(listOf("export", "save", "captured"), order)
+        assertEquals(listOf("timeline-export", "save", "captured"), order)
         assertEquals("stamped", contextFile.readText())
     }
 
@@ -242,6 +295,7 @@ class CameraOverlayHelpersTest {
             stampEnabled = false,
             stampAtRecordStart = null,
             tileBitmap = null,
+            timelineSamples = emptyList(),
             photoPipelineService = pipeline,
             setProcessingVideoStamp = { },
             onSavePhoto = {

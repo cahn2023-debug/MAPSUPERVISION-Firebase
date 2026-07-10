@@ -17,9 +17,10 @@ class FirebaseMediaUploadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val reason = inputData.getString(FirebaseMediaUploadWorkRequest.KEY_REASON).orEmpty().ifBlank { "unknown" }
+        val projectId = inputData.getString(FirebaseMediaUploadWorkRequest.KEY_PROJECT_ID).orEmpty().ifBlank { null }
         AppLogger.d("firebase.media_auto_upload.started reason=$reason")
 
-        return when (val outcome = runner.run()) {
+        return when (val outcome = runner.run(projectId)) {
             is FirebaseMediaUploadRunOutcome.Success -> {
                 AppLogger.d(
                     "firebase.media_auto_upload.success reason=$reason projects=${outcome.projectCount} uploaded=${outcome.uploadedMedia} failed=${outcome.failedMedia}"
@@ -47,6 +48,10 @@ class FirebaseMediaUploadWorker @AssistedInject constructor(
     companion object {
         fun enqueue(context: Context, reason: String) {
             FirebaseMediaUploadWorkRequest.enqueue(context, reason)
+        }
+
+        fun enqueue(context: Context, reason: String, projectId: String?) {
+            FirebaseMediaUploadWorkRequest.enqueue(context, reason, projectId)
         }
     }
 }

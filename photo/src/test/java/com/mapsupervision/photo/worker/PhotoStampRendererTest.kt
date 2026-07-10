@@ -196,4 +196,43 @@ class PhotoStampRendererTest {
         assertEquals(105.8342, content.longitude)
         assertNotNull(content.coordinateText)
     }
+
+    @Test
+    fun `resolve stamp tile bitmap keeps preview snapshot for scoped map`() {
+        val tile = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.GREEN)
+        }
+        val stamp = CaptureStamp(
+            timestampMs = 1000L,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            address = "",
+            note = "",
+            bearingDeg = 15f,
+            mapScene = CaptureStampMapScene(
+                cameraLatitude = 21.0280,
+                cameraLongitude = 105.8340,
+                bearingDeg = 15f,
+                nodes = listOf(CaptureStampMapNode(code = "N1", latitude = 21.0280, longitude = 105.8340))
+            )
+        )
+        val viewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = RectF(0f, 0f, 270f, 270f),
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 15f,
+            borderWidth = 6f,
+            outerDotRadius = 20f,
+            mapScene = stamp.mapScene
+        )
+
+        val resolvedTile = PhotoStampRenderer.resolveStampTileBitmap(
+            stamp = stamp,
+            tileBitmap = tile,
+            viewport = viewport
+        )
+
+        assertTrue(resolvedTile === tile)
+        tile.recycle()
+    }
 }

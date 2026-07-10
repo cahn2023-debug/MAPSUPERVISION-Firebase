@@ -2,6 +2,7 @@ package com.mapsupervision.app.sync
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Data
 import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
@@ -38,8 +39,25 @@ class FirebaseMediaUploadWorkerTest {
         val outcome = FirebaseMediaUploadRunner(photoRepository, syncRepository).run()
 
         assertTrue(outcome is FirebaseMediaUploadRunOutcome.Success)
-        assertEquals(listOf("project-1", "project-2"), syncRepository.uploadCalls)
+        assertEquals(listOf("project-1", "project-2"), syncRepository.pushCalls)
         assertEquals(3, (outcome as FirebaseMediaUploadRunOutcome.Success).uploadedMedia)
+    }
+
+    @Test
+    fun runner_uploads_only_requested_project_when_projectIdProvided() = runBlocking {
+        val photoRepository = FakePendingPhotoRepository(listOf("project-1", "project-2"))
+        val syncRepository = FakeUploadFirebaseSyncRepository(
+            results = mapOf(
+                "project-1" to AppResult.Success(SyncBatchResult(uploadedMedia = 2)),
+                "project-2" to AppResult.Success(SyncBatchResult(uploadedMedia = 1))
+            )
+        )
+
+        val outcome = FirebaseMediaUploadRunner(photoRepository, syncRepository).run("project-2")
+
+        assertTrue(outcome is FirebaseMediaUploadRunOutcome.Success)
+        assertEquals(listOf("project-2"), syncRepository.pushCalls)
+        assertEquals(1, (outcome as FirebaseMediaUploadRunOutcome.Success).uploadedMedia)
     }
 
     @Test
@@ -72,7 +90,7 @@ class FirebaseMediaUploadWorkerTest {
                 FakePendingPhotoRepository(emptyList()),
                 FakeUploadFirebaseSyncRepository(emptyMap())
             ) {
-                override suspend fun run(): FirebaseMediaUploadRunOutcome =
+                override suspend fun run(projectId: String?): FirebaseMediaUploadRunOutcome =
                     FirebaseMediaUploadRunOutcome.Retry(1, 0, 1, "temporary")
             }
         )
@@ -89,7 +107,7 @@ class FirebaseMediaUploadWorkerTest {
                 FakePendingPhotoRepository(emptyList()),
                 FakeUploadFirebaseSyncRepository(emptyMap())
             ) {
-                override suspend fun run(): FirebaseMediaUploadRunOutcome =
+                override suspend fun run(projectId: String?): FirebaseMediaUploadRunOutcome =
                     FirebaseMediaUploadRunOutcome.Failure(1, 0, 1, "missing config")
             }
         )
@@ -99,7 +117,35 @@ class FirebaseMediaUploadWorkerTest {
         assertEquals(ListenableWorker.Result.failure()::class, result::class)
     }
 
-    private fun buildWorker(runner: FirebaseMediaUploadRunner): FirebaseMediaUploadWorker {
+    @Test
+    fun worker_passes_projectId_to_runner() {
+        var seenProjectId: String? = null
+        val worker = buildWorker(
+            object : FirebaseMediaUploadRunner(
+                FakePendingPhotoRepository(emptyList()),
+                FakeUploadFirebaseSyncRepository(emptyMap())
+            ) {
+                override suspend fun run(projectId: String?): FirebaseMediaUploadRunOutcome {
+                    seenProjectId = projectId
+                    return FirebaseMediaUploadRunOutcome.Success(1, 0, 0)
+                }
+            },
+            Data.Builder()
+                .putString(FirebaseMediaUploadWorkRequest.KEY_REASON, "photo_saved")
+                .putString(FirebaseMediaUploadWorkRequest.KEY_PROJECT_ID, "project-2")
+                .build()
+        )
+
+        val result = runBlocking { worker.doWork() }
+
+        assertEquals(ListenableWorker.Result.success()::class, result::class)
+        assertEquals("project-2", seenProjectId)
+    }
+
+    private fun buildWorker(
+        runner: FirebaseMediaUploadRunner,
+        inputData: Data = Data.EMPTY
+    ): FirebaseMediaUploadWorker {
         val factory = object : WorkerFactory() {
             override fun createWorker(
                 appContext: Context,
@@ -112,6 +158,7 @@ class FirebaseMediaUploadWorkerTest {
 
         return TestListenableWorkerBuilder<FirebaseMediaUploadWorker>(context)
             .setWorkerFactory(factory)
+            .setInputData(inputData)
             .build()
     }
 }
@@ -129,12 +176,12 @@ private class FakePendingPhotoRepository(
 private class FakeUploadFirebaseSyncRepository(
     private val results: Map<String, AppResult<SyncBatchResult>>
 ) : FirebaseSyncRepository {
-    val uploadCalls = mutableListOf<String>()
+    val pushCalls = mutableListOf<String>()
 
-    override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> = AppResult.Success(SyncBatchResult())
-    override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> = AppResult.Success(SyncBatchResult())
-    override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> {
-        uploadCalls += projectId
+    override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> {
+        pushCalls += projectId
         return results[projectId] ?: AppResult.Success(SyncBatchResult())
     }
+    override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> = AppResult.Success(SyncBatchResult())
+    override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> = AppResult.Success(SyncBatchResult())
 }

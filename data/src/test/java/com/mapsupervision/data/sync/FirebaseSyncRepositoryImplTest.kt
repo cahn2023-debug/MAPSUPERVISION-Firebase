@@ -130,6 +130,7 @@ class FirebaseSyncRepositoryImplTest {
         assertNotNull(updatedPhoto)
         assertEquals(SitePhotoSyncStatus.DONE, updatedPhoto!!.syncStatus)
         assertEquals("https://drive.google.com/uc?export=view&id=drive-file-1", updatedPhoto.remoteUrl)
+        assertEquals(null, updatedPhoto.syncErrorMessage)
         assertNotNull(updatedPhoto.lastSyncAttemptEpochMs)
 
         assertNotNull(fakeClient.lastRequest)
@@ -239,6 +240,7 @@ class FirebaseSyncRepositoryImplTest {
         val updatedPhoto = sharedDatabase.sitePhotoDao().byProjectIncludingDeleted(projectId).find { it.id == "photo-fail" }
         assertNotNull(updatedPhoto)
         assertEquals(SitePhotoSyncStatus.FAILED, updatedPhoto!!.syncStatus)
+        assertTrue(updatedPhoto.syncErrorMessage?.contains("Simulated API upload failure") == true)
         assertEquals(localPath, updatedPhoto.filePath)
     }
 

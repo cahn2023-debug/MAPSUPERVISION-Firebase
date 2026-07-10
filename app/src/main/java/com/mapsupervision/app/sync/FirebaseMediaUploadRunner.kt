@@ -34,19 +34,20 @@ open class FirebaseMediaUploadRunner @Inject constructor(
     private val photoRepository: PhotoRepository,
     private val firebaseSyncRepository: FirebaseSyncRepository
 ) {
-    open suspend fun run(): FirebaseMediaUploadRunOutcome {
-        val pendingProjects = when (val result = photoRepository.listProjectsWithPendingUploads()) {
-            is AppResult.Success -> result.data
-            is AppResult.Error -> {
-                val reason = result.throwable.message ?: "Failed to list pending upload projects."
-                return classifyFailure(
-                    reason = reason,
-                    projectCount = 0,
-                    uploadedMedia = 0,
-                    failedMedia = 0
-                )
+    open suspend fun run(projectId: String? = null): FirebaseMediaUploadRunOutcome {
+        val pendingProjects = projectId?.takeIf { it.isNotBlank() }?.let { listOf(it) }
+            ?: when (val result = photoRepository.listProjectsWithPendingUploads()) {
+                is AppResult.Success -> result.data
+                is AppResult.Error -> {
+                    val reason = result.throwable.message ?: "Failed to list pending upload projects."
+                    return classifyFailure(
+                        reason = reason,
+                        projectCount = 0,
+                        uploadedMedia = 0,
+                        failedMedia = 0
+                    )
+                }
             }
-        }
 
         if (pendingProjects.isEmpty()) {
             return FirebaseMediaUploadRunOutcome.Success(
@@ -62,7 +63,7 @@ open class FirebaseMediaUploadRunner @Inject constructor(
         var firstPermanentReason: String? = null
 
         pendingProjects.forEach { projectId ->
-            when (val result = firebaseSyncRepository.uploadPendingMedia(projectId)) {
+            when (val result = firebaseSyncRepository.pushPending(projectId)) {
                 is AppResult.Success -> {
                     uploadedMedia += result.data.uploadedMedia
                     failedMedia += result.data.failed

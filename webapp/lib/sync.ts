@@ -145,6 +145,7 @@ export type SitePhotoRow = {
   address: string | null;
   captureNote: string | null;
   remoteUrl: string | null;
+  syncErrorMessage?: string | null;
   syncStatus: string;
   mimeType: string;
   mediaType: string;

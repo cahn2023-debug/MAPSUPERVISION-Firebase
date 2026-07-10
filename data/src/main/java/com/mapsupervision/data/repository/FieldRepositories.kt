@@ -301,6 +301,7 @@ class PhotoRepositoryImpl @Inject constructor(
         updatedAtEpochMs = updatedAtEpochMs,
         syncStatus = syncStatus,
         remoteUrl = remoteUrl,
+        syncErrorMessage = syncErrorMessage,
         lastSyncAttemptEpochMs = lastSyncAttemptEpochMs,
         isDeleted = isDeleted,
         deletedAtEpochMs = deletedAtEpochMs
@@ -334,6 +335,7 @@ class PhotoRepositoryImpl @Inject constructor(
         updatedAtEpochMs = updatedAtEpochMs,
         syncStatus = syncStatus,
         remoteUrl = remoteUrl,
+        syncErrorMessage = syncErrorMessage,
         lastSyncAttemptEpochMs = lastSyncAttemptEpochMs,
         isDeleted = false,
         deletedAtEpochMs = null

@@ -5,11 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.CanvasOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
@@ -26,6 +28,7 @@ import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.domain.model.CaptureStamp
 import com.mapsupervision.domain.model.CameraAspectRatio
 import com.mapsupervision.domain.model.ProjectStorageRef
+import com.mapsupervision.domain.model.VideoStampTimelineSample
 import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.service.IPhotoPipelineService
 import com.mapsupervision.storage.ProjectStorageManager
@@ -41,6 +44,22 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+
+internal fun selectVideoStampTimelineSample(
+    samples: List<VideoStampTimelineSample>,
+    presentationTimeUs: Long
+): VideoStampTimelineSample {
+    require(samples.isNotEmpty()) { "Missing video stamp timeline samples" }
+    val presentationTimeMs = (presentationTimeUs / 1_000L).coerceAtLeast(0L)
+    var selected = samples.first()
+    for (sample in samples) {
+        if (sample.elapsedMs > presentationTimeMs) {
+            break
+        }
+        selected = sample
+    }
+    return selected
+}
 
 @Singleton
 open class PhotoPipelineService @Inject constructor(
@@ -281,6 +300,80 @@ open class PhotoPipelineService @Inject constructor(
             throw e
         } finally {
             overlayBitmap.recycle()
+        }
+    }
+
+    @OptIn(markerClass = [UnstableApi::class])
+    override suspend fun exportVideoStamp(file: File, samples: List<VideoStampTimelineSample>) {
+        if (samples.isEmpty()) {
+            super<IPhotoPipelineService>.exportVideoStamp(file, samples)
+            return
+        }
+        val (frameWidth, frameHeight) = PhotoStampRenderer.resolveVideoOverlaySize(file)
+        try {
+            exportVideoStampWithTempSwap(file) { tempOutput ->
+                val exportDeferred = kotlinx.coroutines.CompletableDeferred<Unit>()
+                val overlayEffect = OverlayEffect(
+                    listOf(
+                        object : CanvasOverlay(false) {
+                            init {
+                                setCanvasSize(frameWidth, frameHeight)
+                            }
+
+                            override fun onDraw(canvas: Canvas, presentationTimeUs: Long) {
+                                canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                                val sample = selectVideoStampTimelineSample(samples, presentationTimeUs)
+                                PhotoStampRenderer.drawStamp(
+                                    canvas = canvas,
+                                    frameWidth = frameWidth.toFloat(),
+                                    frameHeight = frameHeight.toFloat(),
+                                    stamp = sample.stamp,
+                                    tileBitmap = sample.tileBitmap as? Bitmap,
+                                    missingLocationText = "Khong co vi tri"
+                                )
+                            }
+                        }
+                    )
+                )
+                val editedMediaItem = EditedMediaItem.Builder(MediaItem.fromUri(file.toUri()))
+                    .setEffects(Effects(emptyList(), listOf(overlayEffect)))
+                    .build()
+                val composition = Composition.Builder(
+                    EditedMediaItemSequence.Builder(listOf(editedMediaItem)).build()
+                ).build()
+                withContext(Dispatchers.Main) {
+                    val transformer = Transformer.Builder(appContext)
+                        .setVideoMimeType(androidx.media3.common.MimeTypes.VIDEO_H264)
+                        .addListener(
+                            object : Transformer.Listener {
+                                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                    exportDeferred.complete(Unit)
+                                }
+
+                                override fun onError(
+                                    composition: Composition,
+                                    exportResult: ExportResult,
+                                    exportException: ExportException
+                                ) {
+                                    exportDeferred.completeExceptionally(exportException)
+                                }
+                            }
+                        )
+                        .build()
+
+                    AppLogger.d(
+                        "photo.pipeline.video.timeline.stamp.start file=${file.absolutePath} temp=${tempOutput.absolutePath} samples=${samples.size}"
+                    )
+                    transformer.start(composition, tempOutput.absolutePath)
+                }
+                kotlinx.coroutines.withTimeout(5 * 60 * 1000) {
+                    exportDeferred.await()
+                }
+            }
+            AppLogger.d("photo.pipeline.video.timeline.stamp.done file=${file.absolutePath} samples=${samples.size}")
+        } catch (e: Throwable) {
+            AppLogger.e(e, "photo.pipeline.video.timeline.stamp.failed file=${file.absolutePath} samples=${samples.size}")
+            throw e
         }
     }
 

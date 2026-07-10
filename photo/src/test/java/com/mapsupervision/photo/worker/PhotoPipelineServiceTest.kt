@@ -3,9 +3,11 @@ package com.mapsupervision.photo.worker
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.mapsupervision.domain.service.CaptureFolderType
+import com.mapsupervision.domain.model.CaptureStamp
 import com.mapsupervision.domain.service.PhotoDailyLogDataResult
 import com.mapsupervision.domain.service.PhotoMaterialDataResult
 import com.mapsupervision.domain.service.PhotoOcrService
+import com.mapsupervision.domain.model.VideoStampTimelineSample
 import com.mapsupervision.storage.ProjectStorageManager
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -218,7 +220,7 @@ class PhotoPipelineServiceTest {
         val tile = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply {
             eraseColor(Color.GREEN)
         }
-        val stamp = com.mapsupervision.domain.model.CaptureStamp(
+        val stamp = CaptureStamp(
             timestampMs = 1710000000000L,
             latitude = 10.12345,
             longitude = 106.98765,
@@ -240,6 +242,28 @@ class PhotoPipelineServiceTest {
         assertEquals(204, PhotoStampRenderer.MINIMAP_TILE_ALPHA)
         overlay.recycle()
         tile.recycle()
+    }
+
+    @Test
+    fun `selectVideoStampTimelineSample uses nearest earlier sample`() {
+        val first = VideoStampTimelineSample(
+            elapsedMs = 0L,
+            stamp = CaptureStamp(1000L, 10.0, 106.0, "", "", 0f)
+        )
+        val second = VideoStampTimelineSample(
+            elapsedMs = 250L,
+            stamp = CaptureStamp(1250L, 10.1, 106.1, "", "", 25f)
+        )
+        val third = VideoStampTimelineSample(
+            elapsedMs = 500L,
+            stamp = CaptureStamp(1500L, 10.2, 106.2, "", "", 50f)
+        )
+        val samples = listOf(first, second, third)
+
+        assertEquals(first, selectVideoStampTimelineSample(samples, presentationTimeUs = 0L))
+        assertEquals(first, selectVideoStampTimelineSample(samples, presentationTimeUs = 125_000L))
+        assertEquals(second, selectVideoStampTimelineSample(samples, presentationTimeUs = 375_000L))
+        assertEquals(third, selectVideoStampTimelineSample(samples, presentationTimeUs = 999_000L))
     }
 }
 

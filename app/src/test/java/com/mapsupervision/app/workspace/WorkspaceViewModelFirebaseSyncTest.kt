@@ -156,6 +156,7 @@ class WorkspaceViewModelFirebaseSyncTest {
         assertEquals(1, firebaseRepo.pushCalls)
         assertEquals("photo_saved", viewModel.state.value.firebaseSync.lastTrigger)
         assertEquals(listOf("photo_saved", "photo_saved"), mediaUploadScheduler.reasons.drop(baselineScheduled))
+        assertEquals(listOf("project-1", "project-1"), mediaUploadScheduler.projectIds.drop(baselineScheduled))
 
         firebaseRepo.pushGate?.complete(Unit)
         waitUntil { firebaseRepo.pullCalls == 1 && !viewModel.state.value.firebaseSync.isSyncing }
@@ -355,9 +356,11 @@ private class FakePhotoRepository : PhotoRepository {
 
 private class FakeFirebaseMediaUploadScheduler : FirebaseMediaUploadScheduler {
     val reasons = mutableListOf<String>()
+    val projectIds = mutableListOf<String?>()
 
-    override fun enqueue(reason: String) {
+    override fun enqueue(reason: String, projectId: String?) {
         reasons += reason
+        projectIds += projectId
     }
 }
 

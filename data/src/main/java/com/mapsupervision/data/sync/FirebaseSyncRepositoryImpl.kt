@@ -97,6 +97,12 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         return if (details.isNullOrBlank()) prefix else "$prefix: $details"
     }
 
+    private fun photoSyncErrorMessage(error: Throwable): String? =
+        generateSequence(error) { it.cause }
+            .mapNotNull { it.message?.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?.take(400)
+
     private suspend fun uploadPendingMediaInternal(projectId: String): SyncBatchResult {
         ensureFirebaseConfigured()
         val photoDao = scopedDatabase(projectId)?.sitePhotoDao() ?: sharedDatabase.sitePhotoDao()
@@ -120,6 +126,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                     val updated = photo.copy(
                         syncStatus = SitePhotoSyncStatus.DONE,
                         remoteUrl = downloadUrl,
+                        syncErrorMessage = null,
                         lastSyncAttemptEpochMs = now,
                         updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
                     )
@@ -129,6 +136,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                     AppLogger.e(error, "firebase.media_upload.failed projectId=$projectId photoId=${photo.id}")
                     val updated = photo.copy(
                         syncStatus = SitePhotoSyncStatus.FAILED,
+                        syncErrorMessage = photoSyncErrorMessage(error),
                         lastSyncAttemptEpochMs = now,
                         updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
                     )

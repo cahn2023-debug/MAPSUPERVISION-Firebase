@@ -109,6 +109,12 @@ function previewUrlForPhoto(projectId: string, photoId: string): string | undefi
   return buildProjectMediaPreviewUrl(projectId, photoId);
 }
 
+function syncLabelForPhoto(photo: SitePhotoRow, driveUrl?: string): string {
+  const status = text(photo, "syncStatus") || (driveUrl ? "DONE" : "PENDING");
+  const error = text(photo, "syncErrorMessage");
+  return status === "FAILED" && error ? `Sync: FAILED - ${error}` : `Sync: ${status}`;
+}
+
 function SitePhotoPreview({
   projectId,
   photoId,
@@ -1132,7 +1138,7 @@ export default function HomePage() {
                           ) : <div className="photo-placeholder" />}
                           <strong>{text(photo, "objectCode", "nodeCode", "routeCode") || "Ảnh chưa phân loại"}</strong>
                           <span>Kỹ sư: {text(photo, "engineer", "capturedBy") || "Không rõ"} · {formatDateTime(photo.capturedAtEpochMs ?? photo.updatedAtEpochMs)}</span>
-                          <span>Sync: {text(photo, "syncStatus") || (driveUrl ? "DONE" : "PENDING")}</span>
+                          <span>{syncLabelForPhoto(photo, driveUrl)}</span>
                         </a>
                       );
                     })}

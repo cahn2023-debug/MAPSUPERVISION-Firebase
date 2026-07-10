@@ -62,6 +62,7 @@ data class SitePhotoEntity(
     val updatedAtEpochMs: Long = capturedAtEpochMs,
     val syncStatus: SitePhotoSyncStatus = SitePhotoSyncStatus.PENDING,
     val remoteUrl: String? = null,
+    val syncErrorMessage: String? = null,
     val lastSyncAttemptEpochMs: Long? = null,
     val isDeleted: Boolean = false,
     val deletedAtEpochMs: Long? = null

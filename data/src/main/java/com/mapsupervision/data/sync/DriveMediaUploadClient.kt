@@ -442,17 +442,7 @@ internal open class DriveMediaUploadClient(
             }
             append("}")
         }
-        val body = MultipartBody.Builder()
-            .setType(MULTIPART_RELATED_MEDIA_TYPE)
-            .addPart(
-                okhttp3.Headers.headersOf("Content-Type", JSON_MEDIA_TYPE.toString()),
-                metadataJson.toRequestBody(JSON_MEDIA_TYPE)
-            )
-            .addPart(
-                okhttp3.Headers.headersOf("Content-Type", mimeType),
-                bytes.toRequestBody(mimeType.toMediaTypeOrNull())
-            )
-            .build()
+        val body = buildDriveMultipartUploadBody(metadataJson, mimeType, bytes)
         val uploadUrl = if (fileId == null) {
             "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id"
         } else {
@@ -474,6 +464,17 @@ internal open class DriveMediaUploadClient(
             return responseText
         }
     }
+
+    internal fun buildDriveMultipartUploadBody(
+        metadataJson: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): MultipartBody =
+        MultipartBody.Builder()
+            .setType(MULTIPART_RELATED_MEDIA_TYPE)
+            .addPart(metadataJson.toRequestBody(JSON_MEDIA_TYPE))
+            .addPart(bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
+            .build()
 
     private fun ensurePublicReader(accessToken: String, fileId: String) {
         val permissionList = authorizedJsonRequest(

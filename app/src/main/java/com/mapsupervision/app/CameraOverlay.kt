@@ -7,6 +7,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.SystemClock
 import android.view.OrientationEventListener
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -97,6 +98,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -126,6 +128,7 @@ import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.domain.model.CaptureStamp
 import com.mapsupervision.domain.model.PhotoLocationSnapshot
 import com.mapsupervision.domain.model.RoundedLocationKey
+import com.mapsupervision.domain.model.VideoStampTimelineSample
 import com.mapsupervision.domain.service.IPhotoLocationProvider
 import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.service.IPhotoPipelineService
@@ -218,6 +221,7 @@ internal suspend fun postProcessRecordedVideo(
     stampEnabled: Boolean,
     stampAtRecordStart: CaptureStamp?,
     tileBitmap: Bitmap?,
+    timelineSamples: List<VideoStampTimelineSample>,
     photoPipelineService: IPhotoPipelineService,
     setProcessingVideoStamp: (Boolean) -> Unit,
     onSavePhoto: suspend (java.io.File) -> Boolean,
@@ -229,7 +233,11 @@ internal suspend fun postProcessRecordedVideo(
                 "Missing capture stamp for video export"
             }
             setProcessingVideoStamp(true)
-            photoPipelineService.exportVideoStamp(videoFile, stamp, tileBitmap)
+            if (timelineSamples.isNotEmpty()) {
+                photoPipelineService.exportVideoStamp(videoFile, timelineSamples)
+            } else {
+                photoPipelineService.exportVideoStamp(videoFile, stamp, tileBitmap)
+            }
         }
         val saved = onSavePhoto(videoFile)
         if (saved) onPhotoCaptured()
@@ -272,6 +280,7 @@ internal data class PreviewStampRenderKey(
 
 private const val LOCATION_POLL_INTERVAL_MS = 8_000L
 private const val LOCATION_RENDER_DECIMALS = 4
+private const val VIDEO_STAMP_SAMPLE_INTERVAL_MS = 250L
 
 internal fun roundedLocationKey(
     latitude: Double?,
@@ -316,6 +325,54 @@ internal fun buildPreviewStampRenderKey(
         tileKey = tileKey,
         bearing = bearing
     )
+}
+
+internal fun buildVideoStampTimelineSample(
+    recordingStartElapsedMs: Long,
+    nowElapsedMs: Long,
+    location: PhotoLocationSnapshot?,
+    address: String,
+    note: String,
+    bearingDeg: Float,
+    nodes: List<GisNode> = emptyList(),
+    routes: List<GisRoute> = emptyList(),
+    tileBitmap: Bitmap? = null
+): VideoStampTimelineSample {
+    return VideoStampTimelineSample(
+        elapsedMs = (nowElapsedMs - recordingStartElapsedMs).coerceAtLeast(0L),
+        stamp = buildCaptureStamp(
+            timestampMs = System.currentTimeMillis(),
+            location = location,
+            address = address,
+            note = note,
+            bearingDeg = bearingDeg,
+            nodes = nodes,
+            routes = routes
+        ),
+        tileBitmap = tileBitmap
+    )
+}
+
+internal fun MutableList<VideoStampTimelineSample>.appendVideoStampTimelineSample(
+    sample: VideoStampTimelineSample
+) {
+    val previousSample = lastOrNull()
+    if (previousSample == null || previousSample.elapsedMs != sample.elapsedMs || previousSample.stamp != sample.stamp) {
+        add(sample)
+    }
+}
+
+private fun remapBearingForTargetRotation(
+    rawBearing: Float,
+    targetRotation: Int
+): Float {
+    val adjustedBearing = when (targetRotation) {
+        Surface.ROTATION_90 -> rawBearing + 90f
+        Surface.ROTATION_180 -> rawBearing + 180f
+        Surface.ROTATION_270 -> rawBearing + 270f
+        else -> rawBearing
+    }
+    return ((adjustedBearing % 360f) + 360f) % 360f
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -452,6 +509,9 @@ fun CameraOverlay(
     var currentTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
     var cachedTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var cachedTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
+    var recordingStartElapsedMs by remember { mutableStateOf<Long?>(null) }
+    var recordingTimelineTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val recordingTimelineSamples = remember { mutableStateListOf<VideoStampTimelineSample>() }
     val addressCache = remember { mutableMapOf<RoundedLocationKey, String>() }
     var previewSurfaceSize by remember { mutableStateOf(IntSize.Zero) }
     val previewViewport = remember(previewSurfaceSize, selectedAspectRatio) {
@@ -466,10 +526,46 @@ fun CameraOverlay(
         onDispose {
             currentTileBitmap?.recycle()
             cachedTileBitmap?.recycle()
+            recordingTimelineTileBitmap?.recycle()
         }
     }
 
     val controlsEnabled = !isRecording && !isProcessingVideoStamp && !photoCaptureSession.isCapturingPhoto
+
+    LaunchedEffect(
+        isRecording,
+        recordingStartElapsedMs,
+        stampEnabled,
+        liveLocation,
+        liveAddress,
+        noteText,
+        bearing,
+        nodes,
+        routes,
+        recordingTimelineTileBitmap
+    ) {
+        val startElapsedMs = recordingStartElapsedMs ?: return@LaunchedEffect
+        val tileBitmap = recordingTimelineTileBitmap
+        if (!isRecording || !stampEnabled || tileBitmap == null) {
+            return@LaunchedEffect
+        }
+        while (isRecording) {
+            recordingTimelineSamples.appendVideoStampTimelineSample(
+                buildVideoStampTimelineSample(
+                    recordingStartElapsedMs = startElapsedMs,
+                    nowElapsedMs = SystemClock.elapsedRealtime(),
+                    location = liveLocation,
+                    address = liveAddress,
+                    note = noteText,
+                    bearingDeg = bearing,
+                    nodes = nodes,
+                    routes = routes,
+                    tileBitmap = tileBitmap
+                )
+            )
+            delay(VIDEO_STAMP_SAMPLE_INTERVAL_MS)
+        }
+    }
 
     LaunchedEffect(stampEnabled) {
         if (!stampEnabled) {
@@ -536,19 +632,44 @@ fun CameraOverlay(
         val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION)
         val rotationMatrix = FloatArray(9)
+        val remappedRotationMatrix = FloatArray(9)
         val orientationAngles = FloatArray(3)
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 when (event.sensor.type) {
                     Sensor.TYPE_ROTATION_VECTOR -> {
                         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
-                        SensorManager.getOrientation(rotationMatrix, orientationAngles)
+                        val remapped = when (targetRotation) {
+                            Surface.ROTATION_90 -> SensorManager.remapCoordinateSystem(
+                                rotationMatrix,
+                                SensorManager.AXIS_Y,
+                                SensorManager.AXIS_MINUS_X,
+                                remappedRotationMatrix
+                            )
+                            Surface.ROTATION_180 -> SensorManager.remapCoordinateSystem(
+                                rotationMatrix,
+                                SensorManager.AXIS_MINUS_X,
+                                SensorManager.AXIS_MINUS_Y,
+                                remappedRotationMatrix
+                            )
+                            Surface.ROTATION_270 -> SensorManager.remapCoordinateSystem(
+                                rotationMatrix,
+                                SensorManager.AXIS_MINUS_Y,
+                                SensorManager.AXIS_X,
+                                remappedRotationMatrix
+                            )
+                            else -> false
+                        }
+                        SensorManager.getOrientation(
+                            if (remapped) remappedRotationMatrix else rotationMatrix,
+                            orientationAngles
+                        )
                         bearing = Math.toDegrees(orientationAngles[0].toDouble()).toFloat().let {
                             if (it < 0f) it + 360f else it
                         }
                     }
 
-                    Sensor.TYPE_ORIENTATION -> bearing = event.values[0]
+                    Sensor.TYPE_ORIENTATION -> bearing = remapBearingForTargetRotation(event.values[0], targetRotation)
                 }
             }
 
@@ -1116,6 +1237,23 @@ fun CameraOverlay(
                                 focusManager.clearFocus()
                                 if (isVideoMode) {
                                     if (isRecording) {
+                                        val startElapsedMs = recordingStartElapsedMs
+                                        val tileBitmap = recordingTimelineTileBitmap
+                                        if (stampEnabled && startElapsedMs != null && tileBitmap != null) {
+                                            recordingTimelineSamples.appendVideoStampTimelineSample(
+                                                buildVideoStampTimelineSample(
+                                                    recordingStartElapsedMs = startElapsedMs,
+                                                    nowElapsedMs = SystemClock.elapsedRealtime(),
+                                                    location = liveLocation,
+                                                    address = liveAddress,
+                                                    note = noteText,
+                                                    bearingDeg = bearing,
+                                                    nodes = nodes,
+                                                    routes = routes,
+                                                    tileBitmap = tileBitmap
+                                                )
+                                            )
+                                        }
                                         activeRecording?.stop()
                                         activeRecording = null
                                         isRecording = false
@@ -1134,6 +1272,26 @@ fun CameraOverlay(
                                             routes = routes
                                         )
                                         val recordingTileBitmap = snapshotBitmap(currentTileBitmap)
+                                        recordingTimelineTileBitmap?.recycle()
+                                        recordingTimelineTileBitmap = recordingTileBitmap
+                                        val nextRecordingStartElapsedMs = SystemClock.elapsedRealtime()
+                                        recordingStartElapsedMs = nextRecordingStartElapsedMs
+                                        recordingTimelineSamples.clear()
+                                        if (stampEnabled && recordingTileBitmap != null) {
+                                            recordingTimelineSamples.appendVideoStampTimelineSample(
+                                                buildVideoStampTimelineSample(
+                                                    recordingStartElapsedMs = nextRecordingStartElapsedMs,
+                                                    nowElapsedMs = nextRecordingStartElapsedMs,
+                                                    location = liveLocation,
+                                                    address = liveAddress,
+                                                    note = noteText,
+                                                    bearingDeg = bearing,
+                                                    nodes = nodes,
+                                                    routes = routes,
+                                                    tileBitmap = recordingTileBitmap
+                                                )
+                                            )
+                                        }
                                         val loc = liveLocation
                                         val locationLabel = liveAddress.takeIf { it.isNotBlank() }
                                             ?: if (loc?.latitude != null && loc?.longitude != null) {
@@ -1160,6 +1318,7 @@ fun CameraOverlay(
                                                 is VideoRecordEvent.Finalize -> {
                                                     isRecording = false
                                                     activeRecording = null
+                                                    val timelineSnapshot = recordingTimelineSamples.toList()
                                                     if (!event.hasError()) {
                                                         coroutineScope.launch {
                                                             try {
@@ -1168,6 +1327,7 @@ fun CameraOverlay(
                                                                     stampEnabled = stampEnabled,
                                                                     stampAtRecordStart = stampAtRecordStart,
                                                                     tileBitmap = recordingTileBitmap,
+                                                                    timelineSamples = timelineSnapshot,
                                                                     photoPipelineService = photoPipelineService,
                                                                     setProcessingVideoStamp = { isProcessingVideoStamp = it },
                                                                     onSavePhoto = onSavePhoto,
@@ -1179,10 +1339,17 @@ fun CameraOverlay(
                                                                 runCatching { videoFile.delete() }
                                                                 onDismiss()
                                                             } finally {
+                                                                recordingTimelineSamples.clear()
+                                                                recordingStartElapsedMs = null
+                                                                recordingTimelineTileBitmap = null
                                                                 recordingTileBitmap?.recycle()
                                                             }
                                                         }
                                                     } else {
+                                                        recordingTimelineSamples.clear()
+                                                        recordingStartElapsedMs = null
+                                                        recordingTimelineTileBitmap = null
+                                                        recordingTileBitmap?.recycle()
                                                         runCatching { videoFile.delete() }
                                                         onDismiss()
                                                     }

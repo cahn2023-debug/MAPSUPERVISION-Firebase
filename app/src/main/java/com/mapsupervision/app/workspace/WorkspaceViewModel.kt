@@ -352,7 +352,7 @@ class WorkspaceViewModel @Inject constructor(
                     )
                 }
             } else {
-                firebaseMediaUploadScheduler.enqueue("sync_failed:$trigger")
+                firebaseMediaUploadScheduler.enqueue("sync_failed:$trigger", resolvedProjectId)
                 AppLogger.e(
                     IllegalStateException(mergedState.lastError),
                     "firebase.sync.failed projectId=$resolvedProjectId trigger=$trigger"
@@ -360,7 +360,7 @@ class WorkspaceViewModel @Inject constructor(
                 showMessage("Firebase sync loi: ${mergedState.lastError}")
             }
             if (mergedState.failed > 0) {
-                firebaseMediaUploadScheduler.enqueue("sync_partial_failed:$trigger")
+                firebaseMediaUploadScheduler.enqueue("sync_partial_failed:$trigger", resolvedProjectId)
             }
         }
     }
@@ -390,7 +390,7 @@ class WorkspaceViewModel @Inject constructor(
                     }
                     if (lastAutoUploadScheduledProjectId != snapshot.projectId) {
                         lastAutoUploadScheduledProjectId = snapshot.projectId
-                        firebaseMediaUploadScheduler.enqueue("workspace_loaded:" + snapshot.projectId)
+                        firebaseMediaUploadScheduler.enqueue("workspace_loaded:" + snapshot.projectId, snapshot.projectId)
                     }
                     applySnapshot(snapshot)
                 }
@@ -406,7 +406,7 @@ class WorkspaceViewModel @Inject constructor(
                     "design_import_completed" -> showMessage("Đã cập nhật dữ liệu thiết kế")
                     "photo_saved" -> {
                         showMessage("Đã lưu ảnh hiện trường")
-                        firebaseMediaUploadScheduler.enqueue("photo_saved")
+                        firebaseMediaUploadScheduler.enqueue("photo_saved", activeProjectId)
                         syncFirebaseNow(activeProjectId, trigger = "photo_saved")
                     }
                     "project_imported" -> showMessage("Đã nhập dự án")

@@ -141,4 +141,22 @@ class DriveMediaUploadClientTest {
         assertTrue(message.contains("Shared drive"))
         assertTrue(message.contains("Service account cannot upload there"))
     }
+
+    @Test
+    fun buildDriveMultipartUploadBody_doesNotSetForbiddenPartHeaders() {
+        val client = DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        val body = client.buildDriveMultipartUploadBody(
+            metadataJson = """{"name":"photo.jpg"}""",
+            mimeType = "image/jpeg",
+            bytes = "image".toByteArray()
+        )
+
+        assertEquals(2, body.size)
+        assertEquals(null, body.part(0).headers)
+        assertEquals(null, body.part(1).headers)
+    }
 }

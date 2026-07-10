@@ -32,6 +32,7 @@ data class SitePhotoProjection(
     val updatedAtEpochMs: Long,
     val syncStatus: SitePhotoSyncStatus,
     val remoteUrl: String?,
+    val syncErrorMessage: String?,
     val lastSyncAttemptEpochMs: Long?,
     val matchedNodeId: String?,
     val matchedRouteId: String?
@@ -76,6 +77,7 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
             sp.matchedRouteId
@@ -113,6 +115,7 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
             sp.matchedRouteId
@@ -150,6 +153,7 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
             sp.matchedRouteId
@@ -187,6 +191,7 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
             sp.matchedRouteId
@@ -224,6 +229,7 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
             sp.matchedRouteId
