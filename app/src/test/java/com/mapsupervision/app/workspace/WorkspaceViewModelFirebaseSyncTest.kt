@@ -165,10 +165,32 @@ class WorkspaceViewModelFirebaseSyncTest {
         assertEquals(1, viewModel.state.value.firebaseSync.pulled)
     }
 
+    @Test
+    fun offline_mode_skips_cloud_sync() = runBlocking {
+        val firebaseRepo = FakeFirebaseSyncRepository()
+        val projectSyncRepository = FakeProjectSyncRepository()
+        val mediaUploadScheduler = FakeFirebaseMediaUploadScheduler()
+        val accessRepository = FakeFirebaseAccessRepository(isOffline = true)
+        val viewModel = buildViewModel(
+            firebaseSyncRepository = firebaseRepo,
+            projectSyncRepository = projectSyncRepository,
+            firebaseMediaUploadScheduler = mediaUploadScheduler,
+            firebaseAccessRepository = accessRepository
+        )
+
+        viewModel.syncFirebaseNow(projectId = "project-1", trigger = "manual")
+        waitUntil { viewModel.state.value.firebaseSync.lastError == "Đang ở chế độ offline." }
+
+        assertEquals(0, firebaseRepo.pushCalls)
+        assertEquals(0, firebaseRepo.pullCalls)
+        assertEquals("Đang ở chế độ offline.", viewModel.state.value.firebaseSync.lastError)
+    }
+
     private fun buildViewModel(
         firebaseSyncRepository: FakeFirebaseSyncRepository,
         projectSyncRepository: FakeProjectSyncRepository,
-        firebaseMediaUploadScheduler: FirebaseMediaUploadScheduler = FakeFirebaseMediaUploadScheduler()
+        firebaseMediaUploadScheduler: FirebaseMediaUploadScheduler = FakeFirebaseMediaUploadScheduler(),
+        firebaseAccessRepository: FirebaseAccessRepository = FakeFirebaseAccessRepository()
     ): WorkspaceViewModel {
         val activeProjectRepository = FakeActiveProjectRepository("project-1")
         val importedFileRepository = FakeImportedFileRepository()
@@ -221,7 +243,7 @@ class WorkspaceViewModelFirebaseSyncTest {
             reportDraftRepository = FakeReportDraftRepository(),
             materialDeclarationRepository = materialDeclarationRepository,
             materialHandoverRepository = materialHandoverRepository,
-            firebaseAccessRepository = FakeFirebaseAccessRepository(),
+            firebaseAccessRepository = firebaseAccessRepository,
             firebaseSyncRepository = firebaseSyncRepository,
             firebaseMediaUploadScheduler = firebaseMediaUploadScheduler,
             observeWorkspaceSnapshot = observeWorkspaceSnapshot,
@@ -238,24 +260,43 @@ private suspend fun waitUntil(condition: () -> Boolean) {
     }
 }
 
-private class FakeFirebaseAccessRepository : FirebaseAccessRepository {
+private class FakeFirebaseAccessRepository(
+    isOffline: Boolean = false
+) : FirebaseAccessRepository {
     private val session = FirebaseUserSession(
-        uid = "user-1",
-        email = "sync-test@example.com",
+        uid = if (isOffline) "offline-user" else "user-1",
+        email = if (isOffline) "offline@local" else "sync-test@example.com",
         emailVerified = true,
-        isAdmin = false
+        isAdmin = false,
+        isOffline = isOffline
     )
     private val projectAccess = ProjectAccess(projectId = "project-1")
-    override val accessState: StateFlow<FirebaseAccessState> = MutableStateFlow(
+    private val state = MutableStateFlow(
         FirebaseAccessState(
             session = session,
-            allowedProjectIds = setOf(projectAccess.projectId),
-            permissionsByProject = mapOf(projectAccess.projectId to projectAccess)
+            allowedProjectIds = if (isOffline) emptySet() else setOf(projectAccess.projectId),
+            permissionsByProject = if (isOffline) emptyMap() else mapOf(projectAccess.projectId to projectAccess),
+            isInitialized = true
         )
     )
+    override val accessState: StateFlow<FirebaseAccessState> = state
 
     override suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession> = AppResult.Success(session)
+    override suspend fun register(email: String, password: String): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun signInWithGoogle(idToken: String): AppResult<FirebaseUserSession> = AppResult.Success(session)
+    override suspend fun enterOfflineMode(): AppResult<FirebaseAccessState> {
+        val nextState = FirebaseAccessState(
+            session = FirebaseUserSession(
+                uid = "offline-user",
+                email = "offline@local",
+                emailVerified = true,
+                isOffline = true
+            ),
+            isInitialized = true
+        )
+        state.value = nextState
+        return AppResult.Success(nextState)
+    }
     override suspend fun signOut(): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun refreshAccess(): AppResult<FirebaseAccessState> = AppResult.Success(accessState.value)
     override suspend fun ensureUserProfile(): AppResult<Unit> = AppResult.Success(Unit)

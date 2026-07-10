@@ -497,7 +497,7 @@ fun MapHubScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = "Đồng bộ Firebase",
+                                            text = "Đồng bộ đám mây",
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = textColor
@@ -506,7 +506,7 @@ fun MapHubScreen(
                                             firebaseSyncState.isSyncing -> "Đang đồng bộ..."
                                             firebaseSyncState.lastError != null -> "Đồng bộ lỗi"
                                             firebaseSyncState.lastSyncedAtEpochMs > 0L -> "Đã đẩy ${firebaseSyncState.pushed}, tải ${firebaseSyncState.pulled}"
-                                            else -> "Đồng bộ Firebase"
+                                            else -> "Đồng bộ đám mây"
                                         }
                                         Text(
                                             text = label,

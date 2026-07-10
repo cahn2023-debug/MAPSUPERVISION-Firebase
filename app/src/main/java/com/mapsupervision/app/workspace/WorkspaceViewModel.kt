@@ -311,13 +311,26 @@ class WorkspaceViewModel @Inject constructor(
                 is AppResult.Error -> firebaseAccessRepository.accessState.value
             }
             val session = accessState.session
+            if (session?.isOffline == true) {
+                val errorMessage = "Đang ở chế độ offline."
+                _state.value = _state.value.copy(
+                    isRefreshing = false,
+                    firebaseSync = _state.value.firebaseSync.copy(
+                        isSyncing = false,
+                        lastError = errorMessage,
+                        lastTrigger = trigger
+                    )
+                )
+                showMessage(errorMessage)
+                return@launch
+            }
             val hasProjectAccess = session?.isAdmin == true ||
                 accessState.allowedProjectIds.contains(resolvedProjectId)
             if (session == null || !hasProjectAccess) {
                 val errorMessage = if (session == null) {
-                    "Can dang nhap Firebase de dong bo."
+                    "Cần đăng nhập để đồng bộ đám mây."
                 } else {
-                    "Tai khoan chua duoc cap quyen cho du an nay."
+                    "Tài khoản chưa được cấp quyền cho dự án này."
                 }
                 _state.value = _state.value.copy(
                     isRefreshing = false,
@@ -348,7 +361,7 @@ class WorkspaceViewModel @Inject constructor(
                 requestAiOpsRefresh(force = true)
                 if (trigger == "manual") {
                     showMessage(
-                        "Firebase sync OK: push ${mergedState.pushed}, pull ${mergedState.pulled}, upload ${mergedState.uploadedMedia}"
+                        "Đồng bộ đám mây hoàn tất: đẩy ${mergedState.pushed}, tải ${mergedState.pulled}, upload ${mergedState.uploadedMedia}"
                     )
                 }
             } else {
@@ -357,7 +370,7 @@ class WorkspaceViewModel @Inject constructor(
                     IllegalStateException(mergedState.lastError),
                     "firebase.sync.failed projectId=$resolvedProjectId trigger=$trigger"
                 )
-                showMessage("Firebase sync loi: ${mergedState.lastError}")
+                showMessage("Đồng bộ đám mây lỗi: ${mergedState.lastError}")
             }
             if (mergedState.failed > 0) {
                 firebaseMediaUploadScheduler.enqueue("sync_partial_failed:$trigger", resolvedProjectId)

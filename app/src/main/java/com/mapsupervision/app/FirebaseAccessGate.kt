@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Lock
@@ -33,6 +35,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -49,14 +52,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mapsupervision.app.auth.FirebaseAccessViewModel
-import com.mapsupervision.app.workspace.IncomingSharePayload
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.mapsupervision.app.auth.FirebaseAccessViewModel
+import com.mapsupervision.app.workspace.IncomingSharePayload
 import kotlinx.coroutines.launch
 
 @Composable
@@ -86,13 +89,20 @@ fun AppRoot(
         FirebaseSignInScreen(
             email = accessState.email,
             password = accessState.password,
+            confirmPassword = accessState.confirmPassword,
             rememberMe = accessState.rememberMe,
             isBusy = accessState.isBusy,
+            isRegisterMode = accessState.isRegisterMode,
             error = accessState.error,
+            message = accessState.message,
             onEmailChange = accessViewModel::updateEmail,
             onPasswordChange = accessViewModel::updatePassword,
+            onConfirmPasswordChange = accessViewModel::updateConfirmPassword,
             onRememberMeChange = accessViewModel::updateRememberMe,
+            onAuthModeChange = accessViewModel::updateAuthMode,
             onSignIn = accessViewModel::signIn,
+            onRegister = accessViewModel::register,
+            onSkipOffline = accessViewModel::enterOfflineMode,
             onGoogleSignIn = accessViewModel::signInWithGoogle,
             setAuthError = accessViewModel::setAuthError
         )
@@ -113,13 +123,20 @@ fun AppRoot(
 private fun FirebaseSignInScreen(
     email: String,
     password: String,
+    confirmPassword: String,
     rememberMe: Boolean,
     isBusy: Boolean,
+    isRegisterMode: Boolean,
     error: String,
+    message: String,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onConfirmPasswordChange: (String) -> Unit,
     onRememberMeChange: (Boolean) -> Unit,
+    onAuthModeChange: (Boolean) -> Unit,
     onSignIn: () -> Unit,
+    onRegister: () -> Unit,
+    onSkipOffline: () -> Unit,
     onGoogleSignIn: (String) -> Unit,
     setAuthError: (String) -> Unit
 ) {
@@ -147,6 +164,7 @@ private fun FirebaseSignInScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 460.dp)
+                .verticalScroll(rememberScrollState())
                 .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(24.dp))
@@ -171,18 +189,46 @@ private fun FirebaseSignInScreen(
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Đăng nhập Firebase",
+                    text = if (isRegisterMode) "Tạo tài khoản" else "Đăng nhập",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Sử dụng tài khoản đã được cấp quyền để mở workspace và đồng bộ dữ liệu theo project.",
+                    text = if (isRegisterMode) {
+                        "Tạo tài khoản bằng email để dùng trực tuyến. Sau khi đăng ký, hãy xác thực email trước khi đăng nhập."
+                    } else {
+                        "Dùng email đã đăng ký, tài khoản Google, hoặc bỏ qua để làm việc offline với dữ liệu cục bộ."
+                    },
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TextButton(
+                    onClick = { onAuthModeChange(false) },
+                    enabled = !isBusy
+                ) {
+                    Text(
+                        text = "Đăng nhập",
+                        fontWeight = if (!isRegisterMode) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+                TextButton(
+                    onClick = { onAuthModeChange(true) },
+                    enabled = !isBusy
+                ) {
+                    Text(
+                        text = "Tạo tài khoản",
+                        fontWeight = if (isRegisterMode) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
             }
 
             OutlinedTextField(
@@ -193,14 +239,7 @@ private fun FirebaseSignInScreen(
                 enabled = !isBusy,
                 label = { Text("Email") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                )
+                colors = inputColors()
             )
 
             OutlinedTextField(
@@ -212,34 +251,50 @@ private fun FirebaseSignInScreen(
                 label = { Text("Mật khẩu") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                )
+                colors = inputColors()
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(
-                    checked = rememberMe,
-                    onCheckedChange = onRememberMeChange,
+            if (isRegisterMode) {
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = onConfirmPasswordChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     enabled = !isBusy,
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = MaterialTheme.colorScheme.primary,
-                        uncheckedColor = MaterialTheme.colorScheme.outline,
-                        checkmarkColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    label = { Text("Nhập lại mật khẩu") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    colors = inputColors()
                 )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = rememberMe,
+                        onCheckedChange = onRememberMeChange,
+                        enabled = !isBusy,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.outline,
+                            checkmarkColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    )
+                    Text(
+                        text = "Lưu tài khoản",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            if (message.isNotBlank()) {
                 Text(
-                    text = "Lưu tài khoản",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 14.sp
+                    text = message,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -253,7 +308,9 @@ private fun FirebaseSignInScreen(
             }
 
             Button(
-                onClick = onSignIn,
+                onClick = {
+                    if (isRegisterMode) onRegister() else onSignIn()
+                },
                 enabled = !isBusy && email.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -272,40 +329,71 @@ private fun FirebaseSignInScreen(
                     )
                 } else {
                     Text(
-                        text = "Đăng nhập",
+                        text = if (isRegisterMode) "Tạo tài khoản" else "Đăng nhập",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            OutlinedButton(
-                onClick = {
-                    coroutineScope.launch {
-                        try {
-                            val googleIdOption = GetGoogleIdOption.Builder()
-                                .setFilterByAuthorizedAccounts(false)
-                                .setServerClientId("735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com")
-                                .setAutoSelectEnabled(false)
-                                .build()
+            if (!isRegisterMode) {
+                OutlinedButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            try {
+                                val googleIdOption = GetGoogleIdOption.Builder()
+                                    .setFilterByAuthorizedAccounts(false)
+                                    .setServerClientId("735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com")
+                                    .setAutoSelectEnabled(false)
+                                    .build()
 
-                            val request = GetCredentialRequest.Builder()
-                                .addCredentialOption(googleIdOption)
-                                .build()
+                                val request = GetCredentialRequest.Builder()
+                                    .addCredentialOption(googleIdOption)
+                                    .build()
 
-                            val result = credentialManager.getCredential(context, request)
-                            val credential = result.credential
+                                val result = credentialManager.getCredential(context, request)
+                                val credential = result.credential
 
-                            if (credential is GoogleIdTokenCredential) {
-                                onGoogleSignIn(credential.idToken)
-                            } else {
-                                setAuthError("Đăng nhập Google thất bại.")
+                                if (credential is GoogleIdTokenCredential) {
+                                    onGoogleSignIn(credential.idToken)
+                                } else {
+                                    setAuthError("Đăng nhập Google thất bại.")
+                                }
+                            } catch (e: Exception) {
+                                setAuthError(e.message ?: "Đăng nhập Google thất bại.")
                             }
-                        } catch (e: Exception) {
-                            setAuthError(e.message ?: "Đăng nhập Google thất bại.")
                         }
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AccountCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Đăng nhập với Google",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                },
+                }
+            }
+
+            OutlinedButton(
+                onClick = onSkipOffline,
                 enabled = !isBusy,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -316,25 +404,19 @@ private fun FirebaseSignInScreen(
                     contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AccountCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Đăng nhập với Google",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = "Bỏ qua và dùng offline",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Text(
-                text = "Tài khoản được tạo và cấp quyền từ webapp",
+                text = if (isRegisterMode) {
+                    "Tài khoản email cần được xác thực trước khi đăng nhập."
+                } else {
+                    "Dữ liệu đám mây chỉ khả dụng sau khi đăng nhập."
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
@@ -344,3 +426,12 @@ private fun FirebaseSignInScreen(
     }
 }
 
+@Composable
+private fun inputColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
+    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+)

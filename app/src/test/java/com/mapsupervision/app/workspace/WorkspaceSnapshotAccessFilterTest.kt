@@ -58,6 +58,26 @@ class WorkspaceSnapshotAccessFilterTest {
         assertEquals(0, filtered.designNodes.size)
     }
 
+    @Test
+    fun `filterForAccess keeps local data in offline mode`() {
+        val snapshot = workspaceSnapshot()
+
+        val filtered = snapshot.filterForAccess(
+            FirebaseAccessState(
+                session = FirebaseUserSession(
+                    uid = "offline-user",
+                    email = "offline@local",
+                    emailVerified = true,
+                    isAdmin = false,
+                    isOffline = true
+                ),
+                isInitialized = true
+            )
+        )
+
+        assertEquals(1, filtered.designNodes.size)
+    }
+
     private fun workspaceSnapshot() = WorkspaceSnapshot(
         projectId = "project-1",
         designNodes = listOf(

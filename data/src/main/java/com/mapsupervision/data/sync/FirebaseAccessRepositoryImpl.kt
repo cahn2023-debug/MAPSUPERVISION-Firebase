@@ -21,7 +21,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -68,20 +67,32 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         }
     }
 
-
     override suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession> = runCatching {
         ensureConfigured()
         val auth = firebaseRuntime.auth()
         val user = auth.signInWithEmailAndPassword(email.trim(), password).await().user
-            ?: error("Khong the dang nhap Firebase.")
+            ?: error("Khong the dang nhap.")
         if (!user.isEmailVerified) {
             auth.signOut()
             error("Tai khoan chua xac thuc email.")
         }
         syncAccessForUser(user, forceRefresh = true).session
-            ?: error("Khong tai duoc phien dang nhap Firebase.")
+            ?: error("Khong tai duoc phien dang nhap.")
     }.fold(
         onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun register(email: String, password: String): AppResult<Unit> = runCatching {
+        ensureConfigured()
+        val auth = firebaseRuntime.auth()
+        val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user
+            ?: error("Khong the tao tai khoan.")
+        user.sendEmailVerification().await()
+        auth.signOut()
+        _accessState.value = FirebaseAccessState(isInitialized = true)
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(it) }
     )
 
@@ -90,17 +101,40 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         val auth = firebaseRuntime.auth()
         val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
         val user = auth.signInWithCredential(credential).await().user
-            ?: error("Không thể đăng nhập Firebase bằng tài khoản Google.")
+            ?: error("Khong the dang nhap bang tai khoan Google.")
         syncAccessForUser(user, forceRefresh = true).session
-            ?: error("Không tải được phiên đăng nhập Firebase.")
+            ?: error("Khong tai duoc phien dang nhap.")
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun enterOfflineMode(): AppResult<FirebaseAccessState> = runCatching {
+        val nextState = FirebaseAccessState(
+            session = FirebaseUserSession(
+                uid = "offline-user",
+                email = "offline@local",
+                displayName = "Offline",
+                emailVerified = true,
+                isOffline = true
+            ),
+            isInitialized = true
+        )
+        _accessState.value = nextState
+        nextState
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(it) }
     )
 
     override suspend fun signOut(): AppResult<Unit> = runCatching {
-        ensureConfigured()
-        firebaseRuntime.auth().signOut()
+        if (_accessState.value.session?.isOffline == true) {
+            _accessState.value = FirebaseAccessState(isInitialized = true)
+            return@runCatching
+        }
+        if (firebaseRuntime.authConfigured()) {
+            firebaseRuntime.auth().signOut()
+        }
         _accessState.value = FirebaseAccessState(isInitialized = true)
     }.fold(
         onSuccess = { AppResult.Success(Unit) },
@@ -108,6 +142,9 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
     )
 
     override suspend fun refreshAccess(): AppResult<FirebaseAccessState> = runCatching {
+        if (_accessState.value.session?.isOffline == true) {
+            return@runCatching _accessState.value
+        }
         ensureConfigured()
         val user = firebaseRuntime.auth().currentUser ?: return@runCatching FirebaseAccessState(isInitialized = true)
         syncAccessForUser(user, forceRefresh = false)
@@ -255,7 +292,7 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
 
     private fun ensureConfigured() {
         check(firebaseRuntime.authConfigured()) {
-            "Firebase config missing. Set FIREBASE_PROJECT_ID, FIREBASE_APP_ID, FIREBASE_API_KEY in .env"
+            "Cloud config missing. Set FIREBASE_PROJECT_ID, FIREBASE_APP_ID, FIREBASE_API_KEY in .env"
         }
     }
 

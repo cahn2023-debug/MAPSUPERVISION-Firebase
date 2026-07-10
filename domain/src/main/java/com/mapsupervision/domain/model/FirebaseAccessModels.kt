@@ -10,7 +10,8 @@ data class FirebaseUserSession(
     val email: String,
     val displayName: String? = null,
     val emailVerified: Boolean = false,
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val isOffline: Boolean = false
 )
 
 data class ProjectAccess(
@@ -26,4 +27,3 @@ data class FirebaseAccessState(
     val permissionsByProject: Map<String, ProjectAccess> = emptyMap(),
     val isInitialized: Boolean = false
 )
-
