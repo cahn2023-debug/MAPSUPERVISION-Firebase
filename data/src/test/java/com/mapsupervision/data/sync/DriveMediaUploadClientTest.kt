@@ -3,7 +3,14 @@ package com.mapsupervision.data.sync
 import com.mapsupervision.domain.model.MediaType
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicReference
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -158,5 +165,52 @@ class DriveMediaUploadClientTest {
         assertEquals(2, body.size)
         assertEquals(null, body.part(0).headers)
         assertEquals(null, body.part(1).headers)
+    }
+
+    @Test
+    fun uploadMultipartFile_usesPatchForExistingDriveFile() {
+        val capturedRequest = AtomicReference<Request>()
+        val httpClient = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    capturedRequest.set(chain.request())
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"id":"file1"}""".toResponseBody("application/json".toMediaTypeOrNull()))
+                        .build()
+                }
+            )
+            .build()
+        val client = DriveMediaUploadClient(
+            httpClient,
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+        val method = DriveMediaUploadClient::class.java.getDeclaredMethod(
+            "uploadMultipartFile",
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            ByteArray::class.java
+        )
+        method.isAccessible = true
+
+        method.invoke(
+            client,
+            "token1",
+            "file1",
+            "parent1",
+            "photo1",
+            "photo.jpg",
+            "image/jpeg",
+            "image".toByteArray()
+        )
+
+        assertEquals("PATCH", capturedRequest.get()?.method)
     }
 }

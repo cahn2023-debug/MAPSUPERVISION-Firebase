@@ -454,7 +454,7 @@ internal open class DriveMediaUploadClient(
         if (fileId == null) {
             requestBuilder.post(body)
         } else {
-            requestBuilder.put(body)
+            requestBuilder.patch(body)
         }
         httpClient.newCall(requestBuilder.build()).execute().use { response ->
             val responseText = response.body?.string().orEmpty()

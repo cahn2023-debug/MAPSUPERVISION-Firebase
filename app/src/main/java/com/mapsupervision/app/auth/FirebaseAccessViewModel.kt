@@ -120,7 +120,7 @@ class FirebaseAccessViewModel @Inject constructor(
                         password = "",
                         confirmPassword = "",
                         error = "",
-                        message = ""
+                        message = "\u0110\u0103ng nh\u1eadp th\u00e0nh c\u00f4ng."
                     )
                 }
                 is AppResult.Error -> {
@@ -187,7 +187,7 @@ class FirebaseAccessViewModel @Inject constructor(
                         password = "",
                         confirmPassword = "",
                         error = "",
-                        message = ""
+                        message = "\u0110\u0103ng nh\u1eadp th\u00e0nh c\u00f4ng."
                     )
                 }
                 is AppResult.Error -> {

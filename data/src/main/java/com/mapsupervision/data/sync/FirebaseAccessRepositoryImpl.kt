@@ -76,8 +76,10 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
             auth.signOut()
             error("Tai khoan chua xac thuc email.")
         }
-        syncAccessForUser(user, forceRefresh = true).session
+        val session = syncAccessForUser(user, forceRefresh = true).session
             ?: error("Khong tai duoc phien dang nhap.")
+        AppLogger.d("firebase.access.sign_in.success uid=${session.uid} provider=password")
+        session
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(it) }
@@ -100,10 +102,15 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         ensureConfigured()
         val auth = firebaseRuntime.auth()
         val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
-        val user = auth.signInWithCredential(credential).await().user
+        val authResult = auth.signInWithCredential(credential).await()
+        val user = authResult.user
             ?: error("Khong the dang nhap bang tai khoan Google.")
-        syncAccessForUser(user, forceRefresh = true).session
+        val session = syncAccessForUser(user, forceRefresh = true).session
             ?: error("Khong tai duoc phien dang nhap.")
+        AppLogger.d(
+            "firebase.access.sign_in.success uid=${session.uid} provider=google isNewUser=${authResult.additionalUserInfo?.isNewUser == true}"
+        )
+        session
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(it) }

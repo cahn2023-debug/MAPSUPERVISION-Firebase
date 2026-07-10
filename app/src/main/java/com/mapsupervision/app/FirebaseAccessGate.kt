@@ -1,5 +1,10 @@
 package com.mapsupervision.app
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,7 +44,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,15 +56,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
+import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.app.auth.FirebaseAccessViewModel
 import com.mapsupervision.app.workspace.IncomingSharePayload
-import kotlinx.coroutines.launch
 
 @Composable
 fun AppRoot(
@@ -141,8 +145,42 @@ private fun FirebaseSignInScreen(
     setAuthError: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val credentialManager = remember { CredentialManager.create(context) }
+    val activity = context.findActivity()
+    val serverClientId = remember(context) { context.resolveGoogleServerClientId() }
+    val googleSignInClient = remember(context) {
+        GoogleSignIn.getClient(
+            context,
+            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(serverClientId)
+                .requestEmail()
+                .build()
+        )
+    }
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
+            setAuthError("Đăng nhập Google đã bị hủy.")
+            return@rememberLauncherForActivityResult
+        }
+
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken.isNullOrBlank()) {
+                setAuthError("Khong lay duoc token dang nhap Google.")
+            } else {
+                onGoogleSignIn(idToken)
+            }
+        } catch (error: ApiException) {
+            AppLogger.e(error, "google.sign_in.api_exception status=${error.statusCode}")
+            setAuthError(mapGoogleSignInError(error))
+        } catch (error: Exception) {
+            AppLogger.e(error, "google.sign_in.failed")
+            setAuthError(error.message ?: "Dang nhap Google that bai.")
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -197,7 +235,7 @@ private fun FirebaseSignInScreen(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = if (isRegisterMode) {
-                        "Tạo tài khoản bằng email để dùng trực tuyến. Sau khi đăng ký, hãy xác thực email trước khi đăng nhập."
+                        "Tạo tài khoản bằng email hoặc Google để dùng trực tuyến. Nếu đăng ký bằng email, hãy xác thực email trước khi đăng nhập."
                     } else {
                         "Dùng email đã đăng ký, tài khoản Google, hoặc bỏ qua để làm việc offline với dữ liệu cục bộ."
                     },
@@ -336,59 +374,40 @@ private fun FirebaseSignInScreen(
                 }
             }
 
-            if (!isRegisterMode) {
-                OutlinedButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            try {
-                                val googleIdOption = GetGoogleIdOption.Builder()
-                                    .setFilterByAuthorizedAccounts(false)
-                                    .setServerClientId("735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com")
-                                    .setAutoSelectEnabled(false)
-                                    .build()
-
-                                val request = GetCredentialRequest.Builder()
-                                    .addCredentialOption(googleIdOption)
-                                    .build()
-
-                                val result = credentialManager.getCredential(context, request)
-                                val credential = result.credential
-
-                                if (credential is GoogleIdTokenCredential) {
-                                    onGoogleSignIn(credential.idToken)
-                                } else {
-                                    setAuthError("Đăng nhập Google thất bại.")
-                                }
-                            } catch (e: Exception) {
-                                setAuthError(e.message ?: "Đăng nhập Google thất bại.")
-                            }
+            OutlinedButton(
+                onClick = {
+                    if (activity == null) {
+                        setAuthError("Không mở được màn hình đăng nhập Google.")
+                    } else {
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
                         }
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(25.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.AccountCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Đăng nhập với Google",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
+                },
+                enabled = !isBusy,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(25.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = if (isRegisterMode) "Tạo tài khoản với Google" else "Đăng nhập với Google",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
@@ -413,7 +432,7 @@ private fun FirebaseSignInScreen(
 
             Text(
                 text = if (isRegisterMode) {
-                    "Tài khoản email cần được xác thực trước khi đăng nhập."
+                    "Google sẽ tạo tài khoản ngay lần đầu đăng nhập. Tài khoản email cần được xác thực trước khi đăng nhập."
                 } else {
                     "Dữ liệu đám mây chỉ khả dụng sau khi đăng nhập."
                 },
@@ -435,3 +454,27 @@ private fun inputColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = MaterialTheme.colorScheme.onSurface,
     unfocusedTextColor = MaterialTheme.colorScheme.onSurface
 )
+
+private fun mapGoogleSignInError(error: ApiException): String = when (error.statusCode) {
+    CommonStatusCodes.NETWORK_ERROR -> "Mang dang khong on dinh. Hay kiem tra Internet va thu lai."
+    CommonStatusCodes.SIGN_IN_REQUIRED,
+    CommonStatusCodes.INVALID_ACCOUNT -> "Khong the xac thuc tai khoan Google tren thiet bi nay."
+    CommonStatusCodes.DEVELOPER_ERROR -> "Cau hinh dang nhap Google chua khop package/SHA cua ung dung. Can cap nhat SHA-1/SHA-256 cho com.mapsupervision trong Firebase va tai lai google-services.json."
+    CommonStatusCodes.CANCELED -> "Dang nhap Google da bi huy."
+    else -> "Dang nhap Google that bai (${error.statusCode})."
+}
+
+private fun Context.resolveGoogleServerClientId(): String {
+    val resourceId = resources.getIdentifier("default_web_client_id", "string", packageName)
+    if (resourceId != 0) {
+        val value = getString(resourceId).trim()
+        if (value.isNotBlank()) return value
+    }
+    return "735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com"
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
