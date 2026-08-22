@@ -20,6 +20,19 @@ This Master Specification establishes the authoritative technical blueprint for 
 
 ---
 
+## Locked Decisions
+
+- D1: 18-Module Clean Architecture with dependency boundary rules enforced at build time.
+- D2: Room SQLite v48 schema with strict project-scoped database isolation per project.
+- D3: Hybrid edge & cloud AI orchestration with multi-engine routing and safety gate.
+- D4: Offline-first transactional outbox pattern for reliable cloud synchronization.
+
+## System Decision Impact
+
+- Impact: none — consolidates and verifies existing system architecture invariants.
+
+---
+
 ## 2. Specification Suite Index
 
 The full system documentation is decomposed into four comprehensive specifications:

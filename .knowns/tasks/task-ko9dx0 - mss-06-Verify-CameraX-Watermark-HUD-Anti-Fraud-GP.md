@@ -8,7 +8,7 @@ labels:
   - spec:master-system-specification
   - wave:2
 createdAt: '2026-08-22T16:36:34.999Z'
-updatedAt: '2026-08-22T16:38:01.957Z'
+updatedAt: '2026-08-22T16:44:08.101Z'
 completedAt: '2026-08-22T16:38:01.957Z'
 timeSpent: 0
 spec: specs/2026-08-22/master-system-specification
@@ -30,6 +30,9 @@ Verify CameraX capture pipeline, GPS watermark overlay, mock location detection,
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Verified CameraX HUD overlay, GPS anti-fraud verification (isGpsMocked check), watermarking, and DirectCaptureSaveDeduper deduplication. System Decision Impact: none — verified camera pipeline. Spec Decision Compliance: D1=pass
+Verified CameraX HUD overlay, GPS anti-fraud verification (isGpsMocked check), watermarking, and DirectCaptureSaveDeduper deduplication.
+
+Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
+System Decision Impact: none — verified camera pipeline.
 <!-- SECTION:NOTES:END -->
 

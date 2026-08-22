@@ -8,7 +8,7 @@ labels:
   - spec:master-system-specification
   - wave:2
 createdAt: '2026-08-22T16:36:37.980Z'
-updatedAt: '2026-08-22T16:38:07.170Z'
+updatedAt: '2026-08-22T16:44:12.030Z'
 completedAt: '2026-08-22T16:38:07.170Z'
 timeSpent: 0
 spec: specs/2026-08-22/master-system-specification
@@ -30,6 +30,9 @@ Audit AiOrchestrator multi-engine routing, Gemma on-device model, Vietnamese act
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Audited AiOrchestrator 6-engine routing, LiteRtSafetyGate, MediaPipe Gemma, local RAG vector retrieval, ChatActionParser, and ChatDictionaryResolver. System Decision Impact: none — verified AI engine stack. Spec Decision Compliance: D1=pass
+Audited AiOrchestrator 6-engine routing, LiteRtSafetyGate, MediaPipe Gemma, local RAG vector retrieval, ChatActionParser, and ChatDictionaryResolver.
+
+Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
+System Decision Impact: none — verified AI engine stack.
 <!-- SECTION:NOTES:END -->
 

@@ -8,7 +8,7 @@ labels:
   - spec:master-system-specification
   - wave:1
 createdAt: '2026-08-22T16:36:22.974Z'
-updatedAt: '2026-08-22T16:37:35.959Z'
+updatedAt: '2026-08-22T16:43:49.995Z'
 completedAt: '2026-08-22T16:37:35.959Z'
 timeSpent: 0
 spec: specs/2026-08-22/master-system-specification
@@ -30,6 +30,9 @@ Verify Room database v48 schema, all 28 entities and 28 DAOs in MapSupervisionDa
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Verified Room schema v48 with 28 entities and 28 DAOs. DbTypeConverters properly handle spatial polylines, dates, and enums. System Decision Impact: none — verified schema integrity. Spec Decision Compliance: D1=pass
+Verified Room schema v48 with 28 entities and 28 DAOs. DbTypeConverters properly handle spatial polylines, dates, and enums.
+
+Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
+System Decision Impact: none — verified schema integrity.
 <!-- SECTION:NOTES:END -->
 

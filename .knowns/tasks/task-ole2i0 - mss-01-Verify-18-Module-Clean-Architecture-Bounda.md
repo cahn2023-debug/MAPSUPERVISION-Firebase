@@ -8,7 +8,7 @@ labels:
   - spec:master-system-specification
   - wave:1
 createdAt: '2026-08-22T16:36:19.941Z'
-updatedAt: '2026-08-22T16:37:31.980Z'
+updatedAt: '2026-08-22T16:43:40.046Z'
 completedAt: '2026-08-22T16:37:31.980Z'
 timeSpent: 0
 spec: specs/2026-08-22/master-system-specification
@@ -30,6 +30,9 @@ Verify all 18 Gradle modules and run enforceModuleBoundaries verification task
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-enforceModuleBoundaries passed in 21s. All 18 modules verified against allowedProjectDependencies whitelist. System Decision Impact: none — verified architecture invariants. Spec Decision Compliance: D1=pass
+enforceModuleBoundaries passed in 21s.
+
+Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
+System Decision Impact: none — verified architecture invariants.
 <!-- SECTION:NOTES:END -->
 

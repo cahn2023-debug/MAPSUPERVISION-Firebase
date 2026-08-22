@@ -12,8 +12,8 @@
   "task:1st54w": {
     "entityType": "task",
     "entityId": "1st54w",
-    "canonicalHash": "67d9af8327c03ba304cf38cbd6a3518aae57dec2de64d13fc5555102c9aa4891",
-    "revision": 2,
+    "canonicalHash": "eee452c30e31fd41cf5eb7e03de4be9592dd7d8ac578d467fe1188d6b06f2a3f",
+    "revision": 4,
     "path": "tasks/1st54w.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -21,8 +21,8 @@
   "task:baywan": {
     "entityType": "task",
     "entityId": "baywan",
-    "canonicalHash": "e644c66ad17fae8059d4642b7165dac8d72a85862921a5cd73621dc243d97da0",
-    "revision": 2,
+    "canonicalHash": "a7c949157648bcc41ee08f18e61e61631d82846224ab38302a5183011bb102c5",
+    "revision": 4,
     "path": "tasks/baywan.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -30,8 +30,8 @@
   "task:cur2hl": {
     "entityType": "task",
     "entityId": "cur2hl",
-    "canonicalHash": "53b4a11f9b9910d01d7ea43212433494abcc0f600a56f17c734d3268937427e0",
-    "revision": 2,
+    "canonicalHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949",
+    "revision": 4,
     "path": "tasks/cur2hl.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -39,8 +39,8 @@
   "task:ko9dx0": {
     "entityType": "task",
     "entityId": "ko9dx0",
-    "canonicalHash": "25db00e3f4d77eac2adffa6f758b598e3180a54df0bf9c96eb9bf588bd72e092",
-    "revision": 2,
+    "canonicalHash": "58ecd0c54d5df856d079401a65b94b974cba57f4d6abea1581c81fb38f2923a5",
+    "revision": 4,
     "path": "tasks/ko9dx0.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -48,8 +48,8 @@
   "task:lxza27": {
     "entityType": "task",
     "entityId": "lxza27",
-    "canonicalHash": "9c9c50ff3c0828d7fe010c1643e45d1912f1d23aee9bcacbf334254706bee433",
-    "revision": 2,
+    "canonicalHash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9",
+    "revision": 4,
     "path": "tasks/lxza27.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -57,8 +57,8 @@
   "task:mn9jia": {
     "entityType": "task",
     "entityId": "mn9jia",
-    "canonicalHash": "a420605669482e8dbff56be2a6d972c994d61d62f6a605295bf380f92ea4525e",
-    "revision": 2,
+    "canonicalHash": "ddf00eba976e4a7fb7c395436b528514f7f8104408040dc197f355b2b7d6f3b6",
+    "revision": 4,
     "path": "tasks/mn9jia.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -66,8 +66,8 @@
   "task:nd6e8j": {
     "entityType": "task",
     "entityId": "nd6e8j",
-    "canonicalHash": "fa3c29a313b0fa46abf3502687e1c482d43c8be580acc3a4234d7ddc15d2a782",
-    "revision": 2,
+    "canonicalHash": "c2b631be296c0aa7f00d369524f7747ae074a320e8535c246d064d868c0d51f6",
+    "revision": 4,
     "path": "tasks/nd6e8j.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -75,8 +75,8 @@
   "task:ole2i0": {
     "entityType": "task",
     "entityId": "ole2i0",
-    "canonicalHash": "25ce8361fe1020dc5e77151e6cb59d6af182487088eb3100f339441a54a74f0b",
-    "revision": 2,
+    "canonicalHash": "d99f11edd4dc54e0215f28fc23e96f52cb60e7ad6f313f866947b0c23b55f9b6",
+    "revision": 4,
     "path": "tasks/ole2i0.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -84,8 +84,8 @@
   "task:s9g76i": {
     "entityType": "task",
     "entityId": "s9g76i",
-    "canonicalHash": "dd83c3b1ab9d6dcabd197c65f2c9d8b9947f46f6dab479f36282870d09d39209",
-    "revision": 2,
+    "canonicalHash": "7ad305a8c46b8c0a42096453b00300b8910fc06dfe5fe092669636dc2a3af5d7",
+    "revision": 4,
     "path": "tasks/s9g76i.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -93,8 +93,8 @@
   "task:u9qrz7": {
     "entityType": "task",
     "entityId": "u9qrz7",
-    "canonicalHash": "8bb20c9dd341f6742927448be99033853bf214cf3bcc3f10b13a5c1f5de14116",
-    "revision": 2,
+    "canonicalHash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469",
+    "revision": 4,
     "path": "tasks/u9qrz7.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true

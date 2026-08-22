@@ -65,6 +65,18 @@ MAPSUPERVISION-Firebase/
 
 ---
 
+## Locked Decisions
+
+- D1: Android Gradle Plugin 8.13.2 with Kotlin 2.2.21 and Java 17 toolchain.
+- D2: Low-memory build profile (-Xmx1536m, maxParallelForks=1) to prevent memory thrashing.
+- D3: Automated quality gates via enforceModuleBoundaries and ./gradlew check.
+
+## System Decision Impact
+
+- Impact: none — preserves and validates existing build profile constraints.
+
+---
+
 ## 2. Toolchain Versions & Dependency Specifications
 
 ### 2.1 Core Build System

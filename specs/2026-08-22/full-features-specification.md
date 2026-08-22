@@ -36,6 +36,18 @@ MapSupervision integrates 8 core functional subsystems into a unified Android wo
 
 ---
 
+## Locked Decisions
+
+- D1: 5-Hub navigation paradigm (MapHub, ProgressHub, DataHub, MaterialsHub, ReportsHub) managed by WorkspaceAppShell.
+- D2: CameraX watermark HUD with anti-fraud GPS verification and DirectCaptureSaveDeduper deduplication.
+- D3: Multi-engine AI orchestration (Cloud Gemini + On-Device Gemma/LiteRT) with Vietnamese NLP parser.
+
+## System Decision Impact
+
+- Impact: none — preserves and validates all existing feature capabilities.
+
+---
+
 ## 2. Core Workspace Tabs
 
 ### 2.1 MapHub (GIS & Spatial Inspection Engine)

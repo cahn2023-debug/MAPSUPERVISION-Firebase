@@ -8,7 +8,7 @@ labels:
   - spec:master-system-specification
   - wave:3
 createdAt: '2026-08-22T16:36:49.124Z'
-updatedAt: '2026-08-22T16:38:19.951Z'
+updatedAt: '2026-08-22T16:44:27.089Z'
 completedAt: '2026-08-22T16:38:19.951Z'
 timeSpent: 0
 spec: specs/2026-08-22/master-system-specification
@@ -30,6 +30,9 @@ Validate KeyStore configuration, SHA-1/SHA-256 fingerprint matching with Firebas
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Validated signed release APK runbooks, SHA fingerprint verification scripts, and ProGuard/R8 keep rules. System Decision Impact: none — verified release pipeline. Spec Decision Compliance: D1=pass
+Validated signed release APK runbooks, SHA fingerprint verification scripts, and ProGuard/R8 keep rules.
+
+Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
+System Decision Impact: none — verified release pipeline.
 <!-- SECTION:NOTES:END -->
 

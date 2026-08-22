@@ -59,6 +59,18 @@ MapSupervision utilizes a hybrid local-first persistence architecture:
 
 ---
 
+## Locked Decisions
+
+- D1: Room Database version 48 with 28 registered entities and DAOs.
+- D2: ProjectScopedDatabaseProvider pattern isolating SQLite instances per project.
+- D3: Event Outbox pattern (event_outbox table) for eventual consistency with Firestore.
+
+## System Decision Impact
+
+- Impact: none — preserves and validates existing database schema invariants.
+
+---
+
 ## 2. Complete Room Database Schema (v48) - 28 Entities
 
 The local database `MapSupervisionDatabase` contains 28 strongly-typed entities registered in `@Database(version = 48)`:

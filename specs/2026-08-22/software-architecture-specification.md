@@ -21,6 +21,18 @@ The software architecture is governed by four non-negotiable core principles:
 
 ---
 
+## Locked Decisions
+
+- D1: 18-Module Clean Architecture with dependency boundary whitelist strictly verified via `enforceModuleBoundaries`.
+- D2: Strict isolation between Presentation (Jetpack Compose), Domain (Pure Kotlin), and Data (Room/Firebase) layers.
+- D3: Standardized Coroutine Dispatchers via `DispatchersProvider` and error contracts via `AppResult<T>`.
+
+## System Decision Impact
+
+- Impact: none — preserves and validates existing modular architecture contracts.
+
+---
+
 ## 2. 18-Module Dependency Graph & Responsibilities
 
 The project is structured into 18 modules declared in `settings.gradle.kts` and verified by `build.gradle.kts`:
