@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "735767087959-b8cmln30mqv24daen6nibb8blrc7mq3s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mapsupervision",
+            "certificate_hash": "e39e32129bf4f52e3e8aca3b02a04ae1ecdefbd0"
+          }
+        },
+        {
+          "client_id": "735767087959-e2v29sp1laevu612ac688178peakjj22.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mapsupervision",
+            "certificate_hash": "ff0175811875e7e049cd0f2aab2abc4bc9ce760f"
+          }
+        },
+        {
           "client_id": "735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com",
           "client_type": 3
         }

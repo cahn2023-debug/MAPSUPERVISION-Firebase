@@ -31,9 +31,17 @@ Thu muc `docs` chua bo tai lieu tong hop cho toan bo du an `MapSupervision`. Du 
 - [Release gate runbook](./release_gate_runbook.md)
 - [Redundant loop cleanup 2026-06-28](./redundant-loop-cleanup-2026-06-28.md)
 
+## Nhom dac ta he thong Knowns SDD (2026-08-22)
+
+- [Master System Specification](../specs/2026-08-22/master-system-specification.md)
+- [Software Architecture Specification](../specs/2026-08-22/software-architecture-specification.md)
+- [Full Features & Workflows Specification](../specs/2026-08-22/full-features-specification.md)
+- [Data Architecture & Schema Specification](../specs/2026-08-22/data-architecture-specification.md)
+- [Project Structure & Build Conventions](../specs/2026-08-22/project-structure-specification.md)
+
 ## Goi y cach su dung
 
-- Can onboarding nhanh: doc `tong_hop_du_an_v1.1.md` -> `tong_quan_kien_truc_toan_du_an.md` -> `module_matrix_chi_tiet.md`.
-- Can sua Android UI/flow: doc bo `android_*.md`.
-- Can sua import, database, project storage: doc `android_cau_truc_module_va_du_lieu.md`, `database.md`, `file_database.md`, `tab_nhap_lieu_data_hub.md`.
-- Can build hoac release: doc `build_kiem_thu_va_release.md` va `release_gate_runbook.md`.
+- Can onboarding nhanh: doc `tong_hop_du_an_v1.1.md` -> `tong_quan_kien_truc_toan_du_an.md` -> `module_matrix_chi_tiet.md` hoac `specs/2026-08-22/master-system-specification.md`.
+- Can sua Android UI/flow: doc bo `android_*.md` va `full-features-specification.md`.
+- Can sua import, database, project storage: doc `data-architecture-specification.md`, `database.md`, `file_database.md`.
+- Can build hoac release: doc `project-structure-specification.md`, `build_kiem_thu_va_release.md` va `release_gate_runbook.md`.

@@ -3,11 +3,8 @@ package com.mapsupervision.app
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.backgroundimport androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,15 +53,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import com.google.android.gms.common.api.CommonStatusCodes
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.app.auth.FirebaseAccessViewModel
 import com.mapsupervision.app.workspace.IncomingSharePayload
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppRoot(
@@ -108,7 +110,8 @@ fun AppRoot(
             onRegister = accessViewModel::register,
             onSkipOffline = accessViewModel::enterOfflineMode,
             onGoogleSignIn = accessViewModel::signInWithGoogle,
-            setAuthError = accessViewModel::setAuthError
+            setAuthError = accessViewModel::setAuthError,
+            setAuthMessage = accessViewModel::setAuthMessage
         )
         return
     }
@@ -142,43 +145,77 @@ private fun FirebaseSignInScreen(
     onRegister: () -> Unit,
     onSkipOffline: () -> Unit,
     onGoogleSignIn: (String) -> Unit,
-    setAuthError: (String) -> Unit
+    setAuthError: (String) -> Unit,
+    setAuthMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
+    val scope = rememberCoroutineScope()
+    val credentialManager = remember(context) { CredentialManager.create(context) }
     val serverClientId = remember(context) { context.resolveGoogleServerClientId() }
-    val googleSignInClient = remember(context) {
-        GoogleSignIn.getClient(
-            context,
-            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(serverClientId)
-                .requestEmail()
-                .build()
-        )
-    }
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            setAuthError("Đăng nhập Google đã bị hủy.")
-            return@rememberLauncherForActivityResult
+    val googleConfigError: String? =
+        if (serverClientId.isNullOrBlank()) {
+            "Cấu hình đăng nhập Google thiếu trên bản cài này (không tìm thấy default_web_client_id). Hãy cập nhật google-services.json từ Firebase console rồi build lại."
+        } else {
+            null
         }
 
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)
-            val idToken = account.idToken
-            if (idToken.isNullOrBlank()) {
-                setAuthError("Khong lay duoc token dang nhap Google.")
-            } else {
-                onGoogleSignIn(idToken)
+    fun launchGoogleSignIn() {
+        val clientId = serverClientId
+        if (clientId.isNullOrBlank()) {
+            setAuthError(googleConfigError.orEmpty())
+            return
+        }
+        val activityContext = activity ?: context
+        scope.launch {
+            try {
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(
+                        GetGoogleIdOption.Builder()
+                            .setServerClientId(clientId)
+                            .setFilterByAuthorizedAccounts(false)
+                            .setAutoSelectEnabled(false)
+                            .build()
+                    )
+                    .build()
+                val response = credentialManager.getCredential(activityContext, request)
+                val credential = response.credential
+                if (credential is GoogleIdTokenCredential) {
+                    val idToken = credential.idToken
+                    if (idToken.isNullOrBlank()) {
+                        AppLogger.e(
+                            IllegalStateException("empty_google_id_token"),
+                            "google.sign_in.empty_token"
+                        )
+                        setAuthError("Không nhận được token đăng nhập Google. Vui lòng thử lại.")
+                    } else {
+                        onGoogleSignIn(idToken)
+                    }
+                } else {
+                    AppLogger.e(
+                        IllegalStateException("unexpected_credential_type=${credential.type}"),
+                        "google.sign_in.unexpected_credential_type"
+                    )
+                    setAuthError("Thông tin xác thực Google không đúng định dạng. Vui lòng thử lại.")
+                }
+            } catch (error: NoCredentialException) {
+                AppLogger.d("google.sign_in.no_credential")
+                setAuthMessage(
+                    "Thiết bị chưa có tài khoản Google nào. Hãy thêm tài khoản Google trong phần Cài đặt của máy rồi thử lại."
+                )
+            } catch (error: GetCredentialCancellationException) {
+                AppLogger.d("google.sign_in.cancelled")
+                setAuthMessage("Đã hủy đăng nhập Google.")
+            } catch (error: GetCredentialException) {
+                AppLogger.e(error, "google.sign_in.get_credential_failed type=${error.type}")
+                setAuthError(mapGoogleCredentialError(error.type))
+            } catch (error: Exception) {
+                AppLogger.e(error, "google.sign_in.failed")
+                setAuthError(
+                    error.message?.takeIf { it.isNotBlank() }
+                        ?: "Đăng nhập Google thất bại. Vui lòng thử lại."
+                )
             }
-        } catch (error: ApiException) {
-            AppLogger.e(error, "google.sign_in.api_exception status=${error.statusCode}")
-            setAuthError(mapGoogleSignInError(error))
-        } catch (error: Exception) {
-            AppLogger.e(error, "google.sign_in.failed")
-            setAuthError(error.message ?: "Dang nhap Google that bai.")
         }
     }
 
@@ -375,16 +412,8 @@ private fun FirebaseSignInScreen(
             }
 
             OutlinedButton(
-                onClick = {
-                    if (activity == null) {
-                        setAuthError("Không mở được màn hình đăng nhập Google.")
-                    } else {
-                        googleSignInClient.signOut().addOnCompleteListener {
-                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                        }
-                    }
-                },
-                enabled = !isBusy,
+                onClick = { launchGoogleSignIn() },
+                enabled = !isBusy && googleConfigError == null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -455,22 +484,17 @@ private fun inputColors() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = MaterialTheme.colorScheme.onSurface
 )
 
-private fun mapGoogleSignInError(error: ApiException): String = when (error.statusCode) {
-    CommonStatusCodes.NETWORK_ERROR -> "Mang dang khong on dinh. Hay kiem tra Internet va thu lai."
-    CommonStatusCodes.SIGN_IN_REQUIRED,
-    CommonStatusCodes.INVALID_ACCOUNT -> "Khong the xac thuc tai khoan Google tren thiet bi nay."
-    CommonStatusCodes.DEVELOPER_ERROR -> "Cau hinh dang nhap Google chua khop package/SHA cua ung dung. Can cap nhat SHA-1/SHA-256 cho com.mapsupervision trong Firebase va tai lai google-services.json."
-    CommonStatusCodes.CANCELED -> "Dang nhap Google da bi huy."
-    else -> "Dang nhap Google that bai (${error.statusCode})."
-}
+private fun mapGoogleCredentialError(type: String): String =
+    // Lỗi phổ biến: cấu hình SHA-1/SHA-256 chưa đăng ký hoặc google-services.json cũ.
+    "Đăng nhập Google thất bại ($type). Nếu lỗi lặp lại, hãy kiểm tra SHA-1/SHA-256 của bản build đã được thêm vào Firebase console và tải lại google-services.json."
 
-private fun Context.resolveGoogleServerClientId(): String {
+private fun Context.resolveGoogleServerClientId(): String? {
     val resourceId = resources.getIdentifier("default_web_client_id", "string", packageName)
     if (resourceId != 0) {
         val value = getString(resourceId).trim()
         if (value.isNotBlank()) return value
     }
-    return "735767087959-2868idghbi47fciqh9kp52dugpedu1kc.apps.googleusercontent.com"
+    return null
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {

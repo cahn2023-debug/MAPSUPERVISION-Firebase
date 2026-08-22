@@ -55,15 +55,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,6 +136,7 @@ import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.service.IPhotoPipelineService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -887,7 +890,11 @@ fun CameraOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.Transparent)
-                .statusBarsPadding()
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+                    )
+                )
                 .padding(horizontal = 16.dp, vertical = 10.dp)
                 .align(Alignment.TopCenter),
             verticalAlignment = Alignment.CenterVertically,
@@ -1027,42 +1034,55 @@ fun CameraOverlay(
         }
 
         // Cụm các nút điều khiển phía dưới màn hình hoàn toàn trong suốt
-        Column(
+        // Bố cục thích ứng: đo chiều cao khả dụng để bật chế độ compact (spec D4).
+        BoxWithConstraints(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Transparent)
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .align(Alignment.BottomCenter),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
         ) {
-            // Trường nhập ghi chú bán trong suốt
-            OutlinedTextField(
-                value = noteText,
-                onValueChange = { if (controlsEnabled) noteText = it },
-                enabled = controlsEnabled,
-                placeholder = { Text("Ghi chú (tùy chọn)...", color = Color(0xAAFFFFFF), fontSize = 13.sp) },
-                singleLine = true,
+            val controlsLayout = computeCameraControlsLayout(maxHeight.value.roundToInt())
+            val compactSpacing = controlsLayout.useCompactSpacing
+            val showNoteField = controlsLayout.showNoteField || isKeyboardVisible
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0x33FFFFFF),
-                    unfocusedContainerColor = Color(0x15FFFFFF),
-                    focusedBorderColor = Color(0xFF00E5FF),
-                    unfocusedBorderColor = Color(0x33FFFFFF),
-                    cursorColor = Color(0xFF00E5FF)
+                    .background(Color.Transparent)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                        )
+                    )
+                    .padding(horizontal = 20.dp, vertical = if (compactSpacing) 6.dp else 12.dp)
+                    .align(Alignment.BottomCenter),
+                verticalArrangement = Arrangement.spacedBy(if (compactSpacing) 8.dp else 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            // Trường nhập ghi chú bán trong suốt (ẩn ở màn rất thấp, trừ khi đang gõ)
+            if (showNoteField) {
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { if (controlsEnabled) noteText = it },
+                    enabled = controlsEnabled,
+                    placeholder = { Text("Ghi chú (tùy chọn)...", color = Color(0xAAFFFFFF), fontSize = 13.sp) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color(0x33FFFFFF),
+                        unfocusedContainerColor = Color(0x15FFFFFF),
+                        focusedBorderColor = Color(0xFF00E5FF),
+                        unfocusedBorderColor = Color(0x33FFFFFF),
+                        cursorColor = Color(0xFF00E5FF)
+                    )
                 )
-            )
+            }
 
-            if (!isKeyboardVisible) {
+            if (!isKeyboardVisible && controlsLayout.showZoomBar) {
                 // Thanh Zoom và Cài đặt
                 Box(
                     modifier = Modifier

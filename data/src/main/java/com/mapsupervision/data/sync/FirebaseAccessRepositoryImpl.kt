@@ -70,50 +70,71 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
     override suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession> = runCatching {
         ensureConfigured()
         val auth = firebaseRuntime.auth()
-        val user = auth.signInWithEmailAndPassword(email.trim(), password).await().user
-            ?: error("Khong the dang nhap.")
+        AppLogger.d("firebase.access.sign_in.start provider=password")
+        val user = withAuthTimeout {
+            auth.signInWithEmailAndPassword(email.trim(), password).await().user
+        } ?: throw FirebaseAuthErrorMapper.AppAuthMessageException("Không thể đăng nhập. Vui lòng thử lại.")
         if (!user.isEmailVerified) {
             auth.signOut()
-            error("Tai khoan chua xac thuc email.")
+            throw FirebaseAuthErrorMapper.AppAuthMessageException(
+                "Tài khoản chưa xác thực email. Vui lòng kiểm tra hộp thư và xác thực trước khi đăng nhập."
+            )
         }
         val session = syncAccessForUser(user, forceRefresh = true).session
-            ?: error("Khong tai duoc phien dang nhap.")
+            ?: throw FirebaseAuthErrorMapper.AppAuthMessageException("Không tải được phiên đăng nhập. Vui lòng thử lại.")
         AppLogger.d("firebase.access.sign_in.success uid=${session.uid} provider=password")
         session
     }.fold(
         onSuccess = { AppResult.Success(it) },
-        onFailure = { AppResult.Error(it) }
+        onFailure = { error ->
+            AppLogger.e(error, "firebase.access.sign_in.failed provider=password")
+            AppResult.Error(FirebaseAuthErrorMapper.wrap(error))
+        }
     )
 
     override suspend fun register(email: String, password: String): AppResult<Unit> = runCatching {
         ensureConfigured()
         val auth = firebaseRuntime.auth()
-        val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user
-            ?: error("Khong the tao tai khoan.")
-        user.sendEmailVerification().await()
+        AppLogger.d("firebase.access.register.start")
+        val user = withAuthTimeout {
+            auth.createUserWithEmailAndPassword(email.trim(), password).await().user
+        } ?: throw FirebaseAuthErrorMapper.AppAuthMessageException("Không thể tạo tài khoản. Vui lòng thử lại.")
+        AppLogger.d("firebase.access.register.user_created uid=${user.uid}")
+        withAuthTimeout { user.sendEmailVerification().await() }
+        AppLogger.d("firebase.access.register.verification_sent uid=${user.uid}")
         auth.signOut()
         _accessState.value = FirebaseAccessState(isInitialized = true)
     }.fold(
         onSuccess = { AppResult.Success(Unit) },
-        onFailure = { AppResult.Error(it) }
+        onFailure = { error ->
+            AppLogger.e(error, "firebase.access.register.failed")
+            runCatching { firebaseRuntime.auth().signOut() }
+            AppResult.Error(FirebaseAuthErrorMapper.wrap(error))
+        }
     )
 
     override suspend fun signInWithGoogle(idToken: String): AppResult<FirebaseUserSession> = runCatching {
         ensureConfigured()
         val auth = firebaseRuntime.auth()
+        AppLogger.d("firebase.access.sign_in.start provider=google")
         val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
-        val authResult = auth.signInWithCredential(credential).await()
+        val authResult = withAuthTimeout { auth.signInWithCredential(credential).await() }
         val user = authResult.user
-            ?: error("Khong the dang nhap bang tai khoan Google.")
+            ?: throw FirebaseAuthErrorMapper.AppAuthMessageException(
+                "Không thể đăng nhập bằng tài khoản Google. Vui lòng thử lại."
+            )
         val session = syncAccessForUser(user, forceRefresh = true).session
-            ?: error("Khong tai duoc phien dang nhap.")
+            ?: throw FirebaseAuthErrorMapper.AppAuthMessageException("Không tải được phiên đăng nhập. Vui lòng thử lại.")
         AppLogger.d(
             "firebase.access.sign_in.success uid=${session.uid} provider=google isNewUser=${authResult.additionalUserInfo?.isNewUser == true}"
         )
         session
     }.fold(
         onSuccess = { AppResult.Success(it) },
-        onFailure = { AppResult.Error(it) }
+        onFailure = { error ->
+            AppLogger.e(error, "firebase.access.sign_in.failed provider=google")
+            AppResult.Error(FirebaseAuthErrorMapper.wrap(error))
+        }
     )
 
     override suspend fun enterOfflineMode(): AppResult<FirebaseAccessState> = runCatching {
@@ -219,7 +240,7 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
     }
 
     private suspend fun buildSession(user: FirebaseUser, forceRefresh: Boolean): FirebaseUserSession {
-        val tokenResult = user.getIdToken(forceRefresh).await()
+        val tokenResult = withAuthTimeout { user.getIdToken(forceRefresh).await() }
         return FirebaseUserSession(
             uid = user.uid,
             email = user.email.orEmpty(),

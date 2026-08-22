@@ -103,6 +103,10 @@ class FirebaseAccessViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = value, message = "", isBusy = false)
     }
 
+    fun setAuthMessage(value: String) {
+        _uiState.value = _uiState.value.copy(error = "", message = value, isBusy = false)
+    }
+
     fun signIn() {
         val email = _uiState.value.email.trim()
         val password = _uiState.value.password

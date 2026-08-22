@@ -1,0 +1,30 @@
+package com.mapsupervision.{{camelCase name}}.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mapsupervision.core.result.AppResult
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * {{pascalCase name}} ViewModel — MVI-lean convention:
+ * one immutable UiState exposed via StateFlow; repositories return AppResult.
+ * See @doc/build-conventions (Knowns) for the full convention.
+ */
+@HiltViewModel
+class {{pascalCase name}}ViewModel @Inject constructor(
+    // TODO: inject repositories from :domain interfaces only
+) : ViewModel() {
+
+    data class UiState(
+        val isLoading: Boolean = false,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+}

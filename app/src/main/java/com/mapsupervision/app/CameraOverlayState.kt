@@ -184,10 +184,61 @@ internal fun rememberCameraOverlayState(
     stampPipelineCoordinator: com.mapsupervision.photo.worker.StampPipelineCoordinator,
     stampDataRepository: com.mapsupervision.domain.repository.StampDataRepository
 ): CameraOverlayState {
-    return remember(context, stampPipelineCoordinator, stampDataRepository) { 
-        CameraOverlayState(context, stampPipelineCoordinator, stampDataRepository) 
+    return remember(context, stampPipelineCoordinator, stampDataRepository) {
+        CameraOverlayState(context, stampPipelineCoordinator, stampDataRepository)
     }
 }
+
+// region Adaptive camera controls layout (spec: specs/2026-08-22/camera-ui-screen-scale-fix.md)
+
+/**
+ * Chiều cao khả dụng tối thiểu (dp) để hiển thị đầy đủ cụm điều khiển
+ * (ghi chú + thanh zoom + hàng chế độ + hàng nút chính).
+ */
+internal const val CAMERA_CONTROLS_FULL_MIN_HEIGHT_DP = 600
+
+/**
+ * Ngưỡng dưới (dp) của dải compact: từ giá trị này trở xuống chỉ giữ
+ * hàng nút chính + hàng chọn ẢNH/VIDEO; trường ghi chú và thanh zoom bị ẩn.
+ */
+internal const val CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP = 480
+
+/**
+ * Kết quả tính bố cục thích ứng cho cụm điều khiển dưới cùng màn hình camera.
+ * Hàng nút chính và hàng chọn ẢNH/VIDEO luôn hiển thị (không nằm trong toggle).
+ * Thứ tự ưu tiên khi thiếu chỗ (FR-2 spec): ẩn thanh zoom trước, trường ghi chú sau.
+ */
+internal data class CameraControlsLayout(
+    val showNoteField: Boolean,
+    val showZoomBar: Boolean,
+    val useCompactSpacing: Boolean
+)
+
+/**
+ * Hàm thuần tính bố cục theo chiều cao khả dụng (dp) — unit-test được, không phụ thuộc thiết bị.
+ */
+internal fun computeCameraControlsLayout(availableHeightDp: Int): CameraControlsLayout {
+    if (availableHeightDp < CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP) {
+        return CameraControlsLayout(
+            showNoteField = false,
+            showZoomBar = false,
+            useCompactSpacing = true
+        )
+    }
+    if (availableHeightDp < CAMERA_CONTROLS_FULL_MIN_HEIGHT_DP) {
+        return CameraControlsLayout(
+            showNoteField = true,
+            showZoomBar = false,
+            useCompactSpacing = true
+        )
+    }
+    return CameraControlsLayout(
+        showNoteField = true,
+        showZoomBar = true,
+        useCompactSpacing = false
+    )
+}
+// endregion
 
 @Composable
 internal fun BindCameraOverlayState(

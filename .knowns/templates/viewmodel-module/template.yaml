@@ -1,0 +1,15 @@
+name: viewmodel-module
+description: Generate a Hilt ViewModel + UiState skeleton following the MapSupervision MVI-lean convention (StateFlow-backed immutable state, repository injection, AppResult handling).
+doc: patterns/ai-engine-orchestration
+
+prompts:
+  - name: name
+    type: text
+    message: Feature name (e.g. Timeline, PhotoReview)?
+    validate: required
+
+actions:
+  - type: add
+    template: viewmodel.kt.hbs
+    path: "{{camelCase name}}-feature/src/main/java/com/mapsupervision/{{camelCase name}}/ui/{{pascalCase name}}ViewModel.kt"
+    skipIfExists: true

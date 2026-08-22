@@ -1,0 +1,15 @@
+name: gradle-module
+description: Generate an Android library module build.gradle.kts + boundary entry for MapSupervision — matches the serialized low-memory toolchain (compileSdk 36, minSdk 24, Java 17, Hilt+KSP) and reminds you to edit the allowedProjectDependencies map first.
+doc: architecture-overview
+
+prompts:
+  - name: name
+    type: text
+    message: Module name without colon (e.g. inspection)?
+    validate: required
+
+actions:
+  - type: add
+    template: build.gradle.kts.hbs
+    path: "{{camelCase name}}/build.gradle.kts"
+    skipIfExists: true

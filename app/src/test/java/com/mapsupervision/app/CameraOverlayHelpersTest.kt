@@ -38,6 +38,68 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `camera controls layout shows everything on tall screens`() {
+        val layout = computeCameraControlsLayout(800)
+
+        assertTrue(layout.showNoteField)
+        assertTrue(layout.showZoomBar)
+        assertFalse(layout.useCompactSpacing)
+    }
+
+    @Test
+    fun `camera controls layout hides zoom bar in compact band`() {
+        val layout = computeCameraControlsLayout(CAMERA_CONTROLS_FULL_MIN_HEIGHT_DP - 1)
+
+        assertTrue(layout.showNoteField)
+        assertFalse(layout.showZoomBar)
+        assertTrue(layout.useCompactSpacing)
+    }
+
+    @Test
+    fun `camera controls layout hides note before zoom is restored`() {
+        // Dải compact thấp: ghi chú và zoom đều ẩn — zoom bị ẩn trước ghi chú khi thiếu chỗ (FR-2).
+        val midBand = computeCameraControlsLayout(CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP + 10)
+        val lowBand = computeCameraControlsLayout(CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP - 10)
+
+        assertTrue(midBand.showNoteField && !midBand.showZoomBar)
+        assertFalse(lowBand.showNoteField)
+        assertFalse(lowBand.showZoomBar)
+    }
+
+    @Test
+    fun `camera controls layout minimal mode at very short heights`() {
+        val layout = computeCameraControlsLayout(CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP - 1)
+
+        assertFalse(layout.showNoteField)
+        assertFalse(layout.showZoomBar)
+        assertTrue(layout.useCompactSpacing)
+    }
+
+    @Test
+    fun `camera controls layout handles zero and negative heights defensively`() {
+        val zero = computeCameraControlsLayout(0)
+        val negative = computeCameraControlsLayout(-100)
+
+        assertFalse(zero.showNoteField)
+        assertFalse(zero.showZoomBar)
+        assertFalse(negative.showNoteField)
+        assertFalse(negative.showZoomBar)
+    }
+
+    @Test
+    fun `camera controls layout thresholds are consistent`() {
+        // Ngưỡng full phải cao hơn ngưỡng minimal để dải compact tồn tại.
+        org.junit.Assert.assertTrue(
+            CAMERA_CONTROLS_FULL_MIN_HEIGHT_DP > CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP
+        )
+        // Ranh giới đúng tại chính ngưỡng.
+        val atMinimalBoundary = computeCameraControlsLayout(CAMERA_CONTROLS_MINIMAL_MAX_HEIGHT_DP)
+        val atFullBoundary = computeCameraControlsLayout(CAMERA_CONTROLS_FULL_MIN_HEIGHT_DP)
+        assertTrue(atMinimalBoundary.showNoteField)
+        assertTrue(atFullBoundary.showZoomBar)
+    }
+
+    @Test
     fun `photo capture session blocks double start until finished`() {
         val session = PhotoCaptureSession()
 
