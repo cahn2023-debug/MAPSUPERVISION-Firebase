@@ -100,11 +100,6 @@ When a follow-up is natural, recommend exactly one next command:
 - after a successful commit tied to active work: `/kn-verify`
 - after a successful standalone commit: `/kn-extract` or the next task-specific workflow command if one is obvious
 
-## Related Skills
-
-- `/kn-verify` - Verify SDD state after a commit tied to active work
-- `/kn-extract <task-id>` - Capture durable knowledge after a standalone commit
-
 ## Checklist
 
 - [ ] Reviewed staged changes
@@ -112,9 +107,8 @@ When a follow-up is natural, recommend exactly one next command:
 - [ ] User approved
 - [ ] Next action suggested when applicable
 
-## Red Flags
+## Abort Conditions
 
-- Committing unstaged or unrelated files to "help" the user
-- Adding AI/generator attribution without explicit request
-- Treating silence as approval
-- Amending or pushing beyond what was requested
+- Nothing staged
+- Staged diff includes unrelated work that should be split
+- User has not explicitly approved the final message

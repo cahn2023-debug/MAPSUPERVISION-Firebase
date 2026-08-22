@@ -128,22 +128,3 @@ When a follow-up is natural, recommend exactly one next command such as:
 /kn-flow @doc/<approved-spec-path>
 /kn-research <query>
 ```
-
-## Related Skills
-
-- `/kn-plan --new "<summary>"` - Plan fresh work once context is loaded
-- `/kn-research <query>` - Deep-dive an open question surfaced by init
-- `/kn-verify` - Check SDD health when init reports coverage risks
-
-## Red Flags
-
-- Injecting full docs into context instead of bounded retrieval
-- Reporting readiness while `initial`/validation failed silently
-- Inventing conventions not found in docs or code
-
-## Checklist
-
-- [ ] Session bootstrap completed (or documented fallback used)
-- [ ] Project purpose/architecture summarized from real sources
-- [ ] Relevant docs listed; in-progress work and risks reported
-- [ ] One next command suggested only when a natural handoff exists

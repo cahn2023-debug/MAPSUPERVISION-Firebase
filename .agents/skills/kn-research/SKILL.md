@@ -157,19 +157,6 @@ Do not manage platform-synced skill copies; this source defines the built-in wor
 - [ ] Cited evidence and reported conflicts or gaps
 - [ ] Kept research read-only unless persistence was authorized
 
-## Red Flags
-
-- Reporting findings without `path:line` or source refs
-- Fabricating confidence levels or evidence
-- Persisting findings to Knowns without explicit authorization
-- Serializing every doc/task into context instead of bounded retrieval
-
-## Related Skills
-
-- `/kn-plan <task-id>` - Turn findings into an implementation plan
-- `/kn-extract <task-id>` - Persist reusable knowledge from completed work
-- `/kn-doc` - Create or update the canonical doc when findings warrant one
-
 ## Next Step Suggestion
 
 - active task research → `/kn-plan <task-id>`

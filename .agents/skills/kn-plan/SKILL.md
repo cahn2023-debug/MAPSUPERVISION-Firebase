@@ -138,19 +138,6 @@ Typical handoffs:
 
 Do not manage platform-synced skill copies; this source defines the built-in workflow contract.
 
-## Related Skills
-
-- `/kn-implement <task-id>` - Execute an approved plan
-- `/kn-flow @doc/<spec-path>` - Orchestrate an approved spec wave
-- `/kn-spec <feature>` - Spec first when work is high-risk or broadly ambiguous
-
-## Red Flags
-
-- Planning without reading the primary task/spec first
-- Presenting a plan and starting implementation in the same turn
-- Inventing certainty instead of recording assumptions
-- Splitting approval gates for spec task generation
-
 ## Checklist
 
 - [ ] Primary task/spec read and refs followed

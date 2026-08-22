@@ -143,12 +143,6 @@ graph TD
 
 Diagrams render automatically in WebUI preview.
 
-## Related Skills
-
-- `/kn-extract` - Route extracted knowledge into canonical docs like this one
-- `/kn-template` - Link a generated template to its pattern doc here
-- `/kn-plan` - Plans reference these docs via `@doc/<path>` refs
-
 ## Checklist
 
 - [ ] Searched for existing docs

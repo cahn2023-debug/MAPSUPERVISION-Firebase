@@ -1,6 +1,12 @@
-// setup mcp server in  ~/.gemini\ag-kit\mcp_config.json
 {
     "mcpServers": {
+        "knowns": {
+            "command": "knowns",
+            "args": [
+                "mcp",
+                "--stdio"
+            ]
+        },
         "context7": {
             "command": "npx",
             "args": [
