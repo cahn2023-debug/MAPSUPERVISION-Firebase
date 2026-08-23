@@ -14,13 +14,26 @@ service cloud.firestore {
     }
 
     function approvedAccess(projectId) {
-      return isSignedIn() && (
+      return projectIsActive(projectId) && (
         isAdmin() ||
         (
           exists(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))) &&
           get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.status == "APPROVED"
         )
       );
+    }
+
+    function projectIsActive(projectId) {
+      return exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        (!("deletionState" in get(/databases/$(database)/documents/projects/$(projectId)).data) ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.deletionState == "ACTIVE") &&
+        (!("isDeleted" in get(/databases/$(database)/documents/projects/$(projectId)).data) ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.isDeleted != true) &&
+        (!("data" in get(/databases/$(database)/documents/projects/$(projectId)).data) ||
+          (!("deletionState" in get(/databases/$(database)/documents/projects/$(projectId)).data.data) ||
+            get(/databases/$(database)/documents/projects/$(projectId)).data.data.deletionState == "ACTIVE") &&
+          (!("isDeleted" in get(/databases/$(database)/documents/projects/$(projectId)).data.data) ||
+            get(/databases/$(database)/documents/projects/$(projectId)).data.data.isDeleted != true));
     }
 
     function allowedDataGroup(projectId, group) {
@@ -51,8 +64,12 @@ service cloud.firestore {
         "lastLoginAtEpochMs",
         "updatedAtEpochMs",
         "isDisabled",
-        "projectIds"
-      ]) && request.resource.data.uid == uid;
+        "projectIds",
+        "activeProjectId"
+      ]) && request.resource.data.uid == uid &&
+        (!("activeProjectId" in request.resource.data) ||
+          request.resource.data.activeProjectId == null ||
+          request.resource.data.activeProjectId is string);
     }
 
     function validAccessRequestShape(data) {
@@ -132,8 +149,10 @@ service cloud.firestore {
       allow update: if (
         isOwnUser(uid) &&
         validUserProfileShape(uid) &&
-        request.resource.data.isDisabled == resource.data.isDisabled &&
-        request.resource.data.projectIds == resource.data.projectIds
+        ((!("isDisabled" in resource.data) && !("isDisabled" in request.resource.data)) ||
+          request.resource.data.isDisabled == resource.data.isDisabled) &&
+        ((!("projectIds" in resource.data) && !("projectIds" in request.resource.data)) ||
+          request.resource.data.projectIds == resource.data.projectIds)
       ) || isAdmin();
       allow delete: if isAdmin();
     }
@@ -211,18 +230,35 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if approvedAccess(projectId);
-      allow write: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && projectIsActive(projectId) &&
+        (!("deletionState" in request.resource.data) ||
+          request.resource.data.deletionState == "ACTIVE");
+      allow delete: if false;
 
       match /projectMembers/{memberId} {
         allow read: if approvedAccess(projectId);
-        allow write: if isAdmin();
+        allow write: if isAdmin() && projectIsActive(projectId);
       }
 
       match /{collectionName}/{documentId} {
-        allow read: if (collectionName == "site_photos" && approvedMedia(projectId)) ||
-          (collectionName != "site_photos" && allowedDataGroup(projectId, collectionName));
-        allow write: if allowedDataGroup(projectId, collectionName);
+        allow read: if projectIsActive(projectId) && ((collectionName == "site_photos" && approvedMedia(projectId)) ||
+          (collectionName != "site_photos" && allowedDataGroup(projectId, collectionName)));
+        allow write: if projectIsActive(projectId) && allowedDataGroup(projectId, collectionName);
       }
+    }
+
+    match /projectDeletionTombstones/{projectId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() &&
+          (!exists(/databases/$(database)/documents/projectDeletionTombstones/$(projectId)) ||
+            (resource.data.memberUids is list && resource.data.memberUids.hasAny([request.auth.uid]))));
+      allow write: if false;
+    }
+
+    match /projectDeletionAudit/{auditId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
   }
 }

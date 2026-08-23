@@ -105,6 +105,22 @@ open class ProjectStorageManager @Inject constructor(
     fun reportsDir(projectSlug: String): File = File(projectRoot(projectSlug), "reports")
     fun exportsDir(projectSlug: String): File = File(projectRoot(projectSlug), "exports")
 
+    /** Removes local project storage roots while leaving remote Google Drive media untouched. */
+    open fun deleteProjectStorage(projectSlug: String, projectId: String, projectDbPath: String): Boolean {
+        val roots = linkedSetOf(
+            projectRootDirectory(projectSlug),
+            privateProjectRootDirectory(projectSlug),
+            privateProjectRootDirectory(projectId),
+            scopedProjectDbRootDirectory(projectSlug),
+            File(publicBaseDirDirectory(), "Projects/$projectId"),
+            File(projectDbPath).parentFile?.parentFile
+        ).filterNotNull().distinctBy { it.absolutePath }
+
+        val deleted = roots.all { root -> !root.exists() || root.deleteRecursively() }
+        if (deleted) clearCustomPath(projectSlug)
+        return deleted
+    }
+
     fun sanitizeFolderName(rawName: String): String = sanitizeSegment(rawName, "Unnamed")
 
     fun sanitizeSegment(str: String, default: String): String {

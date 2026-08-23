@@ -4,8 +4,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Transaction
 import com.mapsupervision.data.db.entity.ProjectEntity
+import androidx.sqlite.db.SupportSQLiteQuery
+import androidx.sqlite.db.SimpleSQLiteQuery
 
 @Dao
 interface ProjectDao {
@@ -18,6 +21,9 @@ interface ProjectDao {
     @Query("SELECT * FROM projects WHERE id = :projectId LIMIT 1")
     suspend fun get(projectId: String): ProjectEntity?
 
+    @Query("SELECT COUNT(*) FROM projects WHERE slug = :slug AND isDeleted = 0")
+    suspend fun countActiveBySlug(slug: String): Int
+
     @Query("UPDATE projects SET metadataVersion = :metadataVersion, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId")
     suspend fun touch(projectId: String, metadataVersion: Int, updatedAtEpochMs: Long)
 
@@ -29,6 +35,24 @@ interface ProjectDao {
 
     @Query("UPDATE projects SET isArchived = 1 WHERE id = :projectId")
     suspend fun archive(projectId: String)
+
+    @Query("UPDATE projects SET deletionState = 'DELETING', deletionRequestId = :requestId, deletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionState IN ('ACTIVE', 'DELETE_FAILED')")
+    suspend fun requestDeletion(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'DELETE_FAILED', deletionErrorCode = :errorCode, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND deletionRequestId = :requestId AND isDeleted = 0")
+    suspend fun markDeletionFailed(projectId: String, requestId: String, errorCode: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET cloudDeletionCompletedAtEpochMs = :completedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND deletionRequestId = :requestId AND deletionState = 'DELETING' AND isDeleted = 0")
+    suspend fun markCloudDeletionCompleted(projectId: String, requestId: String, completedAtEpochMs: Long, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'DELETED', deletionRequestId = :requestId, cloudDeletionCompletedAtEpochMs = :completedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0")
+    suspend fun markRemoteDeletion(projectId: String, requestId: String, completedAtEpochMs: Long, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET isDeleted = 1, deletionState = 'DELETED', deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND deletionRequestId = :requestId AND deletionState = 'DELETING' AND cloudDeletionCompletedAtEpochMs IS NOT NULL")
+    suspend fun completeLocalDeletion(projectId: String, requestId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET isDeleted = 1, deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionState = 'DELETED'")
+    suspend fun completeRemoteLocalDeletion(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long): Int
 
     @Query("UPDATE gis_node SET isDeleted = 1, deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE projectId = :projectId AND isDeleted = 0")
     suspend fun markGisNodesDeleted(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long)
@@ -62,6 +86,12 @@ interface ProjectDao {
 
     @Transaction
     suspend fun clearProjectData(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long) {
+        clearProjectRows(projectId, updatedAtEpochMs, deletedAtEpochMs)
+        markProjectDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
+    }
+
+    @Transaction
+    suspend fun clearProjectRows(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long) {
         markGisNodesDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
         markGisRoutesDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
         markNotesDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
@@ -71,7 +101,45 @@ interface ProjectDao {
         markSitePhotosDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
         markImportedFilesDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
         markDailyLogsDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
-        markProjectDeleted(projectId, updatedAtEpochMs, deletedAtEpochMs)
+    }
+
+    @RawQuery
+    suspend fun executeProjectPurge(query: SupportSQLiteQuery): Int
+
+    @Transaction
+    suspend fun purgeProjectRows(projectId: String) {
+        val tables = listOf(
+            "daily_log_photos",
+            "daily_log_nodes",
+            "daily_log_line",
+            "photo_tags",
+            "import_audit",
+            "import_conflict",
+            "import_version",
+            "import_session",
+            "event_outbox",
+            "rag_document_embedding",
+            "ai_action_log",
+            "ai_decision_cache",
+            "chat_history",
+            "report_draft",
+            "material_handover",
+            "material_declaration",
+            "work_plan",
+            "work_categories",
+            "note",
+            "task",
+            "site_photos",
+            "node_progress",
+            "work_volume_progress",
+            "daily_log",
+            "gis_route",
+            "gis_node",
+            "imported_files"
+        )
+        tables.forEach { table ->
+            executeProjectPurge(SimpleSQLiteQuery("DELETE FROM `$table` WHERE projectId = ?", arrayOf(projectId)))
+        }
     }
 }
 

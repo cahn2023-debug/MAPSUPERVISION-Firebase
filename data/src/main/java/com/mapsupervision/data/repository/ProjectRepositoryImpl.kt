@@ -2,10 +2,15 @@ package com.mapsupervision.data.repository
 
 import com.mapsupervision.core.error.DatabaseException
 import com.mapsupervision.core.result.AppResult
+import com.mapsupervision.data.db.ProjectScopedDatabaseProvider
+import com.mapsupervision.data.db.dao.EventOutboxDao
 import com.mapsupervision.data.db.dao.ProjectDao
+import com.mapsupervision.data.db.dao.SitePhotoDao
 import com.mapsupervision.data.db.entity.ProjectEntity
 import com.mapsupervision.domain.model.Project
+import com.mapsupervision.domain.model.ProjectDeletionState
 import com.mapsupervision.domain.model.ProjectStorageMode
+import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.ProjectRepository
 import com.mapsupervision.storage.ProjectStorageManager
 import java.util.UUID
@@ -13,7 +18,11 @@ import javax.inject.Inject
 
 class ProjectRepositoryImpl @Inject constructor(
     private val projectDao: ProjectDao,
-    private val storageManager: ProjectStorageManager
+    private val storageManager: ProjectStorageManager,
+    private val eventOutboxDao: EventOutboxDao,
+    private val sitePhotoDao: SitePhotoDao,
+    private val projectScopedDatabaseProvider: ProjectScopedDatabaseProvider,
+    private val activeProjectRepository: ActiveProjectRepository
 ) : ProjectRepository {
     private companion object {
         const val CURRENT_METADATA_VERSION = 3
@@ -91,7 +100,11 @@ class ProjectRepositoryImpl @Inject constructor(
             mediaStorageFolderUrl = resolved.mediaStorageFolderUrl,
             mediaStorageUpdatedAtEpochMs = resolved.mediaStorageUpdatedAtEpochMs,
             isDeleted = resolved.isDeleted,
-            deletedAtEpochMs = resolved.deletedAtEpochMs
+            deletedAtEpochMs = resolved.deletedAtEpochMs,
+            deletionState = resolved.deletionState,
+            deletionRequestId = resolved.deletionRequestId,
+            deletionErrorCode = resolved.deletionErrorCode,
+            cloudDeletionCompletedAtEpochMs = resolved.cloudDeletionCompletedAtEpochMs
         )
         projectDao.upsert(entity)
     }.fold(
@@ -105,6 +118,113 @@ class ProjectRepositoryImpl @Inject constructor(
     }.fold(
         onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(DatabaseException("Failed to clear project data", it)) }
+    )
+
+    override suspend fun pendingDeletionWork(projectId: String): AppResult<Int> = runCatching {
+        val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
+        val pendingOutbox = eventOutboxDao.pendingCountByProject(projectId)
+        val photos = if (project.storageMode == ProjectStorageMode.PROJECT_DB) {
+            projectScopedDatabaseProvider.databaseFor(projectId)?.sitePhotoDao()
+        } else {
+            sitePhotoDao
+        }
+        val pendingPhotos = photos?.hasPendingUploads(projectId) == true
+        pendingOutbox + if (pendingPhotos) 1 else 0
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to inspect pending project work", it)) }
+    )
+
+    override suspend fun requestDeletion(projectId: String, requestId: String): AppResult<ProjectDeletionState> = runCatching {
+        val activeProjectId = when (val active = activeProjectRepository.getActive()) {
+            is AppResult.Success -> active.data
+            is AppResult.Error -> throw active.throwable
+        }
+        check(activeProjectId != projectId) { "Active project must be switched before deletion" }
+        val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
+        check(!project.isDeleted) { "Project is already deleted" }
+        if (project.deletionState == ProjectDeletionState.DELETING) {
+            check(project.deletionRequestId == requestId) { "Project deletion is already owned by another request" }
+            return@runCatching ProjectDeletionState.DELETING
+        }
+        if (project.deletionState == ProjectDeletionState.DELETE_FAILED) {
+            check(project.deletionRequestId == requestId) { "Retry must reuse the existing deletion request" }
+        }
+        projectDao.requestDeletion(projectId, requestId, System.currentTimeMillis())
+        val current = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
+        if (current.deletionState == ProjectDeletionState.DELETING) {
+            check(current.deletionRequestId == requestId) { "Project deletion is already owned by another request" }
+        }
+        current.deletionState
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to request project deletion", it)) }
+    )
+
+    override suspend fun markDeletionFailed(projectId: String, requestId: String, errorCode: String): AppResult<Unit> = runCatching {
+        check(projectDao.markDeletionFailed(projectId, requestId, errorCode, System.currentTimeMillis()) > 0) {
+            "Project deletion request is no longer active"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to mark project deletion failure", it)) }
+    )
+
+    override suspend fun markCloudDeletionCompleted(projectId: String, requestId: String): AppResult<Unit> = runCatching {
+        check(projectDao.markCloudDeletionCompleted(projectId, requestId, System.currentTimeMillis(), System.currentTimeMillis()) > 0) {
+            "Project deletion request is not active"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to record cloud project deletion", it)) }
+    )
+
+    override suspend fun completeLocalDeletion(projectId: String, requestId: String): AppResult<Unit> = runCatching {
+        val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
+        check(project.deletionRequestId == requestId) { "Project deletion request does not match" }
+        check(project.deletionState == ProjectDeletionState.DELETING) { "Project is not pending deletion" }
+        check(project.cloudDeletionCompletedAtEpochMs != null) { "Cloud deletion has not completed" }
+        check(projectDao.countActiveBySlug(project.slug) == 1) {
+            "Project storage root is shared by another active project"
+        }
+        projectDao.purgeProjectRows(projectId)
+        check(projectScopedDatabaseProvider.closeProjectDatabase(projectId)) { "Project database was not found" }
+        check(storageManager.deleteProjectStorage(project.slug, project.id, project.projectDbPath)) {
+            "Project storage could not be removed"
+        }
+        check(projectDao.completeLocalDeletion(projectId, requestId, System.currentTimeMillis(), System.currentTimeMillis()) > 0) {
+            "Project deletion request is no longer active"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to complete local project deletion", it)) }
+    )
+
+    override suspend fun acknowledgeRemoteDeletion(projectId: String, deleteLocal: Boolean): AppResult<Unit> = runCatching {
+        val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
+        check(project.deletionState == ProjectDeletionState.DELETED && !project.isDeleted) {
+            "Remote project deletion is not awaiting acknowledgement"
+        }
+        if (deleteLocal) {
+            check(projectDao.countActiveBySlug(project.slug) == 1) {
+                "Project storage root is shared by another active project"
+            }
+            projectDao.purgeProjectRows(projectId)
+            check(projectScopedDatabaseProvider.closeProjectDatabase(projectId)) { "Project database was not found" }
+            check(storageManager.deleteProjectStorage(project.slug, project.id, project.projectDbPath)) {
+                "Project storage could not be removed"
+            }
+            check(projectDao.completeRemoteLocalDeletion(projectId, System.currentTimeMillis(), System.currentTimeMillis()) > 0) {
+                "Remote project deletion acknowledgement is stale"
+            }
+        } else {
+            projectScopedDatabaseProvider.databaseFor(projectId)
+                ?.projectDao()
+                ?.markRemoteDeletion(projectId, project.deletionRequestId.orEmpty(), project.deletedAtEpochMs ?: System.currentTimeMillis(), System.currentTimeMillis())
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to acknowledge remote project deletion", it)) }
     )
 
     override suspend fun touch(projectId: String): AppResult<Unit> = runCatching {
@@ -246,6 +366,10 @@ class ProjectRepositoryImpl @Inject constructor(
         mediaStorageFolderUrl = mediaStorageFolderUrl,
         mediaStorageUpdatedAtEpochMs = mediaStorageUpdatedAtEpochMs,
         isDeleted = isDeleted,
-        deletedAtEpochMs = deletedAtEpochMs
+        deletedAtEpochMs = deletedAtEpochMs,
+        deletionState = deletionState,
+        deletionRequestId = deletionRequestId,
+        deletionErrorCode = deletionErrorCode,
+        cloudDeletionCompletedAtEpochMs = cloudDeletionCompletedAtEpochMs
     )
 }

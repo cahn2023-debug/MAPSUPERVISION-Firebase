@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.mapsupervision.data.db.MapSupervisionDatabase
+import com.mapsupervision.data.db.ProjectDeletionSqlGuards
 import com.mapsupervision.data.db.dao.DailyLogDao
 import com.mapsupervision.data.db.dao.GisNodeDao
 import com.mapsupervision.data.db.dao.GisRouteDao
@@ -80,6 +81,7 @@ object DataModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                     super.onOpen(db)
+                    ProjectDeletionSqlGuards.install(db)
                     db.execSQL("PRAGMA foreign_keys = ON")
                     db.execSQL("PRAGMA synchronous = NORMAL")
                     db.execSQL("PRAGMA temp_store = MEMORY")

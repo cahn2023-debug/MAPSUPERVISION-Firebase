@@ -56,6 +56,11 @@ class ProjectScopedDatabaseProvider @Inject constructor(
         if (project.storageMode != ProjectStorageMode.PROJECT_DB || project.projectDbPath.isBlank()) {
             return null
         }
+        if (project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
+            project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+        ) {
+            return null
+        }
         return openProjectDb(project)
     }
 
@@ -63,8 +68,29 @@ class ProjectScopedDatabaseProvider @Inject constructor(
         databaseFor(projectId)?.openHelper?.writableDatabase?.execSQL("VACUUM")
     }
 
-    private suspend fun openProjectDb(project: ProjectEntity): MapSupervisionDatabase = mutex.withLock {
+    suspend fun closeProjectDatabase(projectId: String): Boolean = mutex.withLock {
+        val project = sharedDatabase.projectDao().get(projectId) ?: return@withLock false
         val resolvedProject = resolveProjectDbPath(project)
+        val dbPath = resolvedProject.projectDbPath
+        val holder = holders.remove(dbPath)
+        if (holder != null) {
+            runCatching {
+                holder.database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            }
+            runCatching { holder.database.close() }
+            AppLogger.d("project.db.close_for_delete path=$dbPath")
+        }
+        true
+    }
+
+    private suspend fun openProjectDb(project: ProjectEntity): MapSupervisionDatabase? = mutex.withLock {
+        val currentProject = sharedDatabase.projectDao().get(project.id) ?: return@withLock null
+        if (currentProject.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
+            currentProject.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+        ) {
+            return@withLock null
+        }
+        val resolvedProject = resolveProjectDbPath(currentProject)
         val dbPath = resolvedProject.projectDbPath
 
         val existing = holders[dbPath]
@@ -81,6 +107,7 @@ class ProjectScopedDatabaseProvider @Inject constructor(
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                     super.onOpen(db)
+                    ProjectDeletionSqlGuards.install(db)
                     db.execSQL("PRAGMA foreign_keys = ON")
                     db.execSQL("PRAGMA synchronous = NORMAL")
                     db.execSQL("PRAGMA temp_store = MEMORY")
@@ -134,6 +161,11 @@ class ProjectScopedDatabaseProvider @Inject constructor(
         }
 
         val database = holder.database
+        if (project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETED) {
+            ensureProjectRow(project, database, source)
+            holder.isPrepared = true
+            return
+        }
         ensureProjectRow(project, database, source)
         if (shouldUseLegacyBridge(project, database)) {
             runLegacyBridge(project, dbPath, database)

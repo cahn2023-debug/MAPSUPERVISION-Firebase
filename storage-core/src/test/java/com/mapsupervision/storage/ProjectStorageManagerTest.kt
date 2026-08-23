@@ -34,6 +34,10 @@ class ProjectStorageManagerTest {
                 return File(tempDir, "private/Projects/$projectSlug")
             }
 
+            override fun scopedProjectDbRootDirectory(projectSlug: String): File {
+                return File(tempDir, "scoped/Projects/$projectSlug")
+            }
+
             override fun projectRoot(projectSlug: String): File {
                 return super.projectRoot(projectSlug)
             }
@@ -130,6 +134,29 @@ class ProjectStorageManagerTest {
         assertFalse(File(File(tempDir, "private/Projects/$slug"), "db/project.sqlite").exists())
         assertFalse(File(File(tempDir, "private/Projects/$projectId"), "db/project.sqlite").exists())
         assertFalse(File(publicLegacyRoot, "db/project.sqlite").exists())
+    }
+
+    @Test
+    fun deleteProjectStorage_removes_local_roots_and_keeps_remote_media_unaddressed() {
+        val slug = "delete-project"
+        val projectId = "delete-id"
+        val publicRoot = File(tempDir, "custom/$slug")
+        val privateRoot = File(tempDir, "private/Projects/$slug")
+        storageManager.setCustomPath(slug, publicRoot.absolutePath)
+        File(publicRoot, "db/project.sqlite").apply {
+            parentFile?.mkdirs()
+            writeText("local-db")
+        }
+        File(privateRoot, "Media/Node/N1/photo.jpg").apply {
+            parentFile?.mkdirs()
+            writeText("local-media")
+        }
+        val dbPath = File(publicRoot, "db/project.sqlite").absolutePath
+
+        assertTrue(storageManager.deleteProjectStorage(slug, projectId, dbPath))
+        assertFalse(publicRoot.exists())
+        assertFalse(privateRoot.exists())
+        assertEquals(null, storageManager.getCustomPath(slug))
     }
 
     @Test(expected = SecurityException::class)

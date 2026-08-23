@@ -5,9 +5,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.mapsupervision.data.db.MapSupervisionDatabase
 import com.mapsupervision.data.db.ProjectScopedDatabaseProvider
+import com.mapsupervision.data.db.ProjectDeletionSqlGuards
 import com.mapsupervision.data.db.entity.ProjectEntity
 import com.mapsupervision.data.db.entity.SitePhotoEntity
 import com.mapsupervision.data.db.entity.GisRouteEntity
+import com.mapsupervision.data.db.entity.EventOutboxEntity
 import com.mapsupervision.domain.model.ProjectStorageMode
 import com.mapsupervision.domain.model.SitePhotoSyncStatus
 import com.mapsupervision.domain.model.MediaType
@@ -190,6 +192,45 @@ class FirebaseSyncRepositoryImplTest {
         assertEquals(0, batchResult.uploadedMedia)
         assertEquals(0, batchResult.failed)
         assertTrue(fakeClient.lastRequest == null)
+    }
+
+    @Test
+    fun uploadPendingMedia_rejectsDeletedProjectBeforeTouchingLocalRows() = runBlocking {
+        val projectId = "proj-deleted"
+        insertProject(projectId)
+        sharedDatabase.projectDao().markRemoteDeletion(
+            projectId = projectId,
+            requestId = "delete-request-1",
+            completedAtEpochMs = 3_000L,
+            updatedAtEpochMs = 3_000L
+        )
+
+        val result = repository.uploadPendingMedia(projectId)
+
+        assertTrue(result is com.mapsupervision.core.result.AppResult.Error)
+        assertTrue((result as com.mapsupervision.core.result.AppResult.Error).throwable.message.orEmpty().contains("locked", ignoreCase = true))
+        assertTrue(fakeClient.lastRequest == null)
+    }
+
+    @Test
+    fun sqliteDeletionGuard_rejectsBusinessWritesForDeletedProject() = runBlocking {
+        val projectId = "proj-guarded"
+        insertProject(projectId)
+        ProjectDeletionSqlGuards.install(sharedDatabase.openHelper.writableDatabase)
+        sharedDatabase.projectDao().markRemoteDeletion(projectId, "request-guarded", 3_000L, 3_000L)
+
+        val failure = runCatching {
+            sharedDatabase.eventOutboxDao().upsert(
+                EventOutboxEntity(
+                    id = "event-guarded",
+                    projectId = projectId,
+                    eventType = "project.updated",
+                    payloadJson = "{}"
+                )
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure?.message.orEmpty().contains("locked", ignoreCase = true))
     }
 
     @Test

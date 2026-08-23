@@ -157,7 +157,8 @@ fun MapHubScreen(
     onCreateProject: (String) -> Unit,
     onSwitchProject: (String) -> Unit,
     onCloneProject: (String, String) -> Unit,
-    onDeleteProject: (String) -> Unit,
+    onDeleteProject: (String, String, String, Boolean) -> Unit,
+    onAcknowledgeRemoteDeletion: (String, Boolean) -> Unit = { _, _ -> },
     onSelectNode: (GisNode) -> Unit,
     onSelectRoute: (GisRoute) -> Unit,
     onSetCenterNode: (GisNode?) -> Unit,
@@ -227,6 +228,10 @@ fun MapHubScreen(
         if (uri != null) onImportProject(uri)
     }
     var projectName by remember { mutableStateOf("") }
+    var deletionProject by remember { mutableStateOf<com.mapsupervision.domain.model.Project?>(null) }
+    var deletionIdentity by remember { mutableStateOf("") }
+    var deletionPassword by remember { mutableStateOf("") }
+    var deletionPendingConfirmed by remember { mutableStateOf(false) }
     var showContractorMenu by remember { mutableStateOf(false) }
     var showMaterialMenu by remember { mutableStateOf(false) }
     var showLayerMenu by remember { mutableStateOf(false) }
@@ -409,8 +414,24 @@ fun MapHubScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (isActive) colors.onPrimaryContainer else secondaryTextColor
                                         )
+                                        if (p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
+                                            Text(
+                                                when (p.deletionState) {
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.DELETING -> "ĐANG XÓA — project bị khóa"
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED -> "XÓA THẤT BẠI — có thể thử lại"
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.DELETED -> "ĐÃ XÓA TRÊN CLOUD — chỉ đọc"
+                                                    else -> ""
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED) dangerColor else secondaryTextColor
+                                            )
+                                        }
                                     }
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        val isCreator = projectState.catalogItems.firstOrNull { it.projectId == p.id }?.createdByUid == session.uid
+                                        val canDelete = session.isAdmin || isCreator
+                                        val deletionLocked = p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
+                                            p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
                                         if (isActive) {
                                             Box(
                                                 modifier = Modifier
@@ -432,18 +453,31 @@ fun MapHubScreen(
                                         }
 
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETED && !session.isAdmin) {
+                                                OutlinedButton(onClick = { onAcknowledgeRemoteDeletion(p.id, false) }) { Text("Giữ chỉ đọc") }
+                                                Button(
+                                                    onClick = { onAcknowledgeRemoteDeletion(p.id, true) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
+                                                ) { Text("Xóa bản local") }
+                                            }
                                             if (!isRevoked) {
-                                                IconButton(onClick = { onExportProject(p) }) {
+                                                IconButton(
+                                                    onClick = { onExportProject(p) },
+                                                    enabled = !deletionLocked && p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+                                                ) {
                                                      Icon(
                                                          imageVector = Icons.Default.Share,
                                                          contentDescription = "Export Project",
                                                          tint = if (isActive) onPrimaryColor else secondaryTextColor
                                                      )
                                                 }
-                                                IconButton(onClick = { onCloneProject(p.id, "${p.name} - Copy") }) {
+                                                IconButton(
+                                                    onClick = { onCloneProject(p.id, "${p.name} - Copy") },
+                                                    enabled = p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE
+                                                ) {
                                                     Icon(Icons.Outlined.ContentCopy, contentDescription = "Clone", tint = if (isActive) onPrimaryColor else secondaryTextColor)
                                                 }
-                                                IconButton(onClick = {
+                                                IconButton(enabled = p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE, onClick = {
                                                     selectedProjectForSettings = p
                                                     editedStoragePath = p.projectDbPath.substringBeforeLast("/db/")
                                                     editedMediaStorageInput = p.mediaStorageFolderUrl.ifBlank { p.mediaStorageFolderId }
@@ -457,8 +491,13 @@ fun MapHubScreen(
                                                 }
                                             }
                                             if (!isActive) {
-                                                if (!isRevoked) {
-                                                    IconButton(onClick = { onDeleteProject(p.id) }) {
+                                                if (!isRevoked && canDelete && p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.DELETED) {
+                                                    IconButton(onClick = {
+                                                        deletionProject = p
+                                                        deletionIdentity = ""
+                                                        deletionPassword = ""
+                                                        deletionPendingConfirmed = false
+                                                    }) {
                                                         Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = dangerColor)
                                                     }
                                                 }
@@ -467,6 +506,7 @@ fun MapHubScreen(
                                                         onSwitchProject(p.id)
                                                         scope.launch { drawerState.close() }
                                                     },
+                                                    enabled = !deletionLocked,
                                                     shape = MaterialTheme.shapes.small,
                                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                                     colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor)
@@ -1514,6 +1554,50 @@ fun MapHubScreen(
                     .imePadding(),
                 shape = RoundedCornerShape(16.dp),
                 containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        deletionProject?.let { project ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { deletionProject = null },
+                title = { Text("Xóa vĩnh viễn project", fontWeight = FontWeight.Bold, color = dangerColor) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Dữ liệu nghiệp vụ trên Firebase sẽ bị xóa. Media Google Drive được giữ lại. Hành động này không thể hoàn tác.", color = secondaryTextColor)
+                        OutlinedTextField(
+                            value = deletionIdentity,
+                            onValueChange = { deletionIdentity = it },
+                            label = { Text("Nhập đúng tên hoặc mã project") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = deletionPassword,
+                            onValueChange = { deletionPassword = it },
+                            label = { Text("Mật khẩu xác thực lại") },
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = deletionPendingConfirmed, onCheckedChange = { deletionPendingConfirmed = it })
+                            Text("Tôi xác nhận cả các thay đổi chưa đồng bộ (nếu có)", color = secondaryTextColor)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onDeleteProject(project.id, deletionIdentity, deletionPassword, deletionPendingConfirmed)
+                            deletionProject = null
+                        },
+                        enabled = deletionIdentity.isNotBlank() && deletionPassword.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
+                    ) { Text("Xóa project") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { deletionProject = null }) { Text("Hủy") }
+                }
             )
         }
 

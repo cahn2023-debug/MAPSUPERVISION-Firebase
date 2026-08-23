@@ -23,6 +23,17 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+
+internal class ProjectDeletionHttpException(
+    val errorCode: String?,
+    val responseCode: Int,
+    message: String
+) : Exception(message)
 
 @Singleton
 class FirebaseSyncRepositoryImpl @Inject constructor(
@@ -37,10 +48,12 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     internal var firebaseRuntime = FirebaseRuntime(appContext)
     internal var driveMediaUploadClient = DriveMediaUploadClient()
     internal var enforceAccessChecks = true
+    private val httpClient = OkHttpClient()
 
     override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
             ensureFirebaseConfigured()
+            ensureLocalProjectActive(projectId)
             ensureApprovedAccess(projectId)
             val mediaResult = uploadPendingMediaInternal(projectId)
             var pushed = 0
@@ -67,6 +80,8 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
             ensureFirebaseConfigured()
+            if (applyRemoteTombstone(projectId)) return@runCatching SyncBatchResult()
+            ensureLocalProjectActive(projectId)
             ensureApprovedAccess(projectId)
             var pulled = 0
             FirebaseSyncTableCatalog.tables.forEach { table ->
@@ -88,11 +103,61 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
 
     override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
+            ensureLocalProjectActive(projectId)
             ensureApprovedAccess(projectId)
             uploadPendingMediaInternal(projectId)
         }.fold(
             onSuccess = { AppResult.Success(it) },
             onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to upload Firebase media", it), it)) }
+        )
+    }
+
+    override suspend fun requestProjectDeletion(
+        projectId: String,
+        requestId: String,
+        typedIdentity: String,
+        pendingOutboxCount: Int,
+        confirmPendingOutbox: Boolean
+    ): AppResult<com.mapsupervision.domain.model.ProjectDeletionState> = withContext(Dispatchers.IO) {
+        runCatching {
+            ensureFirebaseConfigured()
+            val baseUrl = BuildConfig.MEDIA_UPLOAD_BASE_URL.trim().trimEnd('/').ifBlank {
+                error("MEDIA_UPLOAD_BASE_URL is not configured")
+            }
+            val token = firebaseRuntime.getFirebaseToken()
+            val body = JSONObject().apply {
+                put("requestId", requestId)
+                put("typedIdentity", typedIdentity)
+                put("pendingOutboxCount", pendingOutboxCount)
+                put("confirmPendingOutbox", confirmPendingOutbox)
+            }.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$baseUrl/api/projects/${java.net.URLEncoder.encode(projectId, "UTF-8")}/deletion")
+                .header("Authorization", "Bearer $token")
+                .post(body)
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                val payload = JSONObject(response.body?.string().orEmpty())
+                if (!response.isSuccessful || payload.optBoolean("success", false).not()) {
+                    val error = payload.optJSONObject("error")
+                    throw ProjectDeletionHttpException(
+                        errorCode = error?.optString("code")?.takeIf { it.isNotBlank() },
+                        responseCode = response.code,
+                        message = listOfNotNull(
+                            error?.optString("code")?.takeIf { it.isNotBlank() },
+                            error?.optString("message")?.takeIf { it.isNotBlank() }
+                        ).joinToString(": ").ifBlank { "Cloud deletion request failed" }
+                    )
+                }
+                when (payload.optJSONObject("data")?.optString("deletionState")) {
+                    "DELETED" -> com.mapsupervision.domain.model.ProjectDeletionState.DELETED
+                    "DELETING" -> com.mapsupervision.domain.model.ProjectDeletionState.DELETING
+                    else -> com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+                }
+            }
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to request cloud project deletion", it)) }
         )
     }
 
@@ -298,6 +363,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         table: FirebaseSyncTable,
         envelopes: List<SyncEnvelope<Map<String, Any?>>>
     ): Int {
+        ensureLocalProjectActive(projectId)
         val deviceId = metadataStore.deviceId()
         val rowsToApply = envelopes.filter { it.sourceDeviceId != deviceId }
         if (rowsToApply.isEmpty()) return 0
@@ -331,6 +397,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     }
 
     private suspend fun upsertSitePhoto(projectId: String, photo: SitePhotoEntity) {
+        ensureLocalProjectActive(projectId)
         sharedDatabase.sitePhotoDao().upsert(photo)
         scopedDatabase(projectId)?.sitePhotoDao()?.upsert(photo)
     }
@@ -338,17 +405,57 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     private suspend fun databaseFor(projectId: String, table: FirebaseSyncTable): MapSupervisionDatabase =
         when (table.scope) {
             SyncScope.SHARED_ONLY -> sharedDatabase
-            SyncScope.PROJECT_MIRROR -> scopedDatabase(projectId) ?: sharedDatabase
+            SyncScope.PROJECT_MIRROR -> {
+                val project = sharedDatabase.projectDao().get(projectId)
+                    ?: error("Project not found: $projectId")
+                if (project.storageMode == com.mapsupervision.domain.model.ProjectStorageMode.PROJECT_DB) {
+                    scopedDatabase(projectId) ?: error("Project database is locked: $projectId")
+                } else {
+                    sharedDatabase
+                }
+            }
         }
 
     private suspend fun databasesForWrite(projectId: String, table: FirebaseSyncTable): List<MapSupervisionDatabase> =
         when (table.scope) {
             SyncScope.SHARED_ONLY -> listOf(sharedDatabase)
-            SyncScope.PROJECT_MIRROR -> listOfNotNull(sharedDatabase, scopedDatabase(projectId)).distinctBy { it.openHelper.databaseName }
+            SyncScope.PROJECT_MIRROR -> {
+                val project = sharedDatabase.projectDao().get(projectId)
+                    ?: error("Project not found: $projectId")
+                if (project.storageMode == com.mapsupervision.domain.model.ProjectStorageMode.PROJECT_DB) {
+                    listOfNotNull(sharedDatabase, scopedDatabase(projectId)).distinctBy { it.openHelper.databaseName }
+                } else {
+                    listOf(sharedDatabase)
+                }
+            }
         }
 
     private suspend fun scopedDatabase(projectId: String): MapSupervisionDatabase? =
         projectScopedDatabaseProvider.databaseFor(projectId)
+
+    private suspend fun ensureLocalProjectActive(projectId: String) {
+        val project = sharedDatabase.projectDao().get(projectId)
+        check(project != null && !project.isDeleted &&
+            project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
+            "Project is locked for deletion: $projectId"
+        }
+    }
+
+    private suspend fun applyRemoteTombstone(projectId: String): Boolean {
+        val snapshot = firebaseRuntime.firestore()
+            .collection("projectDeletionTombstones")
+            .document(projectId)
+            .get()
+            .await()
+        if (!snapshot.exists()) return false
+        val requestId = snapshot.getString("requestId").orEmpty()
+        val completedAt = snapshot.getLong("deletedAtEpochMs") ?: System.currentTimeMillis()
+        sharedDatabase.projectDao().markRemoteDeletion(projectId, requestId, completedAt, System.currentTimeMillis())
+        projectScopedDatabaseProvider.databaseFor(projectId)
+            ?.projectDao()
+            ?.markRemoteDeletion(projectId, requestId, completedAt, System.currentTimeMillis())
+        return true
+    }
 
     private fun rowUpdatedAt(row: Map<String, Any?>, columnName: String): Long =
         (row[columnName] as? Number)?.toLong() ?: 0L

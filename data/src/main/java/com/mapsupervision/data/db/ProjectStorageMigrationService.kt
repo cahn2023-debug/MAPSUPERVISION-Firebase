@@ -76,7 +76,13 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
             mediaStorageProvider = project.mediaStorageProvider,
             mediaStorageFolderId = project.mediaStorageFolderId,
             mediaStorageFolderUrl = project.mediaStorageFolderUrl,
-            mediaStorageUpdatedAtEpochMs = project.mediaStorageUpdatedAtEpochMs
+            mediaStorageUpdatedAtEpochMs = project.mediaStorageUpdatedAtEpochMs,
+            isDeleted = project.isDeleted,
+            deletedAtEpochMs = project.deletedAtEpochMs,
+            deletionState = project.deletionState,
+            deletionRequestId = project.deletionRequestId,
+            deletionErrorCode = project.deletionErrorCode,
+            cloudDeletionCompletedAtEpochMs = project.cloudDeletionCompletedAtEpochMs
         )
         return migrateProjectEntityIfNeeded(entity)
     }
@@ -426,6 +432,12 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
     private fun openScopedDatabase(newDbPath: String): MapSupervisionDatabase {
         return androidx.room.Room.databaseBuilder(context, MapSupervisionDatabase::class.java, newDbPath)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .addCallback(object : androidx.room.RoomDatabase.Callback() {
+                override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    ProjectDeletionSqlGuards.install(db)
+                }
+            })
             .addMigrations(*MapSupervisionDatabase.ALL_MIGRATIONS)
             .build()
     }

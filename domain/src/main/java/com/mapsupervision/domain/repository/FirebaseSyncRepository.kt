@@ -1,6 +1,7 @@
 package com.mapsupervision.domain.repository
 
 import com.mapsupervision.core.result.AppResult
+import com.mapsupervision.domain.model.ProjectDeletionState
 
 data class SyncEnvelope<T>(
     val id: String,
@@ -24,4 +25,12 @@ interface FirebaseSyncRepository {
     suspend fun pushPending(projectId: String): AppResult<SyncBatchResult>
     suspend fun pullChanges(projectId: String, sinceEpochMs: Long? = null): AppResult<SyncBatchResult>
     suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult>
+    suspend fun requestProjectDeletion(
+        projectId: String,
+        requestId: String,
+        typedIdentity: String,
+        pendingOutboxCount: Int,
+        confirmPendingOutbox: Boolean
+    ): AppResult<ProjectDeletionState> =
+        AppResult.Error(UnsupportedOperationException("Project deletion is not supported"))
 }

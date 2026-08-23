@@ -52,6 +52,7 @@ export type ProjectDraft = {
 
 export type ProjectRow = {
   id: string;
+  createdByUid: string;
   name: string;
   slug: string;
   projectCode: string | null;
@@ -331,6 +332,7 @@ export async function createProjectDocument(
     name,
     slug: slugifyProjectName(name) || ref.id.toLowerCase(),
     projectCode,
+    createdByUid: creator.uid,
     isArchived: false,
     createdAtEpochMs: now,
     metadataVersion: 3,
@@ -373,6 +375,7 @@ export async function createProjectDocument(
   batch.set(doc(firestore, "projectCatalog", ref.id), {
     projectName: name,
     projectCode: projectCode || payload.slug.toUpperCase(),
+    createdByUid: creator.uid,
     updatedAtEpochMs: now,
     status: "ACTIVE"
   });
@@ -429,6 +432,17 @@ export async function upsertUserProfile(
     },
     { merge: true }
   );
+}
+
+export async function setActiveProjectForUser(
+  firestore: Firestore,
+  uid: string,
+  projectId: string | null
+): Promise<void> {
+  await setDoc(doc(firestore, "users", uid), {
+    activeProjectId: projectId,
+    updatedAtEpochMs: Date.now()
+  }, { merge: true });
 }
 
 export function subscribeUsersDirectory(

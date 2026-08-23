@@ -96,7 +96,7 @@ import com.mapsupervision.data.db.dao.MaterialDeclarationDao
         MaterialDeclarationEntity::class,
         RagDocumentEmbeddingEntity::class
     ],
-    version = 48,
+    version = 50,
     exportSchema = true
 )
 @TypeConverters(DbTypeConverters::class)
@@ -2934,6 +2934,20 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_48_49 = object : Migration(48, 49) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `projects` ADD COLUMN `deletionState` TEXT NOT NULL DEFAULT 'ACTIVE'")
+                db.execSQL("ALTER TABLE `projects` ADD COLUMN `deletionRequestId` TEXT")
+                db.execSQL("ALTER TABLE `projects` ADD COLUMN `deletionErrorCode` TEXT")
+            }
+        }
+
+        val MIGRATION_49_50 = object : Migration(49, 50) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `projects` ADD COLUMN `cloudDeletionCompletedAtEpochMs` INTEGER")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_8_9,
             MIGRATION_9_10,
@@ -2974,7 +2988,9 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             MIGRATION_44_45,
             MIGRATION_45_46,
             MIGRATION_46_47,
-            MIGRATION_47_48
+            MIGRATION_47_48,
+            MIGRATION_48_49,
+            MIGRATION_49_50
         )
     }
 }

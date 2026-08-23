@@ -22,6 +22,9 @@ interface EventOutboxDao {
     @Query("SELECT * FROM event_outbox WHERE status = 'PENDING' AND projectId = :projectId AND availableAtEpochMs <= :nowEpochMs ORDER BY availableAtEpochMs, createdAtEpochMs LIMIT :limit")
     suspend fun pendingByProject(projectId: String, nowEpochMs: Long, limit: Int): List<EventOutboxEntity>
 
+    @Query("SELECT COUNT(*) FROM event_outbox WHERE status = 'PENDING' AND projectId = :projectId")
+    suspend fun pendingCountByProject(projectId: String): Int
+
     @Query("UPDATE event_outbox SET status = :status, dispatchedAtEpochMs = :dispatchedAtEpochMs WHERE id = :id")
     suspend fun markStatus(id: String, status: String, dispatchedAtEpochMs: Long?)
 }

@@ -3,6 +3,7 @@ package com.mapsupervision.data.db.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.mapsupervision.domain.model.ProjectDeletionState
 import com.mapsupervision.domain.model.ProjectStorageMode
 
 @Entity(tableName = "projects")
@@ -31,5 +32,10 @@ data class ProjectEntity(
     val mediaStorageUpdatedAtEpochMs: Long = 0L,
     @ColumnInfo(defaultValue = "0")
     val isDeleted: Boolean = false,
-    val deletedAtEpochMs: Long? = null
+    val deletedAtEpochMs: Long? = null,
+    @ColumnInfo(defaultValue = "ACTIVE")
+    val deletionState: ProjectDeletionState = ProjectDeletionState.ACTIVE,
+    val deletionRequestId: String? = null,
+    val deletionErrorCode: String? = null,
+    val cloudDeletionCompletedAtEpochMs: Long? = null
 )

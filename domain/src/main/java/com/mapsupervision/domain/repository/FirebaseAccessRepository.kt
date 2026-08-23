@@ -17,6 +17,8 @@ interface FirebaseAccessRepository {
     suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession>
     suspend fun register(email: String, password: String): AppResult<Unit>
     suspend fun signInWithGoogle(idToken: String): AppResult<FirebaseUserSession>
+    suspend fun reauthenticate(password: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Firebase reauthentication is not supported"))
     suspend fun enterOfflineMode(): AppResult<FirebaseAccessState>
     suspend fun signOut(): AppResult<Unit>
 
@@ -48,5 +50,7 @@ interface FirebaseAccessRepository {
         startAfterProjectId: String? = null
     ): AppResult<List<FirebaseProjectCatalogEntry>> =
         AppResult.Error(UnsupportedOperationException("Firebase project catalog is not supported"))
+    suspend fun projectCreatorUid(projectId: String): AppResult<String?> =
+        AppResult.Error(UnsupportedOperationException("Firebase project ownership lookup is not supported"))
     fun projectAccess(projectId: String): ProjectAccess?
 }

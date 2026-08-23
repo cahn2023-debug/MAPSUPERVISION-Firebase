@@ -3,6 +3,7 @@ package com.mapsupervision.data.db
 import androidx.room.TypeConverter
 import com.mapsupervision.domain.model.NodeSignalStatus
 import com.mapsupervision.domain.model.PhotoLocationStatus
+import com.mapsupervision.domain.model.ProjectDeletionState
 import com.mapsupervision.domain.model.ProjectStorageMode
 
 class DbTypeConverters {
@@ -12,6 +13,13 @@ class DbTypeConverters {
     @TypeConverter
     fun toProjectStorageMode(value: String?): ProjectStorageMode =
         value?.let(ProjectStorageMode::valueOf) ?: ProjectStorageMode.LEGACY_SHARED
+
+    @TypeConverter
+    fun fromProjectDeletionState(value: ProjectDeletionState?): String? = value?.name
+
+    @TypeConverter
+    fun toProjectDeletionState(value: String?): ProjectDeletionState =
+        value?.let(ProjectDeletionState::valueOf) ?: ProjectDeletionState.ACTIVE
 
     @TypeConverter
     fun fromPhotoLocationStatus(value: PhotoLocationStatus?): String? = value?.name

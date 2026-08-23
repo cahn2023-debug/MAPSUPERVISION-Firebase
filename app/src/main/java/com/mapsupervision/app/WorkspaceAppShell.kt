@@ -400,7 +400,10 @@ fun WorkspaceAppShell(
                     onCreateProject = projectViewModel::createProject,
                     onSwitchProject = projectViewModel::switchProject,
                     onCloneProject = projectViewModel::cloneProject,
-                    onDeleteProject = projectViewModel::archiveProject,
+                    onDeleteProject = { projectId, identity, password, confirmPending ->
+                        projectViewModel.requestPermanentDeletion(projectId, identity, password, confirmPending)
+                    },
+                    onAcknowledgeRemoteDeletion = projectViewModel::acknowledgeRemoteDeletion,
                     onExportProject = { project -> projectViewModel.exportProject(context, project) },
                     onImportProject = { uri -> projectViewModel.importProject(context, uri) },
                     onResolveDuplicateProject = { uri, overwrite, createCopy ->

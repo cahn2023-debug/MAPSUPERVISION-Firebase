@@ -48,6 +48,7 @@ class ProjectViewModel @Inject constructor(
     private val dailyLogRepository: DailyLogRepository,
     private val progressRepository: ProgressRepository,
     private val projectSyncRepository: ProjectSyncRepository,
+    private val firebaseSyncRepository: FirebaseSyncRepository,
     private val firebaseAccessRepository: FirebaseAccessRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ProjectUiState())
@@ -157,6 +158,76 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             projectRepository.archive(projectId)
             projectSyncRepository.notifyProjectChanged(projectId, "project_archived")
+            refresh()
+        }
+    }
+
+    fun requestPermanentDeletion(
+        projectId: String,
+        typedIdentity: String,
+        reauthPassword: String,
+        confirmPendingOutbox: Boolean
+    ) {
+        viewModelScope.launch {
+            val project = _uiState.value.projects.firstOrNull { it.id == projectId }
+            val session = firebaseAccessRepository.accessState.value.session
+            val canDelete = session?.isAdmin == true || session?.let {
+                (firebaseAccessRepository.projectCreatorUid(projectId) as? AppResult.Success)?.data == it.uid
+            } == true
+            when {
+                project == null -> _uiState.value = _uiState.value.copy(message = "Không tìm thấy project cục bộ")
+                !canDelete -> _uiState.value = _uiState.value.copy(message = "Chỉ creator hoặc super-admin được xóa project")
+                project.id == (activeProjectRepository.getActive() as? AppResult.Success)?.data -> _uiState.value = _uiState.value.copy(message = "Hãy chuyển sang project khác trước khi xóa")
+                typedIdentity.trim() != project.name && typedIdentity.trim() != project.slug -> _uiState.value = _uiState.value.copy(message = "Tên hoặc mã project không khớp")
+                reauthPassword.isBlank() -> _uiState.value = _uiState.value.copy(message = "Cần xác thực lại trước khi xóa")
+                else -> {
+                    val pending = (projectRepository.pendingDeletionWork(projectId) as? AppResult.Success)?.data ?: 0
+                    if (pending > 0 && !confirmPendingOutbox) {
+                        _uiState.value = _uiState.value.copy(message = "Project còn $pending thay đổi chưa đồng bộ; hãy xác nhận thêm")
+                    } else when (val auth = firebaseAccessRepository.reauthenticate(reauthPassword)) {
+                        is AppResult.Error -> _uiState.value = _uiState.value.copy(message = "Xác thực lại thất bại: ${auth.throwable.message}")
+                        is AppResult.Success -> {
+                            val requestId = project.deletionRequestId ?: UUID.randomUUID().toString()
+                            val localRequest = projectRepository.requestDeletion(projectId, requestId)
+                            if (localRequest is AppResult.Error) {
+                                _uiState.value = _uiState.value.copy(message = "Không thể khóa project cục bộ: ${localRequest.throwable.message}")
+                                refresh()
+                                return@launch
+                            }
+                            when (val result = firebaseSyncRepository.requestProjectDeletion(projectId, requestId, typedIdentity.trim(), pending, confirmPendingOutbox)) {
+                                is AppResult.Success -> {
+                                    if (result.data == ProjectDeletionState.DELETED) {
+                                        projectRepository.markCloudDeletionCompleted(projectId, requestId)
+                                        projectRepository.completeLocalDeletion(projectId, requestId)
+                                    }
+                                    _uiState.value = _uiState.value.copy(message = "Project đang được xóa (${result.data})")
+                                }
+                                is AppResult.Error -> {
+                                    if (result.throwable.hasDeletionInProgress()) {
+                                        _uiState.value = _uiState.value.copy(message = "Project đang được xóa, vui lòng chờ worker hoàn tất")
+                                    } else {
+                                        projectRepository.markDeletionFailed(projectId, requestId, "CLOUD_DELETE_REQUEST_FAILED")
+                                        _uiState.value = _uiState.value.copy(message = "Không thể bắt đầu xóa: ${result.throwable.message}")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            refresh()
+        }
+    }
+
+    fun retryPermanentDeletion(projectId: String, typedIdentity: String, reauthPassword: String) =
+        requestPermanentDeletion(projectId, typedIdentity, reauthPassword, confirmPendingOutbox = true)
+
+    fun acknowledgeRemoteDeletion(projectId: String, deleteLocal: Boolean) {
+        viewModelScope.launch {
+            when (val result = projectRepository.acknowledgeRemoteDeletion(projectId, deleteLocal)) {
+                is AppResult.Success -> _uiState.value = _uiState.value.copy(message = if (deleteLocal) "Đã xóa bản local" else "Giữ project ở chế độ chỉ đọc")
+                is AppResult.Error -> _uiState.value = _uiState.value.copy(message = "Không thể xử lý tombstone: ${result.throwable.message}")
+            }
             refresh()
         }
     }
@@ -906,12 +977,17 @@ class ProjectViewModel @Inject constructor(
     }
 }
 
+private fun Throwable.hasDeletionInProgress(): Boolean =
+    generateSequence(this) { it.cause }
+        .any { it.message?.contains("DELETION_IN_PROGRESS", ignoreCase = true) == true }
+
 data class FirebaseCatalogItemUiState(
     val projectId: String = "",
     val projectName: String = "",
     val projectCode: String = "",
     val updatedAtEpochMs: Long = 0L,
     val catalogStatus: FirebaseProjectCatalogStatus = FirebaseProjectCatalogStatus.ACTIVE,
+    val createdByUid: String? = null,
     val accessStatus: FirebaseAccessRequestStatus = FirebaseAccessRequestStatus.NOT_REQUESTED,
     val isLocalAvailable: Boolean = false,
     val isRevokedReadOnly: Boolean = false,
@@ -958,6 +1034,7 @@ internal fun resolveCatalogItems(
             projectCode = entry.projectCode,
             updatedAtEpochMs = entry.updatedAtEpochMs,
             catalogStatus = entry.status,
+            createdByUid = entry.createdByUid,
             accessStatus = status,
             isLocalAvailable = isLocal,
             isRevokedReadOnly = isRevokedReadOnly

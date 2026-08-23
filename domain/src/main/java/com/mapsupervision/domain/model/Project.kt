@@ -25,7 +25,11 @@ data class Project(
     val mediaStorageFolderUrl: String = "",
     val mediaStorageUpdatedAtEpochMs: Long = 0L,
     val isDeleted: Boolean = false,
-    val deletedAtEpochMs: Long? = null
+    val deletedAtEpochMs: Long? = null,
+    val deletionState: ProjectDeletionState = ProjectDeletionState.ACTIVE,
+    val deletionRequestId: String? = null,
+    val deletionErrorCode: String? = null,
+    val cloudDeletionCompletedAtEpochMs: Long? = null
 )
 
 const val CURRENT_METADATA_VERSION: Int = 3

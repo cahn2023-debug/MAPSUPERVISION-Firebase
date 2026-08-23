@@ -13,6 +13,7 @@ import {
   createTaskDocument,
   emptyProjectCollections,
   saveProjectMember,
+  setActiveProjectForUser,
   subscribeCurrentProjectMember,
   subscribeProjectDocument,
   subscribeProjectMembers,
@@ -350,7 +351,11 @@ export default function HomePage() {
       (rows) => {
         setProjects(rows);
         setAccessError("");
-        setSelectedProjectId((current) => current || rows[0]?.id || "");
+        setSelectedProjectId((current) => {
+          const next = current || rows[0]?.id || "";
+          if (!current && next) void setActiveProjectForUser(firestore, user.uid, next);
+          return next;
+        });
       },
       (error) => {
         setProjects([]);
@@ -565,8 +570,15 @@ export default function HomePage() {
     const value = manualProjectId.trim();
     if (value) {
       setSelectedProjectId(value);
+      if (db && user) void setActiveProjectForUser(db, user.uid, value);
       setAccessError("");
     }
+  }
+
+  function selectProject(projectId: string) {
+    setSelectedProjectId(projectId);
+    setAccessError("");
+    if (db && user) void setActiveProjectForUser(db, user.uid, projectId || null);
   }
 
   async function handleCreateProject() {
@@ -585,7 +597,7 @@ export default function HomePage() {
         projectDraft
       );
       setProjectDraft(emptyProjectDraft);
-      setSelectedProjectId(createdProject.id);
+      selectProject(createdProject.id);
       setManualProjectId("");
       setAccessError("");
       setProjectCreateState(`Đã tạo dự án ${createdProject.name}.`);
@@ -846,7 +858,7 @@ export default function HomePage() {
           <div className="sidebar-project-section">
             <label>
               Chọn dự án hoạt động
-              <select value={selectedProjectId} onChange={(event) => { setSelectedProjectId(event.target.value); setAccessError(""); }}>
+              <select value={selectedProjectId} onChange={(event) => selectProject(event.target.value)}>
                 <option value="">Chưa chọn dự án</option>
                 {projects.map((item) => (
                   <option key={item.id} value={item.id}>

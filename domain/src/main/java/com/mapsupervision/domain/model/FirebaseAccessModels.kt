@@ -15,7 +15,8 @@ data class FirebaseProjectCatalogEntry(
     val projectName: String,
     val projectCode: String,
     val updatedAtEpochMs: Long,
-    val status: FirebaseProjectCatalogStatus
+    val status: FirebaseProjectCatalogStatus,
+    val createdByUid: String? = null
 )
 
 data class FirebaseUserSession(

@@ -397,6 +397,7 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
                             mapOf(
                                 "projectName" to entry.projectName,
                                 "projectCode" to entry.projectCode,
+                                "createdByUid" to entry.createdByUid,
                                 "updatedAtEpochMs" to entry.updatedAtEpochMs,
                                 "status" to entry.status.name
                             )
@@ -411,6 +412,18 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
             }
         }
         entries.toList()
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun projectCreatorUid(projectId: String): AppResult<String?> = runCatching {
+        ensureConfigured()
+        val snapshot = firebaseRuntime.firestore().collection("projects").document(projectId).get().await()
+        if (!snapshot.exists()) return@runCatching null
+        @Suppress("UNCHECKED_CAST")
+        val payload = (snapshot.get("payload") as? Map<String, Any?>) ?: snapshot.data.orEmpty()
+        (payload["createdByUid"] as? String)?.trim()?.takeIf { it.isNotBlank() }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(it) }
@@ -439,6 +452,17 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         _accessState.value = nextState
         return nextState
     }
+
+    override suspend fun reauthenticate(password: String): AppResult<Unit> = runCatching {
+        ensureConfigured()
+        val user = firebaseRuntime.auth().currentUser ?: error("Firebase user is not signed in")
+        val email = user.email?.trim().orEmpty().ifBlank { error("Email reauthentication is required") }
+        val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
+        withAuthTimeout { user.reauthenticate(credential).await() }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { error -> AppResult.Error(FirebaseAuthErrorMapper.wrap(error)) }
+    )
 
     private suspend fun safelySyncAccessForUser(
         user: FirebaseUser,
@@ -658,6 +682,7 @@ internal fun parseFirebaseProjectCatalog(
     val normalizedProjectId = projectId.trim()
     val projectName = (fields["projectName"] as? String)?.trim().orEmpty()
     val projectCode = (fields["projectCode"] as? String)?.trim().orEmpty()
+    val createdByUid = (fields["createdByUid"] as? String)?.trim()?.takeIf { it.isNotBlank() }
     val updatedAtEpochMs = when (val value = fields["updatedAtEpochMs"]) {
         is Long -> value
         is Int -> value.toLong()
@@ -678,7 +703,8 @@ internal fun parseFirebaseProjectCatalog(
         projectName = projectName,
         projectCode = projectCode,
         updatedAtEpochMs = updatedAtEpochMs,
-        status = status
+        status = status,
+        createdByUid = createdByUid
     )
 }
 
@@ -701,6 +727,7 @@ internal fun extractCatalogEntryFromProjectDoc(
         else -> System.currentTimeMillis()
     }
     val isArchived = (payload["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
+    val createdByUid = ((payload["createdByUid"] ?: docData["createdByUid"]) as? String)?.trim()?.takeIf { it.isNotBlank() }
     val status = if (isArchived) FirebaseProjectCatalogStatus.ARCHIVED else FirebaseProjectCatalogStatus.ACTIVE
     if (name.isBlank() || projectId.isBlank()) return null
     return FirebaseProjectCatalogEntry(
@@ -708,6 +735,7 @@ internal fun extractCatalogEntryFromProjectDoc(
         projectName = name,
         projectCode = projectCode,
         updatedAtEpochMs = updatedAt,
-        status = status
+        status = status,
+        createdByUid = createdByUid
     )
 }
