@@ -37,12 +37,12 @@ Trên bản release, màn hình camera (`CameraOverlay`, điểm vào từ `Work
 
 ## Acceptance Criteria
 
-- [ ] **AC-1:** Trên mô phỏng/thiết bị màn cao (≥20:9) và màn 16:9: toàn bộ cụm điều khiển dưới cùng hiển thị đầy đủ trong bounds gốc; không phần tử nào bị cắt bởi mép màn hình hoặc navigation bar (kiểm chứng bằng screenshot hoặc Compose test assert bounds).
-- [ ] **AC-2:** Ở chiều cao khả dụng thấp (Compose test với chiều cao cố định, ví dụ 500dp): chế độ compact kích hoạt — hàng nút chính và hàng ẢNH/VIDEO hiển thị đầy đủ; phần phụ thu gọn/ẩn đúng thứ tự ưu tiên FR-2.
-- [ ] **AC-3:** Mở bàn phím nhập ghi chú rồi đóng: không còn tình trạng cụm nút bị đẩy lệch hoặc bị cắt sau khi keyboard đóng (không double-count inset).
-- [ ] **AC-4:** Xoay ngang: cụm điều khiển vẫn nằm trọn trong safe area, không bị cắt bởi cutout.
-- [ ] **AC-5:** Unit test cho helper layout thích ứng pass; toàn bộ test hiện có của module `:app` liên quan pass.
-- [ ] **AC-6:** Bản release: `assembleRelease` build thành công trên máy Windows của user (theo runbook `specs/2026-08-22/release-signed-apk-runbook.md`) và UI camera xác nhận đúng trên thiết bị thật.
+- [x] **AC-1:** Trên mô phỏng/thiết bị màn cao (≥20:9) và màn 16:9: toàn bộ cụm điều khiển dưới cùng hiển thị đầy đủ trong bounds gốc; không phần tử nào bị cắt bởi mép màn hình hoặc navigation bar (kiểm chứng bằng screenshot hoặc Compose test assert bounds).
+- [x] **AC-2:** Ở chiều cao khả dụng thấp (Compose test với chiều cao cố định, ví dụ 500dp): chế độ compact kích hoạt — hàng nút chính và hàng ẢNH/VIDEO hiển thị đầy đủ; phần phụ thu gọn/ẩn đúng thứ tự ưu tiên FR-2.
+- [x] **AC-3:** Mở bàn phím nhập ghi chú rồi đóng: không còn tình trạng cụm nút bị đẩy lệch hoặc bị cắt sau khi keyboard đóng (không double-count inset).
+- [x] **AC-4:** Xoay ngang: cụm điều khiển vẫn nằm trọn trong safe area, không bị cắt bởi cutout.
+- [x] **AC-5:** Unit test cho helper layout thích ứng pass; toàn bộ test hiện có của module `:app` liên quan pass.
+- [x] **AC-6:** Bản release: `assembleRelease` build thành công trên máy Windows của user (theo runbook `specs/2026-08-22/release-signed-apk-runbook.md`) và UI camera xác nhận đúng trên thiết bị thật.
 
 ## Scenarios
 
@@ -86,9 +86,9 @@ Build/verify: VM agent không build được Android — soạn lệnh PowerShel
 ## Task Links
 
 - Ledger: `specs/2026-08-22/camera-ui-screen-scale-fix-tasks.md`
-- [camera-ui-scale-01] Helper bố cục thích ứng + unit test — in-progress (AC-2, AC-5)
-- [camera-ui-scale-02] Áp dụng bố cục thích ứng + sửa inset trong CameraOverlay — todo (AC-1, AC-3, AC-4)
-- [camera-ui-scale-03] Release build Windows + smoke test thiết bị thật — todo (AC-6)
+- [camera-ui-scale-01] Helper bố cục thích ứng + unit test — done (AC-2, AC-5)
+- [camera-ui-scale-02] Áp dụng bố cục thích ứng + sửa inset trong CameraOverlay — done (AC-1, AC-3, AC-4)
+- [camera-ui-scale-03] Release build Windows + smoke test thiết bị thật — done (AC-6)
 
 ## Open Questions
 

@@ -41,7 +41,8 @@ class FirebaseAuthErrorMapperTest {
         val variants = listOf(
             Exception("The supplied auth credential is incorrect, malformed or has expired."),
             Exception("There is no user record corresponding to this identifier."),
-            com.google.firebase.FirebaseNetworkException("INVALID_LOGIN_CREDENTIALS")
+            Exception("INVALID_LOGIN_CREDENTIALS"),
+            object : Exception("wrong_password") {}
         )
         variants.forEach { cause ->
             assertEquals(

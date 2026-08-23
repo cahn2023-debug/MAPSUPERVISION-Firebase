@@ -4,7 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.backgroundimport androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.credentials.CustomCredential
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -63,6 +65,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.app.auth.FirebaseAccessViewModel
 import com.mapsupervision.app.workspace.IncomingSharePayload
@@ -180,16 +183,23 @@ private fun FirebaseSignInScreen(
                     .build()
                 val response = credentialManager.getCredential(activityContext, request)
                 val credential = response.credential
-                if (credential is GoogleIdTokenCredential) {
-                    val idToken = credential.idToken
-                    if (idToken.isNullOrBlank()) {
-                        AppLogger.e(
-                            IllegalStateException("empty_google_id_token"),
-                            "google.sign_in.empty_token"
-                        )
-                        setAuthError("Không nhận được token đăng nhập Google. Vui lòng thử lại.")
-                    } else {
-                        onGoogleSignIn(idToken)
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    try {
+                        val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                        if (idToken.isBlank()) {
+                            AppLogger.e(
+                                IllegalStateException("empty_google_id_token"),
+                                "google.sign_in.empty_token"
+                            )
+                            setAuthError("Không nhận được token đăng nhập Google. Vui lòng thử lại.")
+                        } else {
+                            onGoogleSignIn(idToken)
+                        }
+                    } catch (error: GoogleIdTokenParsingException) {
+                        AppLogger.e(error, "google.sign_in.invalid_google_id_token")
+                        setAuthError("Thông tin xác thực Google không đúng định dạng. Vui lòng thử lại.")
                     }
                 } else {
                     AppLogger.e(

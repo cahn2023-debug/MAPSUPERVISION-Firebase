@@ -1,7 +1,15 @@
 ---
-title: Build & Code Conventions
+id: doc-f48b73dd56ca6eca0c419753f1b4d6f0
+title: 'Build & Code Conventions'
 description: Toolchain versions, the deliberately serialized low-memory build profile, Hilt/DI layout, AppResult error handling, naming rules, and known version skews.
-tags: [build, gradle, conventions, hilt, coroutines]
+createdAt: '2026-08-23T03:18:13.947Z'
+updatedAt: '2026-08-23T03:18:13.935Z'
+tags:
+  - build
+  - gradle
+  - conventions
+  - hilt
+  - coroutines
 ---
 
 # Build & Code Conventions
@@ -62,3 +70,10 @@ Domain exposes `AppResult<T>` (`Success`/`Error`) plus a project exception hiera
 2. Add `implementation(project(":x"))` to the consuming module.
 3. Run the boundary check (`EnforceModuleBoundariesTask` fails fast on undeclared edges).
 4. If the edge crosses a quarantine (Firebase beyond `:data`, MapLibre beyond `:gis-maplibre`), stop and discuss — that's an architecture decision, not a build edit.
+
+
+## Windows release build entrypoint
+
+- Use `scripts/build-release.ps1` for a quick signed APK build on Windows. It validates the four `RELEASE_*` properties and the keystore path from `local.properties` without printing secret values, then runs `:app:assembleRelease --no-daemon`.
+- Keep the full release gate in `specs/2026-08-22/run_release_check.ps1` for test, lint, boundary, signature, and smoke-test verification before a formal release.
+- Source context: @doc/specs/2026-08-22/project-structure-specification

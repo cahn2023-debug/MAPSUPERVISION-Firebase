@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "knowns": {
+      "args": [
+        "mcp",
+        "--stdio"
+      ],
+      "autoApprove": [
+        "*"
+      ],
+      "command": "knowns",
+      "disabled": false
+    }
+  }
+}

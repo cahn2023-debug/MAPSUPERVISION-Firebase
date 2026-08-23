@@ -9,6 +9,15 @@
     "stale": true,
     "pendingRemoval": true
   },
+  "doc:doc-f48b73dd56ca6eca0c419753f1b4d6f0": {
+    "entityType": "doc",
+    "entityId": "doc-f48b73dd56ca6eca0c419753f1b4d6f0",
+    "canonicalHash": "113339bcbdd8224708c99d7656edc100c9cdc2af4054c154361a5663cfe97373",
+    "revision": 1,
+    "path": "docs/build-conventions.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
   "task:1st54w": {
     "entityType": "task",
     "entityId": "1st54w",

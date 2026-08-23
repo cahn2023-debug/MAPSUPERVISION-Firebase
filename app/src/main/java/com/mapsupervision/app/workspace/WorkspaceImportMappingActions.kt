@@ -742,22 +742,57 @@ private fun WorkspaceViewModel.updateExcelParserUiIfChanged(transform: (ExcelPar
     _state.value = state.copy(excelParserUi = updated)
 }
 
+internal fun ExcelParserUiState.startExcelImport(): ExcelParserUiState {
+    if (isLoading) return this
+    return copy(
+        isLoading = true,
+        message = "Đang parse Excel..."
+    )
+}
+
 fun WorkspaceViewModel.parseExcelToDesign() {
     viewModelScope.launch {
         val ui = _state.value.excelParserUi
+        if (ui.isLoading) return@launch
+        AppLogger.d(
+            "import.mapping.flow confirm.start file=${ui.sourceFileName} " +
+                "headers=${ui.headers.size} sourceUriPresent=${ui.sourceUri != null}"
+        )
         val uri = ui.sourceUri
-        val projectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
+        val projectResult = runCatching { activeProjectRepository.getActive() }
+            .onFailure { ex -> AppLogger.e(ex, "import.mapping.flow confirm.activeProject.failure") }
+            .getOrNull()
+        if (projectResult == null) {
+            _state.value = _state.value.copy(
+                excelParserUi = ui.copy(message = "Không đọc được project active. Vui lòng thử lại.")
+            )
+            return@launch
+        }
+        val projectId = (projectResult as? AppResult.Success)?.data
+        if (projectResult is AppResult.Error) {
+            AppLogger.e(
+                projectResult.throwable,
+                "import.mapping.flow confirm.rejected activeProject.error"
+            )
+            _state.value = _state.value.copy(
+                excelParserUi = ui.copy(message = "Không đọc được project active. Vui lòng thử lại.")
+            )
+            return@launch
+        }
         if (uri == null || projectId == null) {
+            AppLogger.e(
+                IllegalStateException("Missing source URI or active project"),
+                "import.mapping.flow confirm.rejected uriPresent=${uri != null} projectPresent=${projectId != null}"
+            )
             _state.value = _state.value.copy(
                 excelParserUi = ui.copy(message = "Thiếu file Excel hoặc chưa chọn project active")
             )
             return@launch
         }
-        _state.value = _state.value.copy(
-            excelParserUi = ui.copy(isLoading = true, message = "Đang parse Excel...")
-        )
+        _state.value = _state.value.copy(excelParserUi = ui.startExcelImport())
 
         runCatching {
+            AppLogger.d("import.mapping.flow confirm.import.start projectId=$projectId")
             withContext(Dispatchers.IO) {
                 importService.importExcelWithMapping(
                     projectId = projectId,
@@ -783,6 +818,10 @@ fun WorkspaceViewModel.parseExcelToDesign() {
                 )
             }
         }.onSuccess { draft ->
+            AppLogger.d(
+                "import.mapping.flow confirm.import.success nodes=${draft.suggestedNodes.size} " +
+                    "routes=${draft.suggestedRoutes.size}"
+            )
             val remapExistingFileId = ui.existingFileId
             viewModelScope.launch {
                 runCatching {
@@ -793,10 +832,11 @@ fun WorkspaceViewModel.parseExcelToDesign() {
                         excelUi = ui
                     )
                 }.onFailure { ex ->
+                    AppLogger.e(ex, "import.mapping.flow confirm.commit.failure")
                     _state.value = _state.value.copy(
                         excelParserUi = ui.copy(
                             isLoading = false,
-                            message = "Parse Excel thất bại: ${ex.message}"
+                            message = "Parse Excel thất bại. Vui lòng thử lại."
                         )
                     )
                 }
@@ -908,10 +948,11 @@ fun WorkspaceViewModel.parseExcelToDesign() {
                 )
             )
         }.onFailure { ex ->
+            AppLogger.e(ex, "import.mapping.flow confirm.import.failure")
             _state.value = _state.value.copy(
                 excelParserUi = _state.value.excelParserUi.copy(
                     isLoading = false,
-                    message = "Parse Excel thất bại: "
+                    message = "Parse Excel thất bại. Vui lòng kiểm tra lại file và mapping."
                 )
             )
         }

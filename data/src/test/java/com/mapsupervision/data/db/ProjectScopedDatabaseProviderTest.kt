@@ -881,7 +881,7 @@ class ProjectScopedDatabaseProviderTest {
         openedDatabases += scopedDatabase!!
 
         val version = scopedDatabase.openHelper.readableDatabase.version
-        assertEquals(47, version)
+        assertEquals(48, version)
         scopedDatabase.openHelper.readableDatabase.query("PRAGMA table_info(`work_plan`)").use { cursor ->
             var found = false
             val nameIndex = cursor.getColumnIndex("name")
@@ -910,7 +910,7 @@ class ProjectScopedDatabaseProviderTest {
         openedDatabases += scopedDatabase!!
 
         val version = scopedDatabase.openHelper.readableDatabase.version
-        assertEquals(47, version)
+        assertEquals(48, version)
         assertTrue(tableExists(scopedDatabase, "material_handover"))
         assertTrue(tableExists(scopedDatabase, "material_declaration"))
         assertTrue(tableExists(scopedDatabase, "rag_document_embedding"))

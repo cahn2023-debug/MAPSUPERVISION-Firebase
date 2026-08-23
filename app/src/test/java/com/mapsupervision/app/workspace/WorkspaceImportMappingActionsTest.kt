@@ -28,4 +28,25 @@ class WorkspaceImportMappingActionsTest {
 
         assertEquals("Đã cập nhật dữ liệu: +2 node, +1 tuyến", message)
     }
+
+    @Test
+    fun `starting Excel import marks mapping state as loading`() {
+        val state = ExcelParserUiState(showMappingDialog = true)
+
+        val started = state.startExcelImport()
+
+        assertTrue(started.isLoading)
+        assertTrue(started.showMappingDialog)
+        assertEquals("Đang parse Excel...", started.message)
+    }
+
+    @Test
+    fun `starting Excel import twice does not reset an active import`() {
+        val state = ExcelParserUiState(
+            isLoading = true,
+            message = "Đang xử lý dữ liệu lớn..."
+        )
+
+        assertEquals(state, state.startExcelImport())
+    }
 }

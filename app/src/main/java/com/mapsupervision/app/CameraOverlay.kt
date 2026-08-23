@@ -339,7 +339,7 @@ internal fun buildVideoStampTimelineSample(
     bearingDeg: Float,
     nodes: List<GisNode> = emptyList(),
     routes: List<GisRoute> = emptyList(),
-    tileBitmap: Bitmap? = null
+    tileBitmap: Any? = null
 ): VideoStampTimelineSample {
     return VideoStampTimelineSample(
         elapsedMs = (nowElapsedMs - recordingStartElapsedMs).coerceAtLeast(0L),
@@ -970,6 +970,17 @@ fun CameraOverlay(
                     }
                 }
                 IconButton(
+                    onClick = { if (controlsEnabled) showSettingsSheet = true },
+                    enabled = controlsEnabled,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Cài đặt",
+                        tint = Color.White
+                    )
+                }
+                IconButton(
                     onClick = {
                         if (!isProcessingVideoStamp) {
                             if (isRecording) {
@@ -1174,7 +1185,9 @@ fun CameraOverlay(
                         )
                     }
                 }
+            }
 
+            if (!isKeyboardVisible) {
                 // Thanh chọn chế độ ẢNH / VIDEO
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1203,6 +1216,7 @@ fun CameraOverlay(
                             .padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
+            }
 
                 // Dải nút chính dưới cùng: [Thêm media] [Nút chụp/quay] [Xoay camera]
                 Row(

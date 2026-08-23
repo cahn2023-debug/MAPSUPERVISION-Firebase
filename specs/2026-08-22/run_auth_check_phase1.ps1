@@ -44,8 +44,13 @@ if (-not ($t1 -and $b1)) {
 
 # ---------- Step 3: Cai len may that ----------
 Step "3. Cai debug APK len may that"
-$apk = Join-Path $root "app\build\outputs\apk\debug\app-debug.apk"
-Check "APK debug ton tai" (Test-Path $apk)
+$debugDir = Join-Path $root "app\build\outputs\apk\debug"
+$apk = Join-Path $debugDir "app-arm64-v8a-debug.apk"
+if (-not (Test-Path $apk)) {
+    $foundApk = Get-ChildItem -Path $debugDir -Filter "*.apk" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($foundApk) { $apk = $foundApk.FullName }
+}
+Check "APK debug ton tai ($apk)" (Test-Path $apk)
 if (-not (Test-Path $apk)) { Stop-Transcript | Out-Null; exit 1 }
 
 # Tim adb

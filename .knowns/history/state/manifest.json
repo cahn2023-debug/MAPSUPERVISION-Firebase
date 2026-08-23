@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "entries": {
+    "doc:doc-f48b73dd56ca6eca0c419753f1b4d6f0": {
+      "entityType": "doc",
+      "entityId": "doc-f48b73dd56ca6eca0c419753f1b4d6f0",
+      "path": "docs/build-conventions.md",
+      "hash": "113339bcbdd8224708c99d7656edc100c9cdc2af4054c154361a5663cfe97373",
+      "revision": 1,
+      "headHash": "113339bcbdd8224708c99d7656edc100c9cdc2af4054c154361a5663cfe97373"
+    },
+    "task:1st54w": {
+      "entityType": "task",
+      "entityId": "1st54w",
+      "path": "tasks/task-1st54w - mss-05-Validate-5-Workspace-Hubs-UDF-State-Flow.md",
+      "hash": "eee452c30e31fd41cf5eb7e03de4be9592dd7d8ac578d467fe1188d6b06f2a3f",
+      "revision": 4,
+      "headHash": "eee452c30e31fd41cf5eb7e03de4be9592dd7d8ac578d467fe1188d6b06f2a3f"
+    },
+    "task:baywan": {
+      "entityType": "task",
+      "entityId": "baywan",
+      "path": "tasks/task-baywan - mss-02-Verify-Room-SQLite-v48-Schema-Integrity-28.md",
+      "hash": "a7c949157648bcc41ee08f18e61e61631d82846224ab38302a5183011bb102c5",
+      "revision": 4,
+      "headHash": "a7c949157648bcc41ee08f18e61e61631d82846224ab38302a5183011bb102c5"
+    },
+    "task:cur2hl": {
+      "entityType": "task",
+      "entityId": "cur2hl",
+      "path": "tasks/task-cur2hl - mss-03-Validate-ProjectScopedDatabaseProvider-Mul.md",
+      "hash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949",
+      "revision": 4,
+      "headHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949"
+    },
+    "task:ko9dx0": {
+      "entityType": "task",
+      "entityId": "ko9dx0",
+      "path": "tasks/task-ko9dx0 - mss-06-Verify-CameraX-Watermark-HUD-Anti-Fraud-GP.md",
+      "hash": "58ecd0c54d5df856d079401a65b94b974cba57f4d6abea1581c81fb38f2923a5",
+      "revision": 4,
+      "headHash": "58ecd0c54d5df856d079401a65b94b974cba57f4d6abea1581c81fb38f2923a5"
+    },
+    "task:lxza27": {
+      "entityType": "task",
+      "entityId": "lxza27",
+      "path": "tasks/task-lxza27 - mss-08-Verify-Firebase-Auth-Event-Outbox-Cloud-Sy.md",
+      "hash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9",
+      "revision": 4,
+      "headHash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9"
+    },
+    "task:mn9jia": {
+      "entityType": "task",
+      "entityId": "mn9jia",
+      "path": "tasks/task-mn9jia - mss-04-Audit-Hilt-DI-Coroutines-AppResult-Engine.md",
+      "hash": "ddf00eba976e4a7fb7c395436b528514f7f8104408040dc197f355b2b7d6f3b6",
+      "revision": 4,
+      "headHash": "ddf00eba976e4a7fb7c395436b528514f7f8104408040dc197f355b2b7d6f3b6"
+    },
+    "task:nd6e8j": {
+      "entityType": "task",
+      "entityId": "nd6e8j",
+      "path": "tasks/task-nd6e8j - mss-07-Audit-AI-Multi-Engine-Orchestrator-Local-R.md",
+      "hash": "c2b631be296c0aa7f00d369524f7747ae074a320e8535c246d064d868c0d51f6",
+      "revision": 4,
+      "headHash": "c2b631be296c0aa7f00d369524f7747ae074a320e8535c246d064d868c0d51f6"
+    },
+    "task:ole2i0": {
+      "entityType": "task",
+      "entityId": "ole2i0",
+      "path": "tasks/task-ole2i0 - mss-01-Verify-18-Module-Clean-Architecture-Bounda.md",
+      "hash": "d99f11edd4dc54e0215f28fc23e96f52cb60e7ad6f313f866947b0c23b55f9b6",
+      "revision": 4,
+      "headHash": "d99f11edd4dc54e0215f28fc23e96f52cb60e7ad6f313f866947b0c23b55f9b6"
+    },
+    "task:s9g76i": {
+      "entityType": "task",
+      "entityId": "s9g76i",
+      "path": "tasks/task-s9g76i - mss-09-Verify-Low-Memory-Build-Configuration-Qual.md",
+      "hash": "7ad305a8c46b8c0a42096453b00300b8910fc06dfe5fe092669636dc2a3af5d7",
+      "revision": 4,
+      "headHash": "7ad305a8c46b8c0a42096453b00300b8910fc06dfe5fe092669636dc2a3af5d7"
+    },
+    "task:u9qrz7": {
+      "entityType": "task",
+      "entityId": "u9qrz7",
+      "path": "tasks/task-u9qrz7 - mss-10-Validate-Signed-Release-APK-Pipeline-SHA-F.md",
+      "hash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469",
+      "revision": 4,
+      "headHash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469"
+    }
+  }
+}

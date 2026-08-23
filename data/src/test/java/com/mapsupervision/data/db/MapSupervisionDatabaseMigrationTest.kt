@@ -116,7 +116,7 @@ class MapSupervisionDatabaseMigrationTest {
         val database = migratingDatabase(dbName).build()
 
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertProjectsTableHasNormalizedDefaults(database)
             assertLatestSchema(database)
         } finally {
@@ -1005,7 +1005,7 @@ class MapSupervisionDatabaseMigrationTest {
 
         val database = migratingDatabase(dbName).build()
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertTrue(tableExists(database, "ai_action_log"))
         } finally {
             database.close()
@@ -1026,7 +1026,7 @@ class MapSupervisionDatabaseMigrationTest {
 
         val database = migratingDatabase(dbName).build()
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertTrue(tableExists(database, "work_volume_progress"))
             val nodes = runBlocking { database.gisNodeDao().byProject("proj1") }
             assertEquals("Legacy summary", nodes.single().workVolumeSummary)
@@ -1047,7 +1047,7 @@ class MapSupervisionDatabaseMigrationTest {
 
         val database = migratingDatabase(dbName).build()
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertTrue(tableExists(database, "material_handover"))
         } finally {
             database.close()
@@ -1062,7 +1062,7 @@ class MapSupervisionDatabaseMigrationTest {
 
         val database = migratingDatabase(dbName).build()
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertTrue(tableExists(database, "material_declaration"))
         } finally {
             database.close()
@@ -1077,7 +1077,7 @@ class MapSupervisionDatabaseMigrationTest {
 
         val database = migratingDatabase(dbName).build()
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             assertTrue(tableExists(database, "rag_document_embedding"))
         } finally {
             database.close()
@@ -1133,7 +1133,7 @@ class MapSupervisionDatabaseMigrationTest {
             .build()
 
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             database.openHelper.readableDatabase.query("SELECT `workName`, `materialName`, `nodeId` FROM `material_handover` WHERE `id` = 'ho1'").use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 assertEquals("Work A", cursor.getString(0))
@@ -1170,7 +1170,7 @@ class MapSupervisionDatabaseMigrationTest {
             .build()
 
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
             database.openHelper.readableDatabase.query("SELECT `objectCode` FROM `site_photos` WHERE `id` = 'photo1'").use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 assertEquals("N1", cursor.getString(0))
@@ -1198,7 +1198,7 @@ class MapSupervisionDatabaseMigrationTest {
             .build()
 
         try {
-            assertEquals(47, database.openHelper.writableDatabase.version)
+            assertEquals(48, database.openHelper.writableDatabase.version)
 
             // Verify new columns exist on gis_node with default values
             database.openHelper.readableDatabase.query("SELECT `ipAddress`, `subnet`, `gateway`, `signalStatus` FROM `gis_node` WHERE `id` = 'node1'").use { cursor ->
