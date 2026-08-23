@@ -36,10 +36,12 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     // ponytail: mutable internal fields for testing without heavy mock libraries
     internal var firebaseRuntime = FirebaseRuntime(appContext)
     internal var driveMediaUploadClient = DriveMediaUploadClient()
+    internal var enforceAccessChecks = true
 
     override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
             ensureFirebaseConfigured()
+            ensureApprovedAccess(projectId)
             val mediaResult = uploadPendingMediaInternal(projectId)
             var pushed = 0
             FirebaseSyncTableCatalog.tables.forEach { table ->
@@ -65,6 +67,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
         runCatching {
             ensureFirebaseConfigured()
+            ensureApprovedAccess(projectId)
             var pulled = 0
             FirebaseSyncTableCatalog.tables.forEach { table ->
                 val cursorEpochMs = sinceEpochMs ?: metadataStore.lastPulledAt(projectId, table.tableName)
@@ -84,7 +87,10 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     }
 
     override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {
-        runCatching { uploadPendingMediaInternal(projectId) }.fold(
+        runCatching {
+            ensureApprovedAccess(projectId)
+            uploadPendingMediaInternal(projectId)
+        }.fold(
             onSuccess = { AppResult.Success(it) },
             onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to upload Firebase media", it), it)) }
         )
@@ -186,6 +192,22 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     private suspend fun ensureFirebaseConfigured() {
         if (!firebaseRuntime.authConfigured()) {
             error("Firebase config missing. Set FIREBASE_PROJECT_ID, FIREBASE_APP_ID, FIREBASE_API_KEY in .env")
+        }
+    }
+
+    private suspend fun ensureApprovedAccess(projectId: String) {
+        if (!enforceAccessChecks) return
+        val auth = firebaseRuntime.auth()
+        val user = auth.currentUser ?: error("Firebase user is not signed in.")
+        val token = user.getIdToken(false).await()
+        if (token.claims["admin"] == true) return
+        val access = firebaseRuntime.firestore()
+            .collection("accessRequests")
+            .document("${projectId.trim()}__${user.uid}")
+            .get()
+            .await()
+        check(access.getString("status") == "APPROVED") {
+            "Project access is not approved for sync."
         }
     }
 

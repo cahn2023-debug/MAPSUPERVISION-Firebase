@@ -72,6 +72,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
@@ -203,6 +204,7 @@ fun MapHubScreen(
     onDismissDuplicateDialog: () -> Unit = {},
     onUpdateProjectStoragePath: (String, String) -> Unit = { _, _ -> },
     onUpdateProjectMediaStorage: (String, String) -> Unit = { _, _ -> },
+    onRequestProjectAccess: (String) -> Unit = {},
     session: FirebaseUserSession,
     onSignOut: () -> Unit,
     firebaseSyncState: FirebaseSyncState,
@@ -369,6 +371,7 @@ fun MapHubScreen(
                     ) {
                         items(projectState.projects, key = { project -> "${project.id}:${project.slug}" }) { p ->
                             val isActive = projectState.activeProjectId == p.id
+                            val isRevoked = p.id in projectState.revokedReadOnlyProjectIds
                             ElevatedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -386,7 +389,11 @@ fun MapHubScreen(
                                     },
                                 shape = MaterialTheme.shapes.medium,
                                 colors = CardDefaults.elevatedCardColors(
-                                    containerColor = if (isActive) orangeColor else cardBgColor
+                                    containerColor = when {
+                                        isActive -> orangeColor
+                                        isRevoked -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                                        else -> cardBgColor
+                                    }
                                 )
                             ) {
                                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -412,36 +419,48 @@ fun MapHubScreen(
                                             ) {
                                                 Text("ĐANG HOẠT ĐỘNG", style = MaterialTheme.typography.labelSmall, color = colors.onPrimaryContainer, fontWeight = FontWeight.Bold)
                                             }
+                                        } else if (isRevoked) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(MaterialTheme.colorScheme.error, MaterialTheme.shapes.small)
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text("CHỈ ĐỌC (REVOKED)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                                            }
                                         } else {
                                             Text("KHÔNG HOẠT ĐỘNG", style = MaterialTheme.typography.labelSmall, color = secondaryTextColor)
                                         }
 
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            IconButton(onClick = { onExportProject(p) }) {
-                                                 Icon(
-                                                     imageVector = Icons.Default.Share,
-                                                     contentDescription = "Export Project",
-                                                     tint = if (isActive) onPrimaryColor else secondaryTextColor
-                                                 )
-                                            }
-                                            IconButton(onClick = { onCloneProject(p.id, "${p.name} - Copy") }) {
-                                                Icon(Icons.Outlined.ContentCopy, contentDescription = "Clone", tint = if (isActive) onPrimaryColor else secondaryTextColor)
-                                            }
-                                            IconButton(onClick = {
-                                                selectedProjectForSettings = p
-                                                editedStoragePath = p.projectDbPath.substringBeforeLast("/db/")
-                                                editedMediaStorageInput = p.mediaStorageFolderUrl.ifBlank { p.mediaStorageFolderId }
-                                                showSettingsDialog = true
-                                            }) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Settings,
-                                                    contentDescription = "Cài đặt dự án",
-                                                    tint = if (isActive) onPrimaryColor else secondaryTextColor
-                                                )
+                                            if (!isRevoked) {
+                                                IconButton(onClick = { onExportProject(p) }) {
+                                                     Icon(
+                                                         imageVector = Icons.Default.Share,
+                                                         contentDescription = "Export Project",
+                                                         tint = if (isActive) onPrimaryColor else secondaryTextColor
+                                                     )
+                                                }
+                                                IconButton(onClick = { onCloneProject(p.id, "${p.name} - Copy") }) {
+                                                    Icon(Icons.Outlined.ContentCopy, contentDescription = "Clone", tint = if (isActive) onPrimaryColor else secondaryTextColor)
+                                                }
+                                                IconButton(onClick = {
+                                                    selectedProjectForSettings = p
+                                                    editedStoragePath = p.projectDbPath.substringBeforeLast("/db/")
+                                                    editedMediaStorageInput = p.mediaStorageFolderUrl.ifBlank { p.mediaStorageFolderId }
+                                                    showSettingsDialog = true
+                                                }) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Settings,
+                                                        contentDescription = "Cài đặt dự án",
+                                                        tint = if (isActive) onPrimaryColor else secondaryTextColor
+                                                    )
+                                                }
                                             }
                                             if (!isActive) {
-                                                IconButton(onClick = { onDeleteProject(p.id) }) {
-                                                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = dangerColor)
+                                                if (!isRevoked) {
+                                                    IconButton(onClick = { onDeleteProject(p.id) }) {
+                                                        Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = dangerColor)
+                                                    }
                                                 }
                                                 Button(
                                                     onClick = {
@@ -452,6 +471,103 @@ fun MapHubScreen(
                                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                                     colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor)
                                                 ) { Text("Mở", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (projectState.catalogItems.isNotEmpty() || projectState.isCatalogLoading) {
+                            item {
+                                Spacer(modifier = Modifier.padding(top = 8.dp))
+                                Text("Danh mục Firebase đám mây", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textColor)
+
+                                if (projectState.isCatalogLoading) {
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                                }
+                            }
+
+                            items(projectState.catalogItems, key = { "catalog_${it.projectId}" }) { catItem ->
+                                ElevatedCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = CardDefaults.elevatedCardColors(
+                                        containerColor = if (catItem.isRevokedReadOnly) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f) else cardBgColor
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(catItem.projectName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = textColor)
+                                                Text("Mã: ${catItem.projectCode}", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                                            }
+                                            val badgeText = when (catItem.accessStatus) {
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.APPROVED -> "ĐÃ DUYỆT"
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.PENDING -> "CHỜ DUYỆT"
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REJECTED -> "TỪ CHỐI"
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REVOKED -> "THU HỒI"
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.NOT_REQUESTED -> "CHƯA YÊU CẦU"
+                                            }
+                                            val badgeBg = when (catItem.accessStatus) {
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.APPROVED -> colors.primaryContainer
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.PENDING -> colors.tertiaryContainer
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REJECTED,
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REVOKED -> MaterialTheme.colorScheme.errorContainer
+                                                else -> colors.surfaceVariant
+                                            }
+                                            val badgeColor = when (catItem.accessStatus) {
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.APPROVED -> colors.onPrimaryContainer
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.PENDING -> colors.onTertiaryContainer
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REJECTED,
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REVOKED -> MaterialTheme.colorScheme.onErrorContainer
+                                                else -> colors.onSurfaceVariant
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(badgeBg, MaterialTheme.shapes.small)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(badgeText, style = MaterialTheme.typography.labelSmall, color = badgeColor, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            when (catItem.accessStatus) {
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.APPROVED -> {
+                                                    if (catItem.isLocalAvailable) {
+                                                        Button(
+                                                            onClick = {
+                                                                onSwitchProject(catItem.projectId)
+                                                                scope.launch { drawerState.close() }
+                                                            },
+                                                            shape = MaterialTheme.shapes.small,
+                                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                            colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor)
+                                                        ) { Text("Mở", style = MaterialTheme.typography.labelSmall) }
+                                                    }
+                                                }
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.PENDING -> {
+                                                    OutlinedButton(onClick = {}, enabled = false, shape = MaterialTheme.shapes.small, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                                                        Text("Đang chờ duyệt", style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REJECTED,
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REVOKED,
+                                                com.mapsupervision.domain.model.FirebaseAccessRequestStatus.NOT_REQUESTED -> {
+                                                    val btnLabel = when (catItem.accessStatus) {
+                                                        com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REJECTED -> "Gửi lại"
+                                                        com.mapsupervision.domain.model.FirebaseAccessRequestStatus.REVOKED -> "Yêu cầu lại"
+                                                        else -> "Yêu cầu quyền"
+                                                    }
+                                                    Button(
+                                                        onClick = { onRequestProjectAccess(catItem.projectId) },
+                                                        enabled = !catItem.isActionBusy,
+                                                        shape = MaterialTheme.shapes.small,
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(if (catItem.isActionBusy) "..." else btnLabel, style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
                                             }
                                         }
                                     }

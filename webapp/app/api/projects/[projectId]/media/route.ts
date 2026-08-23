@@ -63,17 +63,16 @@ function readBearerToken(request: NextRequest): string {
 async function verifyProjectAccess(projectId: string, token: string): Promise<ProjectAccess> {
   const decoded = await getAdminAuth().verifyIdToken(token);
   const projectRef = getAdminDb().collection("projects").doc(projectId);
-  const [project, member] = await Promise.all([
+  const accessRef = getAdminDb().collection("accessRequests").doc(`${projectId}__${decoded.uid}`);
+  const [project, accessRequest] = await Promise.all([
     projectRef.get(),
-    projectRef
-    .collection("projectMembers")
-    .doc(decoded.uid)
-    .get()
+    accessRef.get()
   ]);
   const projectData = unpackProjectData(project.data());
-  const memberData = member.data();
+  const accessData = accessRequest.data();
+  const hasApprovedAccess = accessData?.status === "APPROVED";
   return {
-    hasAccess: decoded.admin === true || (member.exists && memberData?.isActive !== false),
+    hasAccess: decoded.admin === true || hasApprovedAccess,
     mediaStorageFolderId: projectData.mediaStorageFolderId ? String(projectData.mediaStorageFolderId) : "",
     projectName: projectData.name ? String(projectData.name).trim() : projectId
   };

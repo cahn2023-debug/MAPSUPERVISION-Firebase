@@ -16,6 +16,8 @@ import {
   subscribeCurrentProjectMember,
   subscribeProjectDocument,
   subscribeProjectMembers,
+  subscribeProjectAccessRequests,
+  transitionProjectAccessRequest,
   subscribeProjects,
   subscribeProjectTable,
   subscribeUsersDirectory,
@@ -29,7 +31,10 @@ import {
   type ProjectMemberRow,
   type SitePhotoRow,
   type TaskRow,
-  type UserProfileRow
+  type UserProfileRow,
+  type AccessAdminAction,
+  type AccessRequestStatus,
+  type ProjectAccessRequestRow
 } from "@/lib/sync";
 
 type TaskDraft = {
@@ -258,6 +263,12 @@ export default function HomePage() {
   const [currentMember, setCurrentMember] = useState<ProjectMemberRow | null>(null);
   const [usersDirectory, setUsersDirectory] = useState<UserProfileRow[]>([]);
   const [projectMembers, setProjectMembers] = useState<ProjectMemberRow[]>([]);
+  const [accessRequests, setAccessRequests] = useState<ProjectAccessRequestRow[]>([]);
+  const [accessRequestWriteState, setAccessRequestWriteState] = useState("");
+  const [accessRequestBusyId, setAccessRequestBusyId] = useState<string | null>(null);
+  const [accessRequestGroups, setAccessRequestGroups] = useState("gis_node");
+  const [accessRequestScope, setAccessRequestScope] = useState<ContractorScope>("ALL");
+  const [accessRequestContractors, setAccessRequestContractors] = useState("");
   const [selectedManagedUid, setSelectedManagedUid] = useState("");
   const [memberDraft, setMemberDraft] = useState<ProjectMemberRow | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
@@ -358,6 +369,18 @@ export default function HomePage() {
       db,
       (rows) => setUsersDirectory(rows),
       (error) => console.warn("Failed to subscribe users directory:", error)
+    );
+  }, [user, isAdmin]);
+
+  useEffect(() => {
+    if (!db || !user || !isAdmin) {
+      setAccessRequests([]);
+      return;
+    }
+    return subscribeProjectAccessRequests(
+      db,
+      (rows) => setAccessRequests(rows),
+      (error) => setAccessRequestWriteState(errorMessage(error))
     );
   }, [user, isAdmin]);
 
@@ -602,6 +625,40 @@ export default function HomePage() {
       setMemberWriteState(errorMessage(error));
     } finally {
       setMemberWriteBusy(false);
+    }
+  }
+
+  async function handleAccessRequestTransition(
+    request: ProjectAccessRequestRow,
+    action: AccessAdminAction,
+    overrideScope?: {
+      groups?: string[];
+      contractorScope?: ContractorScope;
+      contractors?: string[];
+    }
+  ) {
+    if (!db || !user || !isAdmin) return;
+    setAccessRequestBusyId(request.requestId);
+    setAccessRequestWriteState("Đang cập nhật yêu cầu...");
+    try {
+      const groups = overrideScope?.groups ?? accessRequestGroups.split(",").map((value) => value.trim()).filter(Boolean);
+      const contractorScope = overrideScope?.contractorScope ?? accessRequestScope;
+      const contractors = overrideScope?.contractors ?? accessRequestContractors.split(",").map((value) => value.trim()).filter(Boolean);
+      const next = await transitionProjectAccessRequest(
+        db,
+        user.uid,
+        request,
+        action,
+        groups,
+        contractorScope,
+        contractors
+      );
+      setAccessRequests((current) => current.map((item) => item.requestId === next.requestId ? next : item));
+      setAccessRequestWriteState(`Đã ${action === "APPROVE" ? "phê duyệt" : action === "REJECT" ? "từ chối" : "thu hồi"} và ghi audit.`);
+    } catch (error) {
+      setAccessRequestWriteState(errorMessage(error));
+    } finally {
+      setAccessRequestBusyId(null);
     }
   }
 
@@ -1167,6 +1224,14 @@ export default function HomePage() {
       {/* Tab Content: Admin */}
       {activeTab === "admin" && isAdmin && (
         <>
+          <AdminApprovalQueue
+            requests={accessRequests}
+            projects={projects}
+            usersDirectory={usersDirectory}
+            writeState={accessRequestWriteState}
+            busyRequestId={accessRequestBusyId}
+            onTransition={(request, action, overrideScope) => void handleAccessRequestTransition(request, action, overrideScope)}
+          />
           <section className="project-create-panel">
             <label>
               Tên dự án mới
@@ -1435,6 +1500,340 @@ function AdminAccessPanel({
           <div className="empty-state">Chon mot user o cot ben trai hoac tu danh sach member de chinh sua.</div>
         )}
       </Panel>
+    </section>
+  );
+}
+
+const STANDARD_DATA_GROUPS = [
+  "DEFAULT",
+  "MAP",
+  "GIS",
+  "MATERIALS",
+  "REPORTING",
+  "NOTES",
+  "TASKS"
+];
+
+function AdminApprovalQueue({
+  requests,
+  projects,
+  usersDirectory,
+  writeState,
+  busyRequestId,
+  onTransition
+}: {
+  requests: ProjectAccessRequestRow[];
+  projects: ProjectDoc[];
+  usersDirectory: UserProfileRow[];
+  writeState: string;
+  busyRequestId: string | null;
+  onTransition: (
+    request: ProjectAccessRequestRow,
+    action: AccessAdminAction,
+    overrideScope?: {
+      groups?: string[];
+      contractorScope?: ContractorScope;
+      contractors?: string[];
+    }
+  ) => void;
+}) {
+  const [statusFilter, setStatusFilter] = useState<"ALL" | AccessRequestStatus>("ALL");
+  const [modalRequest, setModalRequest] = useState<ProjectAccessRequestRow | null>(null);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(["DEFAULT"]);
+  const [customGroupInput, setCustomGroupInput] = useState("");
+  const [selectedScope, setSelectedScope] = useState<ContractorScope>("ALL");
+  const [contractorsInput, setContractorsInput] = useState("");
+
+  function openApprovalModal(request: ProjectAccessRequestRow) {
+    setModalRequest(request);
+    setSelectedGroups(request.allowedDataGroups.length ? request.allowedDataGroups : ["DEFAULT", "MAP", "GIS"]);
+    setCustomGroupInput("");
+    setSelectedScope(request.contractorScope || "ALL");
+    setContractorsInput(request.allowedContractors.join(", "));
+  }
+
+  function closeModal() {
+    setModalRequest(null);
+  }
+
+  function toggleDataGroup(group: string) {
+    setSelectedGroups((current) =>
+      current.includes(group) ? current.filter((g) => g !== group) : [...current, group]
+    );
+  }
+
+  function addCustomGroup() {
+    const trimmed = customGroupInput.trim();
+    if (trimmed && !selectedGroups.includes(trimmed)) {
+      setSelectedGroups((current) => [...current, trimmed]);
+      setCustomGroupInput("");
+    }
+  }
+
+  const isValidScope =
+    selectedGroups.length > 0 &&
+    (selectedScope === "ALL" || contractorsInput.split(",").map((c) => c.trim()).filter(Boolean).length > 0);
+
+  function confirmApproval() {
+    if (!modalRequest || !isValidScope) return;
+    const finalContractors = contractorsInput.split(",").map((c) => c.trim()).filter(Boolean);
+    onTransition(modalRequest, "APPROVE", {
+      groups: selectedGroups,
+      contractorScope: selectedScope,
+      contractors: finalContractors
+    });
+    closeModal();
+  }
+
+  const filteredRequests = useMemo(() => {
+    if (statusFilter === "ALL") return requests;
+    return requests.filter((r) => r.status === statusFilter);
+  }, [requests, statusFilter]);
+
+  return (
+    <section className="panel" style={{ marginBottom: "24px" }}>
+      <div className="panel-heading">
+        <h2>Hàng đợi phê duyệt truy cập Firebase (Admin)</h2>
+        <p>{writeState || "Mọi quyết định phê duyệt/thu hồi được đồng bộ hai chiều với Android và lưu vết audit."}</p>
+      </div>
+
+      <div className="filter-tabs">
+        {(["ALL", "PENDING", "APPROVED", "REJECTED", "REVOKED"] as const).map((status) => (
+          <button
+            key={status}
+            type="button"
+            className={`filter-tab-btn ${statusFilter === status ? "active" : ""}`}
+            onClick={() => setStatusFilter(status)}
+          >
+            {status === "ALL"
+              ? `Tất cả (${requests.length})`
+              : status === "PENDING"
+              ? `Chờ duyệt (${requests.filter((r) => r.status === "PENDING").length})`
+              : status === "APPROVED"
+              ? `Đã duyệt (${requests.filter((r) => r.status === "APPROVED").length})`
+              : status === "REJECTED"
+              ? `Từ chối (${requests.filter((r) => r.status === "REJECTED").length})`
+              : `Thu hồi (${requests.filter((r) => r.status === "REVOKED").length})`}
+          </button>
+        ))}
+      </div>
+
+      <div className="item-list compact-list">
+        {filteredRequests.map((request) => {
+          const matchedUser = usersDirectory.find((u) => u.uid === request.userId);
+          const matchedProject = projects.find((p) => p.id === request.projectId);
+          const userLabel = matchedUser?.email || request.userId;
+          const projectLabel = matchedProject?.name || request.projectId;
+
+          return (
+            <div key={request.requestId} className="admin-list-item">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                <div>
+                  <strong>{projectLabel}</strong>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: "12px" }}>
+                    Người dùng: <strong style={{ color: "var(--ink)" }}>{userLabel}</strong> ({request.userId})
+                  </span>
+                </div>
+                <span
+                  className={`approval-status-badge ${
+                    request.status === "PENDING"
+                      ? "badge-status-pending"
+                      : request.status === "APPROVED"
+                      ? "badge-status-approved"
+                      : request.status === "REJECTED"
+                      ? "badge-status-rejected"
+                      : "badge-status-revoked"
+                  }`}
+                >
+                  {request.status === "PENDING"
+                    ? "CHỜ DUYỆT"
+                    : request.status === "APPROVED"
+                    ? "ĐÃ DUYỆT"
+                    : request.status === "REJECTED"
+                    ? "TỪ CHỐI"
+                    : "THU HỒI"}
+                </span>
+              </div>
+
+              {request.status === "APPROVED" && (
+                <div style={{ fontSize: "12px", color: "var(--ink-soft)", marginTop: "4px" }}>
+                  <span>Nhóm dữ liệu: <strong>{request.allowedDataGroups.join(", ") || "Mặc định"}</strong></span> ·{" "}
+                  <span>Nhà thầu: <strong>{request.contractorScope === "ALL" ? "Toàn bộ" : request.allowedContractors.join(", ") || "Chưa gán"}</strong></span>
+                </div>
+              )}
+
+              <small>Cập nhật: {formatDateTime(request.updatedAtEpochMs)}</small>
+
+              <div className="row-actions">
+                {request.status === "PENDING" ? (
+                  <>
+                    <button
+                      className="tiny-button"
+                      type="button"
+                      style={{ background: "var(--accent)", color: "#08090d", fontWeight: "700" }}
+                      disabled={busyRequestId === request.requestId}
+                      onClick={() => openApprovalModal(request)}
+                    >
+                      Phê duyệt
+                    </button>
+                    <button
+                      className="tiny-button"
+                      type="button"
+                      disabled={busyRequestId === request.requestId}
+                      onClick={() => onTransition(request, "REJECT")}
+                    >
+                      Từ chối
+                    </button>
+                  </>
+                ) : null}
+
+                {request.status === "APPROVED" ? (
+                  <>
+                    <button
+                      className="tiny-button"
+                      type="button"
+                      disabled={busyRequestId === request.requestId}
+                      onClick={() => openApprovalModal(request)}
+                    >
+                      Sửa phạm vi
+                    </button>
+                    <button
+                      className="tiny-button"
+                      type="button"
+                      style={{ color: "var(--danger)" }}
+                      disabled={busyRequestId === request.requestId}
+                      onClick={() => onTransition(request, "REVOKE")}
+                    >
+                      Thu hồi quyền
+                    </button>
+                  </>
+                ) : null}
+
+                {request.status === "REJECTED" || request.status === "REVOKED" ? (
+                  <button
+                    className="tiny-button"
+                    type="button"
+                    disabled={busyRequestId === request.requestId}
+                    onClick={() => openApprovalModal(request)}
+                  >
+                    Cấp lại quyền
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+        {!filteredRequests.length ? (
+          <div className="empty-state">Không có yêu cầu nào trong trạng thái này.</div>
+        ) : null}
+      </div>
+
+      {modalRequest && (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800" }}>
+              Cấu hình phạm vi & Phê duyệt quyền
+            </h3>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
+              Dự án: <strong style={{ color: "var(--ink)" }}>{modalRequest.projectId}</strong> · Người dùng: <strong style={{ color: "var(--ink)" }}>{usersDirectory.find((u) => u.uid === modalRequest.userId)?.email || modalRequest.userId}</strong>
+            </p>
+
+            <div style={{ display: "grid", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: "700" }}>
+                Nhóm dữ liệu được phép truy cập (bắt buộc ít nhất 1 nhóm)
+              </label>
+              <div className="scope-chips-container">
+                {STANDARD_DATA_GROUPS.map((group) => {
+                  const isSelected = selectedGroups.includes(group);
+                  return (
+                    <span
+                      key={group}
+                      className={`scope-chip ${isSelected ? "selected" : ""}`}
+                      onClick={() => toggleDataGroup(group)}
+                    >
+                      {group}
+                    </span>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                <input
+                  type="text"
+                  placeholder="Thêm nhóm dữ liệu khác..."
+                  value={customGroupInput}
+                  onChange={(e) => setCustomGroupInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomGroup();
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <button type="button" className="secondary-button" onClick={addCustomGroup}>
+                  Thêm
+                </button>
+              </div>
+              {!selectedGroups.length && (
+                <small style={{ color: "var(--danger)" }}>Vui lòng chọn hoặc thêm ít nhất một nhóm dữ liệu.</small>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: "700" }}>
+                Phạm vi nhà thầu (Contractor Scope)
+              </label>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="scopeRadio"
+                    checked={selectedScope === "ALL"}
+                    onChange={() => setSelectedScope("ALL")}
+                  />
+                  <span>Toàn bộ nhà thầu (ALL)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="scopeRadio"
+                    checked={selectedScope === "SCOPED"}
+                    onChange={() => setSelectedScope("SCOPED")}
+                  />
+                  <span>Giới hạn nhà thầu (SCOPED)</span>
+                </label>
+              </div>
+              {selectedScope === "SCOPED" && (
+                <div style={{ display: "grid", gap: "4px" }}>
+                  <input
+                    type="text"
+                    placeholder="Nhập mã/tên nhà thầu (phân cách bằng dấu phẩy)..."
+                    value={contractorsInput}
+                    onChange={(e) => setContractorsInput(e.target.value)}
+                  />
+                  {!contractorsInput.split(",").map((c) => c.trim()).filter(Boolean).length && (
+                    <small style={{ color: "var(--danger)" }}>Phạm vi SCOPED yêu cầu nhập ít nhất một nhà thầu.</small>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: "12px" }}>
+              <button type="button" className="secondary-button" onClick={closeModal}>
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!isValidScope || busyRequestId === modalRequest.requestId}
+                onClick={confirmApproval}
+              >
+                {busyRequestId === modalRequest.requestId ? "Đang xử lý..." : "Xác nhận phê duyệt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

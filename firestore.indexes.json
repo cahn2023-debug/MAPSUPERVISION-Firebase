@@ -39,6 +39,47 @@
         { "fieldPath": "projectId", "order": "ASCENDING" },
         { "fieldPath": "updatedAtEpochMs", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "projectCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accessRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accessRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accessAudit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "timestampEpochMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "accessAudit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetUserId", "order": "ASCENDING" },
+        { "fieldPath": "timestampEpochMs", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

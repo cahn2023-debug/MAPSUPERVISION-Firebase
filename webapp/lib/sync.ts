@@ -4,12 +4,16 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
   onSnapshot,
   orderBy,
+  limit,
   query,
   serverTimestamp,
   setDoc,
+  runTransaction,
   updateDoc,
+  where,
   writeBatch,
   type DocumentData,
   type Firestore,
@@ -66,6 +70,23 @@ export type ProjectRow = {
 };
 
 export type ContractorScope = "ALL" | "SCOPED";
+
+export type AccessRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
+export type AccessAdminAction = "APPROVE" | "REJECT" | "REVOKE";
+
+export type ProjectAccessRequestRow = {
+  requestId: string;
+  projectId: string;
+  userId: string;
+  status: AccessRequestStatus;
+  allowedDataGroups: string[];
+  contractorScope: ContractorScope;
+  allowedContractors: string[];
+  approvedBy: string | null;
+  approvedAtEpochMs: number | null;
+  requestedAtEpochMs: number | null;
+  updatedAtEpochMs: number;
+};
 
 export type UserProfileRow = {
   uid: string;
@@ -430,6 +451,108 @@ export function subscribeUsersDirectory(
     },
     onError
   );
+}
+
+function parseAccessRequest(requestId: string, raw: DocumentData): ProjectAccessRequestRow | null {
+  const projectId = String(raw.projectId ?? "").trim();
+  const userId = String(raw.userId ?? "").trim();
+  const status = String(raw.status ?? "").trim().toUpperCase() as AccessRequestStatus;
+  if (!projectId || !userId || requestId !== `${projectId}__${userId}` ||
+      !["PENDING", "APPROVED", "REJECTED", "REVOKED"].includes(status)) return null;
+  const groups = Array.isArray(raw.allowedDataGroups) ? raw.allowedDataGroups.map(String).map((value) => value.trim()).filter(Boolean) : [];
+  const contractors = Array.isArray(raw.allowedContractors) ? raw.allowedContractors.map(String).map((value) => value.trim()).filter(Boolean) : [];
+  return {
+    requestId,
+    projectId,
+    userId,
+    status,
+    allowedDataGroups: groups,
+    contractorScope: raw.contractorScope === "SCOPED" ? "SCOPED" : "ALL",
+    allowedContractors: contractors,
+    approvedBy: raw.approvedBy ? String(raw.approvedBy) : null,
+    approvedAtEpochMs: raw.approvedAtEpochMs == null ? null : Number(raw.approvedAtEpochMs),
+    requestedAtEpochMs: raw.requestedAtEpochMs == null ? null : Number(raw.requestedAtEpochMs),
+    updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0)
+  };
+}
+
+export function validateApprovedScope(
+  allowedDataGroups: string[],
+  contractorScope: ContractorScope,
+  allowedContractors: string[]
+): void {
+  const validGroups = allowedDataGroups.map((value) => value.trim()).filter(Boolean);
+  if (!validGroups.length) {
+    throw new Error("Phê duyệt cần ít nhất một nhóm dữ liệu (data group).");
+  }
+  if (contractorScope === "SCOPED") {
+    const validContractors = allowedContractors.map((value) => value.trim()).filter(Boolean);
+    if (!validContractors.length) {
+      throw new Error("Phạm vi SCOPED cần ít nhất một nhà thầu hợp lệ.");
+    }
+  }
+}
+
+export function subscribeProjectAccessRequests(
+  firestore: Firestore,
+  onRows: (rows: ProjectAccessRequestRow[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(firestore, "accessRequests"), orderBy("updatedAtEpochMs", "desc"), orderBy(documentId(), "desc"), limit(100)),
+    (snapshot) => onRows(snapshot.docs.map((item) => parseAccessRequest(item.id, item.data())).filter((item): item is ProjectAccessRequestRow => Boolean(item))),
+    onError
+  );
+}
+
+export async function transitionProjectAccessRequest(
+  firestore: Firestore,
+  adminUid: string,
+  request: ProjectAccessRequestRow,
+  action: AccessAdminAction,
+  allowedDataGroups: string[],
+  contractorScope: ContractorScope,
+  allowedContractors: string[]
+): Promise<ProjectAccessRequestRow> {
+  const targetStatus: AccessRequestStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "REVOKED";
+  if (action === "APPROVE") {
+    validateApprovedScope(allowedDataGroups, contractorScope, allowedContractors);
+  }
+  if (!((request.status === "PENDING" && (targetStatus === "APPROVED" || targetStatus === "REJECTED")) ||
+        (request.status === "APPROVED" && targetStatus === "REVOKED"))) {
+    throw new Error(`Không thể chuyển ${request.status} sang ${targetStatus}.`);
+  }
+  const ref = doc(firestore, "accessRequests", request.requestId);
+  const now = Date.now();
+  const next = {
+    projectId: request.projectId,
+    userId: request.userId,
+    status: targetStatus,
+    allowedDataGroups: action === "APPROVE" ? allowedDataGroups.map((value) => value.trim()).filter(Boolean) : request.allowedDataGroups,
+    contractorScope: action === "APPROVE" ? contractorScope : request.contractorScope,
+    allowedContractors: action === "APPROVE" ? allowedContractors.map((value) => value.trim()).filter(Boolean) : request.allowedContractors,
+    approvedBy: action === "APPROVE" ? adminUid : request.approvedBy,
+    approvedAtEpochMs: action === "APPROVE" ? now : request.approvedAtEpochMs,
+    requestedAtEpochMs: request.requestedAtEpochMs,
+    updatedAtEpochMs: now
+  };
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error("Access request không còn tồn tại.");
+    const current = parseAccessRequest(snapshot.id, snapshot.data());
+    if (!current || current.status !== request.status) throw new Error("Yêu cầu đã thay đổi, hãy làm mới hàng đợi.");
+    transaction.set(ref, next);
+    transaction.set(doc(ref, "accessAudit", `${now}_${adminUid}`), {
+      projectId: request.projectId,
+      targetUserId: request.userId,
+      action,
+      previousState: request.status,
+      newState: targetStatus,
+      actorAdminId: adminUid,
+      timestampEpochMs: now
+    });
+  });
+  return { ...request, ...next, status: targetStatus };
 }
 
 export function subscribeProjectMembers(

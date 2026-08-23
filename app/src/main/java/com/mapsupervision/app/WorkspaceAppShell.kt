@@ -405,6 +405,7 @@ fun WorkspaceAppShell(
                     onDismissDuplicateDialog = projectViewModel::dismissDuplicateDialog,
                     onUpdateProjectStoragePath = projectViewModel::updateProjectStoragePath,
                     onUpdateProjectMediaStorage = projectViewModel::updateProjectMediaStorage,
+                    onRequestProjectAccess = projectViewModel::requestAccess,
                     selectedNodePhotos = workspaceState.selectedNodePhotos,
                     onDismissPhotoPopup = workspaceViewModel::clearSelectedNodePhotos,
                     selectedObjectNotes = workspaceState.selectedObjectNotes,

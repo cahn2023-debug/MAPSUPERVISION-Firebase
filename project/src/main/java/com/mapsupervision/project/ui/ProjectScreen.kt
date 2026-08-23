@@ -23,6 +23,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
+import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
 
 @Composable
 fun ProjectScreen(viewModel: ProjectViewModel = hiltViewModel()) {
@@ -134,11 +136,145 @@ fun ProjectScreen(viewModel: ProjectViewModel = hiltViewModel()) {
                 }
             }
 
+            if (state.message.isNotBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(state.message, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+            }
+
+            if (state.catalogItems.isNotEmpty() || state.isCatalogLoading || state.catalogError.isNotBlank()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Danh mục Firebase đám mây",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            IconButton(onClick = { viewModel.loadCatalog() }) {
+                                Icon(Icons.Outlined.Refresh, contentDescription = "Tải lại danh mục", modifier = Modifier.size(20.dp))
+                            }
+                        }
+
+                        if (state.isCatalogLoading) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+
+                        if (state.catalogError.isNotBlank()) {
+                            Text(state.catalogError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        state.catalogItems.forEach { item ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (item.isRevokedReadOnly) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(item.projectName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                            Text("Mã: ${item.projectCode}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        CatalogStatusBadge(item.accessStatus)
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        when (item.accessStatus) {
+                                            FirebaseAccessRequestStatus.APPROVED -> {
+                                                if (item.isLocalAvailable) {
+                                                    Button(
+                                                        onClick = { viewModel.switchProject(item.projectId) },
+                                                        shape = MaterialTheme.shapes.small
+                                                    ) {
+                                                        Text("Mở dự án")
+                                                    }
+                                                } else {
+                                                    OutlinedButton(
+                                                        onClick = { },
+                                                        enabled = false,
+                                                        shape = MaterialTheme.shapes.small
+                                                    ) {
+                                                        Text("Đã phê duyệt")
+                                                    }
+                                                }
+                                            }
+                                            FirebaseAccessRequestStatus.PENDING -> {
+                                                OutlinedButton(
+                                                    onClick = {},
+                                                    enabled = false,
+                                                    shape = MaterialTheme.shapes.small
+                                                ) {
+                                                    Text("Đang chờ duyệt")
+                                                }
+                                            }
+                                            FirebaseAccessRequestStatus.REJECTED -> {
+                                                Button(
+                                                    onClick = { viewModel.requestAccess(item.projectId) },
+                                                    enabled = !item.isActionBusy,
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                                    shape = MaterialTheme.shapes.small
+                                                ) {
+                                                    Text(if (item.isActionBusy) "Đang gửi..." else "Gửi lại yêu cầu")
+                                                }
+                                            }
+                                            FirebaseAccessRequestStatus.REVOKED -> {
+                                                Button(
+                                                    onClick = { viewModel.requestAccess(item.projectId) },
+                                                    enabled = !item.isActionBusy,
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                                    shape = MaterialTheme.shapes.small
+                                                ) {
+                                                    Text(if (item.isActionBusy) "Đang gửi..." else "Yêu cầu lại quyền")
+                                                }
+                                            }
+                                            FirebaseAccessRequestStatus.NOT_REQUESTED -> {
+                                                Button(
+                                                    onClick = { viewModel.requestAccess(item.projectId) },
+                                                    enabled = !item.isActionBusy,
+                                                    shape = MaterialTheme.shapes.small
+                                                ) {
+                                                    Text(if (item.isActionBusy) "Đang gửi..." else "Yêu cầu quyền")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Text("Danh sách dự án", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
             
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
                 items(state.projects) { p ->
                     val isActive = state.activeProjectId == p.id
+                    val isRevoked = p.id in state.revokedReadOnlyProjectIds
                     val projectRootDir = p.projectDbPath.substringBeforeLast("/db/")
                     ElevatedCard(
                         modifier = Modifier
@@ -154,7 +290,11 @@ fun ProjectScreen(viewModel: ProjectViewModel = hiltViewModel()) {
                             },
                         shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                            containerColor = when {
+                                isActive -> MaterialTheme.colorScheme.primaryContainer
+                                isRevoked -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
                         )
                     ) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -172,14 +312,30 @@ fun ProjectScreen(viewModel: ProjectViewModel = hiltViewModel()) {
                                     ) {
                                         Text("ĐANG HOẠT ĐỘNG", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                                     }
+                                } else if (isRevoked) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.error, MaterialTheme.shapes.small)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("CHỈ ĐỌC (REVOKED)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (!isActive) {
                                     Button(onClick = { viewModel.switchProject(p.id) }, shape = MaterialTheme.shapes.small) { Text("Mở dự án") }
                                 }
-                                OutlinedButton(onClick = { viewModel.cloneProject(p.id, p.name + " (Bản sao)") }, shape = MaterialTheme.shapes.small) { Text("Nhân bản") }
-                                OutlinedButton(onClick = { viewModel.archiveProject(p.id) }, shape = MaterialTheme.shapes.small) { Text("Lưu trữ") }
+                                OutlinedButton(
+                                    onClick = { viewModel.cloneProject(p.id, p.name + " (Bản sao)") },
+                                    enabled = !isRevoked,
+                                    shape = MaterialTheme.shapes.small
+                                ) { Text("Nhân bản") }
+                                OutlinedButton(
+                                    onClick = { viewModel.archiveProject(p.id) },
+                                    enabled = !isRevoked,
+                                    shape = MaterialTheme.shapes.small
+                                ) { Text("Lưu trữ") }
                             }
                         }
                     }
@@ -207,6 +363,25 @@ fun ProjectScreen(viewModel: ProjectViewModel = hiltViewModel()) {
                 item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun CatalogStatusBadge(status: FirebaseAccessRequestStatus) {
+    val (bgColor, textColor, label) = when (status) {
+        FirebaseAccessRequestStatus.APPROVED -> Triple(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer, "ĐÃ PHÊ DUYỆT")
+        FirebaseAccessRequestStatus.PENDING -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, "CHỜ DUYỆT")
+        FirebaseAccessRequestStatus.REJECTED -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, "TỪ CHỐI")
+        FirebaseAccessRequestStatus.REVOKED -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, "ĐÃ THU HỒI")
+        FirebaseAccessRequestStatus.NOT_REQUESTED -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, "CHƯA YÊU CẦU")
+    }
+
+    Box(
+        modifier = Modifier
+            .background(bgColor, MaterialTheme.shapes.small)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.Bold)
     }
 }
 

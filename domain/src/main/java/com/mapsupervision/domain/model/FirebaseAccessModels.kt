@@ -5,6 +5,19 @@ enum class ContractorScope {
     SCOPED
 }
 
+enum class FirebaseProjectCatalogStatus {
+    ACTIVE,
+    ARCHIVED
+}
+
+data class FirebaseProjectCatalogEntry(
+    val projectId: String,
+    val projectName: String,
+    val projectCode: String,
+    val updatedAtEpochMs: Long,
+    val status: FirebaseProjectCatalogStatus
+)
+
 data class FirebaseUserSession(
     val uid: String,
     val email: String,

@@ -9,13 +9,31 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
-    function isProjectMember(projectId) {
+    function accessRequestId(projectId) {
+      return projectId + "__" + request.auth.uid;
+    }
+
+    function approvedAccess(projectId) {
       return isSignedIn() && (
         isAdmin() ||
         (
-          exists(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid)).data.isActive != false
+          exists(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))) &&
+          get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.status == "APPROVED"
         )
+      );
+    }
+
+    function allowedDataGroup(projectId, group) {
+      return approvedAccess(projectId) && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.allowedDataGroups.hasAny([group])
+      );
+    }
+
+    function approvedMedia(projectId) {
+      return approvedAccess(projectId) && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.allowedDataGroups.size() > 0
       );
     }
 
@@ -37,6 +55,73 @@ service cloud.firestore {
       ]) && request.resource.data.uid == uid;
     }
 
+    function validAccessRequestShape(data) {
+      return data.keys().hasOnly([
+        "projectId",
+        "userId",
+        "status",
+        "allowedDataGroups",
+        "contractorScope",
+        "allowedContractors",
+        "approvedBy",
+        "approvedAtEpochMs",
+        "requestedAtEpochMs",
+        "updatedAtEpochMs"
+      ]) &&
+        data.projectId is string &&
+        data.projectId.size() > 0 &&
+        data.userId is string &&
+        data.userId.size() > 0 &&
+        data.status is string &&
+        data.allowedDataGroups is list &&
+        data.contractorScope is string &&
+        data.allowedContractors is list &&
+        data.updatedAtEpochMs is int &&
+        data.updatedAtEpochMs >= 0 &&
+        (data.contractorScope == "ALL" || data.contractorScope == "SCOPED") &&
+        (data.status == "PENDING" || data.status == "APPROVED" ||
+          data.status == "REJECTED" || data.status == "REVOKED");
+    }
+
+    function validApprovedAccessScope(data) {
+      return data.allowedDataGroups.size() > 0 &&
+        data.approvedBy is string &&
+        data.approvedBy.size() > 0 &&
+        data.approvedAtEpochMs is int &&
+        data.approvedAtEpochMs >= 0 &&
+        (data.contractorScope == "ALL" ||
+          (data.contractorScope == "SCOPED" && data.allowedContractors.size() > 0));
+    }
+
+    function validAdminAccessTransition(previous, next) {
+      return (previous == "PENDING" && (next == "APPROVED" || next == "REJECTED")) ||
+        (previous == "APPROVED" && next == "REVOKED");
+    }
+
+    function validAuditShape(data) {
+      return data.keys().hasOnly([
+        "projectId",
+        "targetUserId",
+        "action",
+        "previousState",
+        "newState",
+        "actorAdminId",
+        "timestampEpochMs"
+      ]) &&
+        data.projectId is string &&
+        data.targetUserId is string &&
+        data.action is string &&
+        data.previousState is string &&
+        data.newState is string &&
+        data.actorAdminId is string &&
+        data.timestampEpochMs is int &&
+        data.timestampEpochMs >= 0 &&
+        validAdminAccessTransition(data.previousState, data.newState) &&
+        ((data.action == "APPROVE" && data.newState == "APPROVED") ||
+          (data.action == "REJECT" && data.newState == "REJECTED") ||
+          (data.action == "REVOKE" && data.newState == "REVOKED"));
+    }
+
     match /users/{uid} {
       allow read: if isOwnUser(uid) || isAdmin();
       allow create: if (
@@ -53,16 +138,90 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /projectCatalog/{projectId} {
+      // projectCatalog is a dedicated, sanitized projection. Its exact shape
+      // is enforced for all client/admin writes below; project detail fields
+      // are never read from /projects by catalog clients.
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          "projectName",
+          "projectCode",
+          "updatedAtEpochMs",
+          "status"
+        ]) &&
+        request.resource.data.projectName is string &&
+        request.resource.data.projectCode is string &&
+        request.resource.data.updatedAtEpochMs is int &&
+        (request.resource.data.status == "ACTIVE" ||
+          request.resource.data.status == "ARCHIVED");
+      allow delete: if isAdmin();
+    }
+
+    match /accessRequests/{requestId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && !isAdmin() &&
+        validAccessRequestShape(request.resource.data) &&
+        requestId == request.resource.data.projectId + "__" + request.resource.data.userId &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == "PENDING" &&
+        request.resource.data.contractorScope == "ALL" &&
+        request.resource.data.allowedDataGroups.size() == 0 &&
+        request.resource.data.allowedContractors.size() == 0 &&
+        request.resource.data.approvedBy == null &&
+        request.resource.data.approvedAtEpochMs == null &&
+        exists(/databases/$(database)/documents/projectCatalog/$(request.resource.data.projectId));
+      allow update: if (
+        isSignedIn() && !isAdmin() &&
+        validAccessRequestShape(request.resource.data) &&
+        requestId == request.resource.data.projectId + "__" + request.resource.data.userId &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.projectId == resource.data.projectId &&
+        (resource.data.status == "REJECTED" || resource.data.status == "REVOKED") &&
+        request.resource.data.status == "PENDING" &&
+        request.resource.data.contractorScope == "ALL" &&
+        request.resource.data.allowedDataGroups.size() == 0 &&
+        request.resource.data.allowedContractors.size() == 0 &&
+        request.resource.data.approvedBy == null &&
+        request.resource.data.approvedAtEpochMs == null &&
+        exists(/databases/$(database)/documents/projectCatalog/$(request.resource.data.projectId))
+      ) || (
+        isAdmin() &&
+        validAccessRequestShape(request.resource.data) &&
+        requestId == request.resource.data.projectId + "__" + request.resource.data.userId &&
+        request.resource.data.projectId == resource.data.projectId &&
+        request.resource.data.userId == resource.data.userId &&
+        validAdminAccessTransition(resource.data.status, request.resource.data.status) &&
+        (request.resource.data.status != "APPROVED" || validApprovedAccessScope(request.resource.data)) &&
+        exists(/databases/$(database)/documents/projectCatalog/$(request.resource.data.projectId))
+      );
+      allow delete: if false;
+
+      match /accessAudit/{auditId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() &&
+          validAuditShape(request.resource.data) &&
+          request.resource.data.actorAdminId == request.auth.uid &&
+          get(/databases/$(database)/documents/accessRequests/$(requestId)).data.status == request.resource.data.previousState &&
+          getAfter(/databases/$(database)/documents/accessRequests/$(requestId)).data.status == request.resource.data.newState;
+        allow update, delete: if false;
+      }
+    }
+
     match /projects/{projectId} {
-      allow read, write: if isProjectMember(projectId);
+      allow read: if approvedAccess(projectId);
+      allow write: if isAdmin();
 
       match /projectMembers/{memberId} {
-        allow read: if isProjectMember(projectId);
+        allow read: if approvedAccess(projectId);
         allow write: if isAdmin();
       }
 
       match /{collectionName}/{documentId} {
-        allow read, write: if isProjectMember(projectId);
+        allow read: if (collectionName == "site_photos" && approvedMedia(projectId)) ||
+          (collectionName != "site_photos" && allowedDataGroup(projectId, collectionName));
+        allow write: if allowedDataGroup(projectId, collectionName);
       }
     }
   }

@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.mapsupervision.core.result.AppResult
 import com.mapsupervision.domain.model.FirebaseAccessState
+import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
+import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
+import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
+import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.model.ProjectAccess
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
@@ -85,6 +89,24 @@ class FirebaseAccessViewModelTest {
         assertTrue(viewModel.uiState.value.user?.isOffline == true)
         assertEquals(1, repository.offlineCalls)
     }
+
+    @Test
+    fun signed_in_user_sees_catalog_and_request_updates_pending_status() = runBlocking {
+        val repository = FakeFirebaseAccessRepository()
+        val viewModel = FirebaseAccessViewModel(repository, context)
+
+        viewModel.updateEmail("user@example.com")
+        viewModel.updatePassword("secret123")
+        viewModel.signIn()
+
+        waitUntil { viewModel.uiState.value.projectCatalog.size == 1 }
+        assertEquals(FirebaseAccessRequestStatus.NOT_REQUESTED, viewModel.accessStatusFor("project-1"))
+
+        viewModel.requestProjectAccess("project-1")
+
+        waitUntil { viewModel.accessStatusFor("project-1") == FirebaseAccessRequestStatus.PENDING }
+        assertEquals(1, repository.requestCalls)
+    }
 }
 
 private suspend fun waitUntil(condition: () -> Boolean) {
@@ -100,6 +122,7 @@ private class FakeFirebaseAccessRepository : FirebaseAccessRepository {
     override val accessState: StateFlow<FirebaseAccessState> = state
     var registerCalls = 0
     var offlineCalls = 0
+    var requestCalls = 0
 
     override suspend fun signIn(email: String, password: String): AppResult<FirebaseUserSession> {
         val session = FirebaseUserSession(uid = "u1", email = email, emailVerified = true)
@@ -142,5 +165,38 @@ private class FakeFirebaseAccessRepository : FirebaseAccessRepository {
 
     override suspend fun refreshAccess(): AppResult<FirebaseAccessState> = AppResult.Success(state.value)
     override suspend fun ensureUserProfile(): AppResult<Unit> = AppResult.Success(Unit)
+    override suspend fun listProjectCatalog(
+        pageSize: Long,
+        startAfterUpdatedAtEpochMs: Long?,
+        startAfterProjectId: String?
+    ): AppResult<List<FirebaseProjectCatalogEntry>> = AppResult.Success(
+        if (startAfterProjectId == null) listOf(
+            FirebaseProjectCatalogEntry(
+                projectId = "project-1",
+                projectName = "Project One",
+                projectCode = "P-001",
+                updatedAtEpochMs = 100L,
+                status = FirebaseProjectCatalogStatus.ACTIVE
+            )
+        ) else emptyList()
+    )
+
+    override suspend fun requestProjectAccess(projectId: String): AppResult<FirebaseProjectAccessRequest> {
+        requestCalls += 1
+        return AppResult.Success(
+            FirebaseProjectAccessRequest(
+                requestId = "project-1__u1",
+                projectId = projectId,
+                userId = "u1",
+                status = FirebaseAccessRequestStatus.PENDING,
+                requestedAtEpochMs = 100L,
+                updatedAtEpochMs = 100L
+            )
+        )
+    }
+
+    override suspend fun getProjectAccessRequest(projectId: String): AppResult<FirebaseProjectAccessRequest?> =
+        AppResult.Success(null)
+
     override fun projectAccess(projectId: String): ProjectAccess? = state.value.permissionsByProject[projectId]
 }

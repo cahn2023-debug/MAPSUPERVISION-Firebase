@@ -12,12 +12,15 @@ function projectDbMock(
   memberExists: boolean,
   projectData: Record<string, unknown> = {},
   memberData: Record<string, unknown> | null = { isActive: true },
-  photoDocs: Record<string, Record<string, unknown>> = {}
+  photoDocs: Record<string, Record<string, unknown>> = {},
+  accessStatus: string = memberExists ? "APPROVED" : "PENDING"
 ) {
   return {
-    collection: () => ({
+    collection: (collectionName: string) => ({
       doc: () => ({
-        get: async () => ({ exists: true, data: () => ({ data: projectData }) }),
+        get: async () => collectionName === "accessRequests"
+          ? { exists: true, data: () => ({ status: accessStatus }) }
+          : { exists: true, data: () => ({ data: projectData }) },
         collection: (name: string) => ({
           doc: (id: string) => ({
             get: async () => {
@@ -91,6 +94,29 @@ test("POST /api/projects/[projectId]/media - User without project membership ret
   const body = await res.json();
   assert.strictEqual(body.success, false);
   assert.strictEqual(body.error.code, "FORBIDDEN");
+});
+
+test("POST /api/projects/[projectId]/media - Revoked access returns 403", async () => {
+  setAdminAuthMock({
+    verifyIdToken: async () => ({ uid: "revoked-user" })
+  });
+  setAdminDbMock(projectDbMock(true, {}, { isActive: true }, {}, "REVOKED"));
+
+  const formData = new FormData();
+  formData.append("photoId", "photo-revoked");
+  formData.append("objectCode", "N-1");
+  formData.append("objectType", "NODE");
+  formData.append("mediaType", "IMAGE");
+  formData.append("original", new File(["bytes"], "photo.jpg", { type: "image/jpeg" }));
+  const res = await POST(
+    new Request("http://localhost/api/projects/proj-1/media", {
+      method: "POST",
+      headers: { Authorization: "Bearer revoked-token" },
+      body: formData
+    }) as any,
+    { params: Promise.resolve({ projectId: "proj-1" }) }
+  );
+  assert.strictEqual(res.status, 403);
 });
 
 test("POST /api/projects/[projectId]/media - Admin can upload without project membership", async () => {

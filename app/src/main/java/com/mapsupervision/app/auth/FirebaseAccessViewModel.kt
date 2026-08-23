@@ -5,6 +5,11 @@ import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mapsupervision.core.result.AppResult
+import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
+import com.mapsupervision.domain.model.FirebaseAccessAdminAction
+import com.mapsupervision.domain.model.ContractorScope
+import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
+import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +19,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 data class FirebaseAccessUiState(
@@ -27,7 +35,16 @@ data class FirebaseAccessUiState(
     val error: String = "",
     val message: String = "",
     val user: FirebaseUserSession? = null,
-    val allowedProjectCount: Int = 0
+    val allowedProjectCount: Int = 0,
+    val projectCatalog: List<FirebaseProjectCatalogEntry> = emptyList(),
+    val accessRequestsByProject: Map<String, FirebaseProjectAccessRequest> = emptyMap(),
+    val catalogLoading: Boolean = false,
+    val catalogError: String = "",
+    val requestingProjectId: String? = null,
+    val adminRequests: List<FirebaseProjectAccessRequest> = emptyList(),
+    val adminLoading: Boolean = false,
+    val adminError: String = "",
+    val adminBusyRequestId: String? = null
 )
 
 @HiltViewModel
@@ -37,6 +54,8 @@ class FirebaseAccessViewModel @Inject constructor(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(FirebaseAccessUiState())
     val uiState: StateFlow<FirebaseAccessUiState> = _uiState.asStateFlow()
+    private var catalogRefreshJob: kotlinx.coroutines.Job? = null
+    private var lastCatalogUid: String? = null
 
     init {
         val prefs = context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
@@ -57,6 +76,24 @@ class FirebaseAccessViewModel @Inject constructor(
                     user = accessState.session,
                     allowedProjectCount = accessState.allowedProjectIds.size
                 )
+                val session = accessState.session
+                if (session == null || session.isOffline) {
+                    lastCatalogUid = null
+                    catalogRefreshJob?.cancel()
+                    _uiState.value = _uiState.value.copy(
+                        projectCatalog = emptyList(),
+                        accessRequestsByProject = emptyMap(),
+                        catalogLoading = false,
+                        catalogError = "",
+                        adminRequests = emptyList(),
+                        adminLoading = false,
+                        adminError = ""
+                    )
+                } else if (lastCatalogUid != session.uid) {
+                    lastCatalogUid = session.uid
+                    refreshProjectCatalog()
+                    if (session.isAdmin) refreshAdminRequests()
+                }
             }
         }
         viewModelScope.launch {
@@ -249,6 +286,132 @@ class FirebaseAccessViewModel @Inject constructor(
                         message = ""
                     )
                 }
+            }
+        }
+    }
+
+    fun refreshProjectCatalog() {
+        val session = _uiState.value.user ?: return
+        if (session.isOffline) return
+        catalogRefreshJob?.cancel()
+        catalogRefreshJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(catalogLoading = true, catalogError = "")
+            runCatching {
+                val entries = buildList {
+                    var cursorUpdatedAt: Long? = null
+                    var cursorProjectId: String? = null
+                    var last: FirebaseProjectCatalogEntry? = null
+                    do {
+                        val page = when (val result = firebaseAccessRepository.listProjectCatalog(
+                            pageSize = 100L,
+                            startAfterUpdatedAtEpochMs = cursorUpdatedAt,
+                            startAfterProjectId = cursorProjectId
+                        )) {
+                            is AppResult.Success -> result.data
+                            is AppResult.Error -> throw result.throwable
+                        }
+                        addAll(page)
+                        last = page.lastOrNull()
+                        cursorUpdatedAt = last?.updatedAtEpochMs
+                        cursorProjectId = last?.projectId
+                    } while (last != null && page.size >= 100)
+                }.distinctBy { it.projectId }
+                val requests = coroutineScope {
+                    entries.map { entry ->
+                        async {
+                            when (val result = firebaseAccessRepository.getProjectAccessRequest(entry.projectId)) {
+                                is AppResult.Success -> entry.projectId to result.data
+                                is AppResult.Error -> throw result.throwable
+                            }
+                        }
+                    }.awaitAll().mapNotNull { (projectId, request) -> request?.let { projectId to it } }.toMap()
+                }
+                _uiState.value = _uiState.value.copy(
+                    projectCatalog = entries,
+                    accessRequestsByProject = requests,
+                    catalogLoading = false,
+                    catalogError = ""
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    catalogLoading = false,
+                    catalogError = error.message ?: "Không tải được danh mục dự án Firebase."
+                )
+            }
+        }
+    }
+
+    fun requestProjectAccess(projectId: String) {
+        if (_uiState.value.user?.isOffline == true) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(requestingProjectId = projectId, catalogError = "", message = "")
+            when (val result = firebaseAccessRepository.requestProjectAccess(projectId)) {
+                is AppResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        requestingProjectId = null,
+                        accessRequestsByProject = _uiState.value.accessRequestsByProject + (projectId to result.data),
+                        message = "Đã gửi yêu cầu truy cập. Vui lòng chờ Admin phê duyệt."
+                    )
+                }
+                is AppResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        requestingProjectId = null,
+                        catalogError = result.throwable.message ?: "Không thể gửi yêu cầu truy cập."
+                    )
+                }
+            }
+        }
+    }
+
+    fun accessStatusFor(projectId: String): FirebaseAccessRequestStatus =
+        uiState.value.accessRequestsByProject[projectId]?.status ?: FirebaseAccessRequestStatus.NOT_REQUESTED
+
+    fun refreshAdminRequests() {
+        if (_uiState.value.user?.isAdmin != true) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(adminLoading = true, adminError = "")
+            when (val result = firebaseAccessRepository.listProjectAccessRequests(status = null, pageSize = 100L)) {
+                is AppResult.Success -> _uiState.value = _uiState.value.copy(
+                    adminRequests = result.data,
+                    adminLoading = false,
+                    adminError = ""
+                )
+                is AppResult.Error -> _uiState.value = _uiState.value.copy(
+                    adminLoading = false,
+                    adminError = result.throwable.message ?: "Không tải được hàng đợi phê duyệt."
+                )
+            }
+        }
+    }
+
+    fun transitionProjectAccess(
+        request: FirebaseProjectAccessRequest,
+        action: FirebaseAccessAdminAction,
+        allowedDataGroups: Set<String> = setOf("gis_node"),
+        contractorScope: ContractorScope = ContractorScope.ALL,
+        allowedContractors: Set<String> = emptySet()
+    ) {
+        if (_uiState.value.user?.isAdmin != true) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(adminBusyRequestId = request.requestId, adminError = "")
+            when (val result = firebaseAccessRepository.transitionProjectAccess(
+                projectId = request.projectId,
+                targetUserId = request.userId,
+                action = action,
+                allowedDataGroups = allowedDataGroups,
+                contractorScope = contractorScope,
+                allowedContractors = allowedContractors
+            )) {
+                is AppResult.Success -> _uiState.value = _uiState.value.copy(
+                    adminRequests = _uiState.value.adminRequests
+                        .map { current -> if (current.requestId == result.data.requestId) result.data else current },
+                    adminBusyRequestId = null,
+                    message = "Đã cập nhật trạng thái và ghi audit."
+                )
+                is AppResult.Error -> _uiState.value = _uiState.value.copy(
+                    adminBusyRequestId = null,
+                    adminError = result.throwable.message ?: "Không thể cập nhật quyền truy cập."
+                )
             }
         }
     }

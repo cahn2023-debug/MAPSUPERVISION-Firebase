@@ -4,13 +4,21 @@ import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.mapsupervision.core.logging.AppLogger
 import com.mapsupervision.core.result.AppResult
 import com.mapsupervision.domain.model.ContractorScope
+import com.mapsupervision.domain.model.FirebaseAccessAdminAction
 import com.mapsupervision.domain.model.FirebaseAccessState
+import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
+import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
+import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
+import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.model.ProjectAccess
+import com.mapsupervision.domain.model.canRequestAgain
+import com.mapsupervision.domain.model.validateApprovedScope
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -23,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.Locale
 
 @Singleton
 class FirebaseAccessRepositoryImpl @Inject constructor(
@@ -190,6 +199,187 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         onFailure = { AppResult.Error(it) }
     )
 
+    override suspend fun getProjectAccessRequest(projectId: String): AppResult<FirebaseProjectAccessRequest?> = runCatching {
+        ensureConfigured()
+        val user = firebaseRuntime.auth().currentUser ?: error("Firebase user is not signed in.")
+        require(projectId.isValidFirebaseId()) { "Project id is required." }
+        firebaseRuntime.firestore()
+            .collection(ACCESS_REQUESTS_COLLECTION)
+            .document(accessRequestDocumentId(projectId, user.uid))
+            .get()
+            .await()
+            .takeIf { it.exists() }
+            ?.let { parseFirebaseProjectAccessRequest(it.id, it.data.orEmpty()) }
+            ?: return@runCatching null
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun requestProjectAccess(projectId: String): AppResult<FirebaseProjectAccessRequest> = runCatching {
+        ensureConfigured()
+        val user = firebaseRuntime.auth().currentUser ?: error("Firebase user is not signed in.")
+        require(projectId.isValidFirebaseId()) { "Project id is required." }
+        val firestore = firebaseRuntime.firestore()
+        val reference = firestore.collection(ACCESS_REQUESTS_COLLECTION)
+            .document(accessRequestDocumentId(projectId, user.uid))
+        firestore.runTransaction { transaction ->
+            val existing = transaction.get(reference)
+                .takeIf { it.exists() }
+                ?.let { parseFirebaseProjectAccessRequest(it.id, it.data.orEmpty()) }
+            if (existing != null && !existing.canRequestAgain()) {
+                return@runTransaction existing
+            }
+            val now = System.currentTimeMillis()
+            val next = FirebaseProjectAccessRequest(
+                requestId = reference.id,
+                projectId = projectId,
+                userId = user.uid,
+                status = FirebaseAccessRequestStatus.PENDING,
+                requestedAtEpochMs = now,
+                updatedAtEpochMs = now
+            )
+            transaction.set(reference, next.toFirestoreFields())
+            next
+        }.await()
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun listProjectAccessRequests(
+        status: FirebaseAccessRequestStatus?,
+        pageSize: Long,
+        startAfterUpdatedAtEpochMs: Long?,
+        startAfterRequestId: String?
+    ): AppResult<List<FirebaseProjectAccessRequest>> = runCatching {
+        ensureAdminClaim()
+        if (status == FirebaseAccessRequestStatus.NOT_REQUESTED) {
+            return@runCatching emptyList()
+        }
+        require((startAfterUpdatedAtEpochMs == null) == (startAfterRequestId == null)) {
+            "Access request cursor must include both updatedAtEpochMs and requestId."
+        }
+        var query = firebaseRuntime.firestore()
+            .collection(ACCESS_REQUESTS_COLLECTION)
+            .orderBy("updatedAtEpochMs", Query.Direction.DESCENDING)
+            .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
+            .limit(pageSize.coerceIn(1L, 100L))
+        if (status != null && status != FirebaseAccessRequestStatus.NOT_REQUESTED) {
+            query = firebaseRuntime.firestore()
+                .collection(ACCESS_REQUESTS_COLLECTION)
+                .whereEqualTo("status", status.name)
+                .orderBy("updatedAtEpochMs", Query.Direction.DESCENDING)
+                .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
+                .limit(pageSize.coerceIn(1L, 100L))
+        }
+        if (startAfterUpdatedAtEpochMs != null && startAfterRequestId != null) {
+            query = query.startAfter(startAfterUpdatedAtEpochMs, startAfterRequestId)
+        }
+        query.get().await().documents.mapNotNull { document ->
+            parseFirebaseProjectAccessRequest(document.id, document.data.orEmpty())
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun transitionProjectAccess(
+        projectId: String,
+        targetUserId: String,
+        action: FirebaseAccessAdminAction,
+        allowedDataGroups: Set<String>,
+        contractorScope: ContractorScope,
+        allowedContractors: Set<String>
+    ): AppResult<FirebaseProjectAccessRequest> = runCatching {
+        ensureAdminClaim()
+        require(projectId.isValidFirebaseId()) { "Project id is required." }
+        require(targetUserId.isValidFirebaseId()) { "Target user id is required." }
+        if (action == FirebaseAccessAdminAction.APPROVE) {
+            validateApprovedScope(allowedDataGroups, contractorScope, allowedContractors)
+        }
+        val firestore = firebaseRuntime.firestore()
+        val reference = firestore.collection(ACCESS_REQUESTS_COLLECTION)
+            .document(accessRequestDocumentId(projectId, targetUserId))
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(reference)
+            val current = snapshot.takeIf { it.exists() }
+                ?.let { parseFirebaseProjectAccessRequest(it.id, it.data.orEmpty()) }
+                ?: error("Access request not found.")
+            val targetStatus = action.targetStatus()
+            if (current.status == targetStatus) {
+                return@runTransaction current
+            }
+            require(isValidAdminTransition(current.status, targetStatus)) {
+                "Invalid access transition ${current.status} -> $targetStatus."
+            }
+            val now = System.currentTimeMillis()
+            val next = current.copy(
+                status = targetStatus,
+                allowedDataGroups = if (targetStatus == FirebaseAccessRequestStatus.APPROVED) {
+                    allowedDataGroups.filter(String::isNotBlank).toSet()
+                } else current.allowedDataGroups,
+                contractorScope = if (targetStatus == FirebaseAccessRequestStatus.APPROVED) contractorScope else current.contractorScope,
+                allowedContractors = if (targetStatus == FirebaseAccessRequestStatus.APPROVED) {
+                    allowedContractors.filter(String::isNotBlank).toSet()
+                } else current.allowedContractors,
+                approvedBy = if (targetStatus == FirebaseAccessRequestStatus.APPROVED) {
+                    firebaseRuntime.auth().currentUser?.uid
+                } else current.approvedBy,
+                approvedAtEpochMs = if (targetStatus == FirebaseAccessRequestStatus.APPROVED) now else current.approvedAtEpochMs,
+                updatedAtEpochMs = now
+            )
+            transaction.set(reference, next.toFirestoreFields())
+            val auditReference = reference.collection(ACCESS_AUDIT_SUBCOLLECTION).document()
+            transaction.set(
+                auditReference,
+                mapOf(
+                    "projectId" to projectId,
+                    "targetUserId" to targetUserId,
+                    "action" to action.name,
+                    "previousState" to current.status.name,
+                    "newState" to targetStatus.name,
+                    "actorAdminId" to (firebaseRuntime.auth().currentUser?.uid ?: error("Admin user is missing.")),
+                    "timestampEpochMs" to now
+                )
+            )
+            next
+        }.await()
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
+    override suspend fun listProjectCatalog(
+        pageSize: Long,
+        startAfterUpdatedAtEpochMs: Long?,
+        startAfterProjectId: String?
+    ): AppResult<List<FirebaseProjectCatalogEntry>> = runCatching {
+        ensureConfigured()
+        check(firebaseRuntime.auth().currentUser != null) { "Firebase user is not signed in." }
+        require((startAfterUpdatedAtEpochMs == null) == (startAfterProjectId == null)) {
+            "Catalog cursor must include both updatedAtEpochMs and projectId."
+        }
+        var query = firebaseRuntime.firestore()
+            .collection("projectCatalog")
+            .orderBy("updatedAtEpochMs", Query.Direction.DESCENDING)
+            .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
+            .limit(pageSize.coerceIn(1L, 100L))
+        if (startAfterUpdatedAtEpochMs != null && startAfterProjectId != null) {
+            query = query.startAfter(startAfterUpdatedAtEpochMs, startAfterProjectId)
+        }
+        query
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                parseFirebaseProjectCatalog(document.id, document.data.orEmpty())
+            }
+    }.fold(
+        onSuccess = { AppResult.Success(it) },
+        onFailure = { AppResult.Error(it) }
+    )
+
     override fun projectAccess(projectId: String): ProjectAccess? =
         _accessState.value.permissionsByProject[projectId]
 
@@ -325,4 +515,133 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
     }
 
     private fun Boolean?.orFalse(): Boolean = this == true
+
+    private suspend fun ensureAdminClaim() {
+        val user = firebaseRuntime.auth().currentUser ?: error("Firebase user is not signed in.")
+        check(user.getIdToken(false).await().claims["admin"] == true) {
+            "Firebase admin claim is required."
+        }
+    }
+
+    private fun FirebaseAccessAdminAction.targetStatus(): FirebaseAccessRequestStatus = when (this) {
+        FirebaseAccessAdminAction.APPROVE -> FirebaseAccessRequestStatus.APPROVED
+        FirebaseAccessAdminAction.REJECT -> FirebaseAccessRequestStatus.REJECTED
+        FirebaseAccessAdminAction.REVOKE -> FirebaseAccessRequestStatus.REVOKED
+    }
+
+    private fun String.isValidFirebaseId(): Boolean = isNotBlank() && !contains('/')
+
+    private fun FirebaseProjectAccessRequest.toFirestoreFields(): Map<String, Any?> = mapOf(
+        "projectId" to projectId,
+        "userId" to userId,
+        "status" to status.name,
+        "allowedDataGroups" to allowedDataGroups.toList(),
+        "contractorScope" to contractorScope.name,
+        "allowedContractors" to allowedContractors.toList(),
+        "approvedBy" to approvedBy,
+        "approvedAtEpochMs" to approvedAtEpochMs,
+        "requestedAtEpochMs" to requestedAtEpochMs,
+        "updatedAtEpochMs" to updatedAtEpochMs
+    )
+
+    companion object {
+        private const val ACCESS_REQUESTS_COLLECTION = "accessRequests"
+        private const val ACCESS_AUDIT_SUBCOLLECTION = "accessAudit"
+    }
+}
+
+internal fun accessRequestDocumentId(projectId: String, userId: String): String =
+    "${projectId.trim()}__${userId.trim()}"
+
+internal fun isValidAdminTransition(
+    previous: FirebaseAccessRequestStatus,
+    next: FirebaseAccessRequestStatus
+): Boolean = when (next) {
+    FirebaseAccessRequestStatus.APPROVED,
+    FirebaseAccessRequestStatus.REJECTED -> previous == FirebaseAccessRequestStatus.PENDING
+    FirebaseAccessRequestStatus.REVOKED -> previous == FirebaseAccessRequestStatus.APPROVED
+    else -> false
+}
+
+internal fun parseFirebaseProjectAccessRequest(
+    requestId: String,
+    fields: Map<String, Any?>
+): FirebaseProjectAccessRequest? {
+    val projectId = (fields["projectId"] as? String)?.trim().orEmpty()
+    val userId = (fields["userId"] as? String)?.trim().orEmpty()
+    val status = (fields["status"] as? String)?.trim()?.uppercase(Locale.ROOT)
+        ?.let { value -> runCatching { FirebaseAccessRequestStatus.valueOf(value) }.getOrNull() }
+    val updatedAtEpochMs = fields["updatedAtEpochMs"].asLongOrNull()
+    val allowedDataGroups = fields["allowedDataGroups"].asStringSetOrNull()
+    val allowedContractors = fields["allowedContractors"].asStringSetOrNull()
+    val contractorScope = (fields["contractorScope"] as? String)?.trim()?.uppercase(Locale.ROOT)
+        ?.let { value -> runCatching { ContractorScope.valueOf(value) }.getOrNull() }
+    if (requestId.isBlank() || projectId.isBlank() || userId.isBlank() ||
+        requestId != accessRequestDocumentId(projectId, userId) || status == null ||
+        updatedAtEpochMs == null || updatedAtEpochMs < 0L || allowedDataGroups == null ||
+        allowedContractors == null || contractorScope == null
+    ) return null
+    val approvedAt = fields["approvedAtEpochMs"].asLongOrNull()
+    val requestedAt = fields["requestedAtEpochMs"].asLongOrNull()
+    if (status == FirebaseAccessRequestStatus.APPROVED) {
+        if (approvedAt == null || (fields["approvedBy"] as? String).isNullOrBlank()) return null
+        runCatching { validateApprovedScope(allowedDataGroups, contractorScope, allowedContractors) }
+            .getOrElse { return null }
+    }
+    return FirebaseProjectAccessRequest(
+        requestId = requestId,
+        projectId = projectId,
+        userId = userId,
+        status = status,
+        allowedDataGroups = allowedDataGroups,
+        contractorScope = contractorScope,
+        allowedContractors = allowedContractors,
+        approvedBy = (fields["approvedBy"] as? String)?.trim()?.takeIf { it.isNotBlank() },
+        approvedAtEpochMs = approvedAt,
+        requestedAtEpochMs = requestedAt,
+        updatedAtEpochMs = updatedAtEpochMs
+    )
+}
+
+private fun Any?.asLongOrNull(): Long? = when (this) {
+    is Long -> this
+    is Int -> toLong()
+    else -> null
+}
+
+private fun Any?.asStringSetOrNull(): Set<String>? =
+    (this as? List<*>)?.map { it as? String ?: return null }
+        ?.map(String::trim)
+        ?.filter(String::isNotBlank)
+        ?.toSet()
+
+internal fun parseFirebaseProjectCatalog(
+    projectId: String,
+    fields: Map<String, Any?>
+): FirebaseProjectCatalogEntry? {
+    val normalizedProjectId = projectId.trim()
+    val projectName = (fields["projectName"] as? String)?.trim().orEmpty()
+    val projectCode = (fields["projectCode"] as? String)?.trim().orEmpty()
+    val updatedAtEpochMs = when (val value = fields["updatedAtEpochMs"]) {
+        is Long -> value
+        is Int -> value.toLong()
+        else -> null
+    }
+    val status = when ((fields["status"] as? String)?.trim()?.uppercase(Locale.ROOT)) {
+        "ACTIVE" -> FirebaseProjectCatalogStatus.ACTIVE
+        "ARCHIVED" -> FirebaseProjectCatalogStatus.ARCHIVED
+        else -> null
+    }
+    if (normalizedProjectId.isBlank() || projectName.isBlank() || projectCode.isBlank() ||
+        updatedAtEpochMs == null || updatedAtEpochMs < 0L || status == null
+    ) {
+        return null
+    }
+    return FirebaseProjectCatalogEntry(
+        projectId = normalizedProjectId,
+        projectName = projectName,
+        projectCode = projectCode,
+        updatedAtEpochMs = updatedAtEpochMs,
+        status = status
+    )
 }

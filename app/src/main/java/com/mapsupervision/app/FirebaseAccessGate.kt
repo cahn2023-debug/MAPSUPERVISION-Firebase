@@ -41,7 +41,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,6 +117,31 @@ fun AppRoot(
             onGoogleSignIn = accessViewModel::signInWithGoogle,
             setAuthError = accessViewModel::setAuthError,
             setAuthMessage = accessViewModel::setAuthMessage
+        )
+        return
+    }
+
+    var showProjectCatalog by remember(session.uid) { mutableStateOf(!session.isOffline) }
+    if (!session.isOffline && showProjectCatalog) {
+        FirebaseProjectCatalogScreen(
+            entries = accessState.projectCatalog,
+            statusFor = accessViewModel::accessStatusFor,
+            isLoading = accessState.catalogLoading,
+            error = accessState.catalogError,
+            requestingProjectId = accessState.requestingProjectId,
+            message = accessState.message,
+            isAdmin = session.isAdmin,
+            adminRequests = accessState.adminRequests,
+            adminLoading = accessState.adminLoading,
+            adminError = accessState.adminError,
+            adminBusyRequestId = accessState.adminBusyRequestId,
+            onRefresh = accessViewModel::refreshProjectCatalog,
+            onRequestAccess = accessViewModel::requestProjectAccess,
+            onAdminRefresh = accessViewModel::refreshAdminRequests,
+            onAdminTransition = { request, action ->
+                accessViewModel.transitionProjectAccess(request, action)
+            },
+            onContinueToWorkspace = { showProjectCatalog = false }
         )
         return
     }

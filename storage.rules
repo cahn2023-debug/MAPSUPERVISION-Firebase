@@ -5,15 +5,22 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isProjectMember(projectId) {
+    function accessRequestId(projectId) {
+      return projectId + "__" + request.auth.uid;
+    }
+
+    function hasApprovedAccess(projectId) {
       return isSignedIn() && (
         request.auth.token.admin == true ||
-        firestore.exists(/databases/(default)/documents/projects/$(projectId)/projectMembers/$(request.auth.uid))
+        (
+          firestore.exists(/databases/(default)/documents/accessRequests/$(accessRequestId(projectId))) &&
+          firestore.get(/databases/(default)/documents/accessRequests/$(accessRequestId(projectId))).data.status == "APPROVED"
+        )
       );
     }
 
     match /projects/{projectId}/media/{photoId}/{fileName} {
-      allow read, write: if isProjectMember(projectId);
+      allow read, write: if hasApprovedAccess(projectId);
     }
   }
 }

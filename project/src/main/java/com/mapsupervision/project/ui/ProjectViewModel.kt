@@ -80,6 +80,7 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             firebaseAccessRepository.accessState.debounce(250).collectLatest {
                 refresh()
+                loadCatalog()
             }
         }
     }
@@ -817,7 +818,105 @@ class ProjectViewModel @Inject constructor(
             refresh()
         }
     }
+
+    fun loadCatalog() {
+        viewModelScope.launch {
+            val session = firebaseAccessRepository.accessState.value.session
+            if (session == null || session.isOffline) {
+                _uiState.value = _uiState.value.copy(
+                    catalogItems = emptyList(),
+                    isCatalogLoading = false,
+                    catalogError = if (session?.isOffline == true) "Đang ở chế độ offline. Danh mục Firebase không khả dụng." else ""
+                )
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isCatalogLoading = true, catalogError = "")
+            when (val catalogRes = firebaseAccessRepository.listProjectCatalog(pageSize = 100)) {
+                is AppResult.Success -> {
+                    val catalogEntries = catalogRes.data
+                    val localProjects = (projectRepository.list(true) as? AppResult.Success)?.data.orEmpty()
+                    val accessState = firebaseAccessRepository.accessState.value
+
+                    val requestsByProject = mutableMapOf<String, FirebaseProjectAccessRequest>()
+                    catalogEntries.forEach { entry ->
+                        val reqRes = firebaseAccessRepository.getProjectAccessRequest(entry.projectId)
+                        if (reqRes is AppResult.Success && reqRes.data != null) {
+                            requestsByProject[entry.projectId] = reqRes.data!!
+                        }
+                    }
+
+                    val items = resolveCatalogItems(catalogEntries, localProjects, accessState, requestsByProject)
+                    val revokedIds = resolveRevokedReadOnlyProjectIds(localProjects, accessState, requestsByProject)
+                    _uiState.value = _uiState.value.copy(
+                        catalogItems = items,
+                        isCatalogLoading = false,
+                        catalogError = "",
+                        revokedReadOnlyProjectIds = revokedIds
+                    )
+                }
+                is AppResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isCatalogLoading = false,
+                        catalogError = catalogRes.throwable.message ?: "Không tải được danh mục dự án"
+                    )
+                }
+            }
+        }
+    }
+
+    fun requestAccess(projectId: String) {
+        viewModelScope.launch {
+            val currentItems = _uiState.value.catalogItems
+            val targetItem = currentItems.find { it.projectId == projectId }
+            if (targetItem != null && targetItem.accessStatus == FirebaseAccessRequestStatus.PENDING) {
+                return@launch
+            }
+
+            _uiState.value = _uiState.value.copy(
+                catalogItems = currentItems.map {
+                    if (it.projectId == projectId) it.copy(isActionBusy = true) else it
+                }
+            )
+
+            when (val res = firebaseAccessRepository.requestProjectAccess(projectId)) {
+                is AppResult.Success -> {
+                    val updatedRequest = res.data
+                    _uiState.value = _uiState.value.copy(
+                        message = "Đã gửi yêu cầu phê duyệt cho dự án: ${targetItem?.projectName ?: projectId}",
+                        catalogItems = _uiState.value.catalogItems.map {
+                            if (it.projectId == projectId) {
+                                it.copy(
+                                    accessStatus = updatedRequest.status,
+                                    isActionBusy = false
+                                )
+                            } else it
+                        }
+                    )
+                }
+                is AppResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        message = "Gửi yêu cầu thất bại: ${res.throwable.message}",
+                        catalogItems = _uiState.value.catalogItems.map {
+                            if (it.projectId == projectId) it.copy(isActionBusy = false) else it
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
+
+data class FirebaseCatalogItemUiState(
+    val projectId: String = "",
+    val projectName: String = "",
+    val projectCode: String = "",
+    val updatedAtEpochMs: Long = 0L,
+    val catalogStatus: FirebaseProjectCatalogStatus = FirebaseProjectCatalogStatus.ACTIVE,
+    val accessStatus: FirebaseAccessRequestStatus = FirebaseAccessRequestStatus.NOT_REQUESTED,
+    val isLocalAvailable: Boolean = false,
+    val isRevokedReadOnly: Boolean = false,
+    val isActionBusy: Boolean = false
+)
 
 data class ProjectUiState(
     val projects: List<Project> = emptyList(),
@@ -826,8 +925,64 @@ data class ProjectUiState(
     val importMessage: String = "",
     val message: String = "",
     val duplicateProjectToResolve: Project? = null,
-    val duplicateZipUri: Uri? = null
+    val duplicateZipUri: Uri? = null,
+    val catalogItems: List<FirebaseCatalogItemUiState> = emptyList(),
+    val isCatalogLoading: Boolean = false,
+    val catalogError: String = "",
+    val revokedReadOnlyProjectIds: Set<String> = emptySet()
 )
+
+internal fun resolveCatalogItems(
+    catalogEntries: List<FirebaseProjectCatalogEntry>,
+    localProjects: List<Project>,
+    accessState: com.mapsupervision.domain.model.FirebaseAccessState,
+    requestsByProject: Map<String, FirebaseProjectAccessRequest>
+): List<FirebaseCatalogItemUiState> {
+    val localProjectIds = localProjects.map { it.id }.toSet()
+    val isAdmin = accessState.session?.isAdmin == true
+
+    return catalogEntries.map { entry ->
+        val isLocal = entry.projectId in localProjectIds
+        val req = requestsByProject[entry.projectId]
+        val status = when {
+            isAdmin -> FirebaseAccessRequestStatus.APPROVED
+            req != null -> req.status
+            entry.projectId in accessState.allowedProjectIds -> FirebaseAccessRequestStatus.APPROVED
+            else -> FirebaseAccessRequestStatus.NOT_REQUESTED
+        }
+        val isRevokedReadOnly = isLocal && status == FirebaseAccessRequestStatus.REVOKED
+
+        FirebaseCatalogItemUiState(
+            projectId = entry.projectId,
+            projectName = entry.projectName,
+            projectCode = entry.projectCode,
+            updatedAtEpochMs = entry.updatedAtEpochMs,
+            catalogStatus = entry.status,
+            accessStatus = status,
+            isLocalAvailable = isLocal,
+            isRevokedReadOnly = isRevokedReadOnly
+        )
+    }
+}
+
+internal fun resolveRevokedReadOnlyProjectIds(
+    localProjects: List<Project>,
+    accessState: com.mapsupervision.domain.model.FirebaseAccessState,
+    requestsByProject: Map<String, FirebaseProjectAccessRequest>
+): Set<String> {
+    val session = accessState.session
+    if (session == null || session.isOffline || session.isAdmin) {
+        return emptySet()
+    }
+    return localProjects.mapNotNull { p ->
+        val req = requestsByProject[p.id]
+        if (req?.status == FirebaseAccessRequestStatus.REVOKED) {
+            p.id
+        } else {
+            null
+        }
+    }.toSet()
+}
 
 private fun normalizeGoogleDriveFolderInput(value: String): Pair<String, String> {
     val trimmed = value.trim()
