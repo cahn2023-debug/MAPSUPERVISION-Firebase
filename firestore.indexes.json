@@ -41,26 +41,10 @@
       ]
     },
     {
-      "collectionGroup": "projectCatalog",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "accessRequests",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "accessRequests",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "updatedAtEpochMs", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
