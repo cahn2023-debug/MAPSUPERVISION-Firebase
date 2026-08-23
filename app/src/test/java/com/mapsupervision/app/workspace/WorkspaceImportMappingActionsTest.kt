@@ -49,4 +49,19 @@ class WorkspaceImportMappingActionsTest {
 
         assertEquals(state, state.startExcelImport())
     }
+
+    @Test
+    fun `ExcelParserUiState preserves allowPartialImport toggle state`() {
+        val state = ExcelParserUiState(
+            allowPartialImport = true,
+            validRowCount = 251,
+            invalidRowCount = 1,
+            validationErrors = emptyList()
+        )
+
+        assertTrue(state.allowPartialImport)
+        assertTrue(state.canConfirm)
+        assertEquals(251, state.validRowCount)
+        assertEquals(1, state.invalidRowCount)
+    }
 }

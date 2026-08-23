@@ -8,6 +8,7 @@ import com.mapsupervision.data.db.MapSupervisionDatabase
 import com.mapsupervision.data.db.ProjectScopedDatabaseProvider
 import com.mapsupervision.domain.model.GisNode
 import com.mapsupervision.domain.model.GisRoute
+import com.mapsupervision.domain.model.ImportedFile
 import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.storage.ProjectStorageManager
 import java.io.File
@@ -201,6 +202,57 @@ class GisRepositoryImplTest {
         val retrievedRoute = (searchedRoutes as AppResult.Success).data.single()
         assertEquals(24, retrievedRoute.fiberCoreCount)
         assertEquals("ODF-A to ODF-B", retrievedRoute.fiberConnection)
+    }
+
+    @Test
+    fun `atomic import rolls back file and geometry when a batch write fails`() = runBlocking {
+        val projectId = "project-atomic"
+        database.projectDao().upsert(
+            com.mapsupervision.data.db.entity.ProjectEntity(
+                id = projectId,
+                name = projectId,
+                slug = projectId,
+                isArchived = false,
+                createdAtEpochMs = 1L,
+                storageMode = com.mapsupervision.domain.model.ProjectStorageMode.LEGACY_SHARED
+            )
+        )
+        val file = ImportedFile("file-atomic", projectId, "data.xlsx", "xlsx", "", "", 2L)
+        val nodes = listOf(GisNode("node-a", projectId, "NODE", "CTR", 10.0, 106.0))
+        val invalidRoutes = listOf(
+            GisRoute("route-a", projectId, "ROUTE", "CTR", "NODE", "MISSING", startNodeId = "missing-node")
+        )
+
+        val result = repository.commitImportedGeometry(projectId, file, null, nodes, invalidRoutes)
+
+        assertTrue(result is AppResult.Error)
+        assertTrue(database.importedFileDao().byProject(projectId).isEmpty())
+        assertTrue(database.gisNodeDao().byProject(projectId).isEmpty())
+    }
+
+    @Test
+    fun `atomic import rejects geometry from another project`() = runBlocking {
+        val projectId = "project-owner"
+        database.projectDao().upsert(
+            com.mapsupervision.data.db.entity.ProjectEntity(
+                id = projectId,
+                name = projectId,
+                slug = projectId,
+                isArchived = false,
+                createdAtEpochMs = 1L,
+                storageMode = com.mapsupervision.domain.model.ProjectStorageMode.LEGACY_SHARED
+            )
+        )
+        val result = repository.commitImportedGeometry(
+            projectId,
+            null,
+            null,
+            listOf(GisNode("node-cross", "other-project", "CROSS", "CTR", 10.0, 106.0)),
+            emptyList()
+        )
+
+        assertTrue(result is AppResult.Error)
+        assertTrue(database.gisNodeDao().byProject(projectId).isEmpty())
     }
 
     private fun nodeEntity(id: String, projectId: String, code: String, importedFileId: String) =

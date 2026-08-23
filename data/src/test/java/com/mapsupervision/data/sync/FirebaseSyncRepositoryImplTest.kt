@@ -51,6 +51,7 @@ class FirebaseSyncRepositoryImplTest {
         
         repository = FirebaseSyncRepositoryImpl(context, sharedDatabase, scopedDatabaseProvider)
         repository.firebaseRuntime = TestFirebaseRuntime(context)
+        repository.enforceAccessChecks = false
         
         fakeClient = TestDriveMediaUploadClient()
         repository.driveMediaUploadClient = fakeClient

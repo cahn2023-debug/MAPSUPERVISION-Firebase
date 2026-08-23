@@ -129,6 +129,10 @@ import com.mapsupervision.app.workspace.triggerCapture
 import com.mapsupervision.app.workspace.updateExcelClassificationMode
 import com.mapsupervision.app.workspace.updateExcelCoordinateMode
 import com.mapsupervision.app.workspace.updateExcelMapping
+import com.mapsupervision.app.workspace.updateExcelAllowPartialImport
+import com.mapsupervision.app.workspace.toggleExcelConfirmedCustomColumn
+import com.mapsupervision.app.workspace.updateExcelDuplicatePolicy
+import com.mapsupervision.app.workspace.updateExcelDeduplicationKey
 import com.mapsupervision.app.workspace.updateImportMappingUi
 import com.mapsupervision.app.workspace.updateMapLabelField
 import com.mapsupervision.app.workspace.updateMapVisualOptions
@@ -489,7 +493,11 @@ fun WorkspaceAppShell(
                     onSuggestTasks = workspaceViewModel::suggestTasks,
                     onCombineFiles = workspaceViewModel::combineImportedFiles,
                     onUpdateSelectedExcelSheet = workspaceViewModel::updateSelectedExcelSheet,
-                    onRefresh = workspaceViewModel::refresh
+                     onToggleAllowPartialImport = workspaceViewModel::updateExcelAllowPartialImport,
+                     onToggleConfirmedCustomColumn = workspaceViewModel::toggleExcelConfirmedCustomColumn,
+                     onUpdateExcelDuplicatePolicy = workspaceViewModel::updateExcelDuplicatePolicy,
+                     onUpdateExcelDeduplicationKey = workspaceViewModel::updateExcelDeduplicationKey,
+                     onRefresh = workspaceViewModel::refresh
                 )
             }
             composable("reports") {

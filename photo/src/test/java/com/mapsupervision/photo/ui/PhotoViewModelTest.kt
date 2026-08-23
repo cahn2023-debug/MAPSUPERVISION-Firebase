@@ -177,6 +177,8 @@ private class FakePhotoRepository : PhotoRepository {
         return AppResult.Success(saved.filter { it.projectId == projectId && it.objectCode == objectCode })
     }
 
+    override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = AppResult.Success(emptyList())
+
     override fun observeByProject(projectId: String): Flow<List<SitePhoto>> {
         return flowOf(saved.filter { it.projectId == projectId })
     }

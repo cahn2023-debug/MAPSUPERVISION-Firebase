@@ -3,6 +3,7 @@ package com.mapsupervision.domain.repository
 import com.mapsupervision.core.result.AppResult
 import com.mapsupervision.domain.model.GisNode
 import com.mapsupervision.domain.model.GisRoute
+import com.mapsupervision.domain.model.ImportedFile
 import kotlinx.coroutines.flow.Flow
 
 interface GisRepository {
@@ -10,6 +11,13 @@ interface GisRepository {
     suspend fun upsertRoute(route: GisRoute): AppResult<Unit>
     suspend fun upsertNodes(nodes: List<GisNode>): AppResult<Unit>
     suspend fun upsertRoutes(routes: List<GisRoute>): AppResult<Unit>
+    suspend fun commitImportedGeometry(
+        projectId: String,
+        importedFile: ImportedFile?,
+        replacingImportedFileId: String?,
+        nodes: List<GisNode>,
+        routes: List<GisRoute>
+    ): AppResult<Unit> = AppResult.Error(UnsupportedOperationException("Atomic import commit is not implemented"))
     suspend fun replaceImportedGeometry(importedFileId: String, nodes: List<GisNode>, routes: List<GisRoute>): AppResult<Unit>
     suspend fun searchNodes(projectId: String, query: String): AppResult<List<GisNode>>
     suspend fun searchRoutes(projectId: String, query: String): AppResult<List<GisRoute>>

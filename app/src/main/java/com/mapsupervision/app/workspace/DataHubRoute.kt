@@ -9,6 +9,8 @@ import com.mapsupervision.domain.model.GisNode
 import com.mapsupervision.domain.model.GisRoute
 import com.mapsupervision.domain.model.ImportedFile
 import com.mapsupervision.domain.model.TaskStatus
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
 import com.mapsupervision.storage.importer.ExcelClassificationMode
 
 @Composable
@@ -48,6 +50,10 @@ fun DataHubRoute(
     onSuggestTasks: (String) -> Unit,
     onCombineFiles: (ImportedFile, ImportedFile, List<GisNode>, List<GisRoute>) -> Unit,
     onUpdateSelectedExcelSheet: (String) -> Unit,
+    onToggleAllowPartialImport: (Boolean) -> Unit = {},
+    onToggleConfirmedCustomColumn: (String) -> Unit = {},
+    onUpdateExcelDuplicatePolicy: (DuplicateImportPolicy) -> Unit = {},
+    onUpdateExcelDeduplicationKey: (DuplicateBusinessKey) -> Unit = {},
     onRefresh: () -> Unit = {},
     viewModel: DataHubViewModel = hiltViewModel()
 ) {
@@ -99,7 +105,10 @@ fun DataHubRoute(
         onSuggestTasks = onSuggestTasks,
         onCombineFiles = onCombineFiles,
         onUpdateSelectedExcelSheet = onUpdateSelectedExcelSheet,
+        onToggleAllowPartialImport = onToggleAllowPartialImport,
+        onToggleConfirmedCustomColumn = onToggleConfirmedCustomColumn,
+        onUpdateExcelDuplicatePolicy = onUpdateExcelDuplicatePolicy,
+        onUpdateExcelDeduplicationKey = onUpdateExcelDeduplicationKey,
         onRefresh = onRefresh
     )
 }
-

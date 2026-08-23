@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Dialog
 import com.mapsupervision.core.logging.AppLogger
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
 
 @Composable
 fun ExcelMappingDialog(
@@ -62,7 +64,11 @@ fun ExcelMappingDialog(
     onUpdateCoordinateMode: (Boolean) -> Unit,
     onUpdateMapVisualOptions: (Boolean?, Boolean?) -> Unit,
     onConfirmParse: () -> Unit,
-    onUpdateSelectedSheet: (String) -> Unit
+    onUpdateSelectedSheet: (String) -> Unit,
+    onToggleAllowPartialImport: (Boolean) -> Unit = {},
+    onToggleConfirmedCustomColumn: (String) -> Unit = {},
+    onUpdateDuplicatePolicy: (DuplicateImportPolicy) -> Unit = {},
+    onUpdateDeduplicationKey: (DuplicateBusinessKey) -> Unit = {}
 ) {
     val previews = remember(state.headers, state.sampleRows) {
         state.headers.map { header ->
@@ -128,7 +134,7 @@ fun ExcelMappingDialog(
                     .fillMaxSize()
                     .padding(24.dp)
             ) {
-                Text("Anh xa cot Excel theo noi dung", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Ánh xạ cột dữ liệu bảng", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 Column(
                     modifier = Modifier
@@ -137,9 +143,76 @@ fun ExcelMappingDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Ung dung tu phat hien cot Excel. Vui long doi soat mau truoc khi nhap.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Hệ thống tự động phát hiện cấu trúc cột. Vui lòng đối soát và xác nhận trước khi nhập.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
-                    if (state.message.isNotBlank()) {
+                    // Validation Summary Card
+                    if (state.validationErrors.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Chưa thể xác nhận nhập:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                                state.validationErrors.forEach { err ->
+                                    Text("• $err", color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else if (state.invalidRowCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "Phát hiện ${state.invalidRowCount} dòng lỗi (${state.validRowCount} dòng hợp lệ)",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    fontSize = 13.sp
+                                )
+                                if (state.invalidRowSamples.isNotEmpty()) {
+                                    Text("Chi tiết lỗi mẫu:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                    state.invalidRowSamples.forEach { sample ->
+                                        Text("• $sample", fontSize = 11.sp, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onToggleAllowPartialImport(!state.allowPartialImport) }
+                                        .padding(top = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = state.allowPartialImport,
+                                        onCheckedChange = { onToggleAllowPartialImport(it) },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "Cho phép chỉ nhập ${state.validRowCount} dòng hợp lệ (bỏ qua dòng lỗi)",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    } else if (state.validRowCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("✓ Toàn bộ ${state.validRowCount} dòng dữ liệu hợp lệ và sẵn sàng nhập.", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    if (state.message.isNotBlank() && state.validationErrors.isEmpty() && state.invalidRowCount == 0) {
                         Text(
                             text = state.message,
                             color = MaterialTheme.colorScheme.primary,
@@ -148,205 +221,334 @@ fun ExcelMappingDialog(
                         )
                     }
 
-                if (state.isLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text("Đang nhập dữ liệu, vui lòng chờ...", color = MaterialTheme.colorScheme.primary)
-                }
-
-                if (state.sheets.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Chon worksheet", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        DropdownField(
-                            selected = state.selectedSheet.ifBlank { state.sheets.firstOrNull().orEmpty() },
-                            options = state.sheets,
-                            onSelected = onUpdateSelectedSheet
-                        )
-                    }
-                }
-
-                MappingSection("Định danh & Tọa độ") {
-                    ColumnSection("Cột tên đối tượng / vị trí", state.positionColumn, allHeaders, previews) { update(positionColumn = it) }
-                    Text("Định dạng tọa độ trong Excel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { onUpdateCoordinateMode(false) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!state.useTwoColumnCoordinates) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!state.useTwoColumnCoordinates) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("1 cột (lat,lon)", fontSize = 12.sp) }
-                        Button(
-                            onClick = { onUpdateCoordinateMode(true) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (state.useTwoColumnCoordinates) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (state.useTwoColumnCoordinates) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("2 cột (vĩ/kinh)", fontSize = 12.sp) }
+                    if (state.isLoading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("Đang xử lý nhập dữ liệu, vui lòng chờ...", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
 
-                    if (!state.useTwoColumnCoordinates) {
-                        ColumnSection("Cột tọa độ GPS (lat,lon)", state.coordinateColumn, allHeaders, previews) { update(coordinateColumn = it) }
-                    } else {
+                    if (state.sheets.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Chọn worksheet", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            DropdownField(
+                                selected = state.selectedSheet.ifBlank { state.sheets.firstOrNull().orEmpty() },
+                                options = state.sheets,
+                                onSelected = onUpdateSelectedSheet
+                            )
+                        }
+                    }
+
+                    MappingSection("Định danh & Tọa độ") {
+                        ColumnSection("Cột tên đối tượng / vị trí (*)", state.positionColumn, allHeaders, previews) { update(positionColumn = it) }
+                        Text("Định dạng tọa độ trong bảng dữ liệu (*)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                ColumnSection("Cột vĩ độ (Latitude)", state.latitudeColumn, allHeaders, previews) { update(latitudeColumn = it) }
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                ColumnSection("Cột kinh độ (Longitude)", state.longitudeColumn, allHeaders, previews) { update(longitudeColumn = it) }
-                            }
-                        }
-                    }
-                }
-
-                MappingSection("Nhà thầu & Bản đồ") {
-                    ColumnSection("Cột nhà thầu", state.contractorColumn, allHeaders, previews) { update(contractorColumn = it) }
-                    ColumnSection("Cột số hiển thị trên bản đồ", state.mapNumberColumn, allHeaders, previews) { update(mapNumberColumn = it) }
-                }
-
-                MappingSection("Thông tin mạng (Nút)") {
-                    ColumnSection("Cột IP", state.ipAddressColumn, allHeaders, previews) { update(ipAddressColumn = it) }
-                    ColumnSection("Cột Subnet", state.subnetColumn, allHeaders, previews) { update(subnetColumn = it) }
-                    ColumnSection("Cột Gateway", state.gatewayColumn, allHeaders, previews) { update(gatewayColumn = it) }
-                    ColumnSection("Cột trạng thái tín hiệu", state.signalStatusColumn, allHeaders, previews) { update(signalStatusColumn = it) }
-                }
-
-                MappingSection("Thông tin mạng (Tuyến)") {
-                    ColumnSection("Cột số core quang", state.fiberCoreCountColumn, allHeaders, previews) { update(fiberCoreCountColumn = it) }
-                    ColumnSection("Cột sợi kết nối", state.fiberConnectionColumn, allHeaders, previews) { update(fiberConnectionColumn = it) }
-                }
-
-                val excluded = setOf(
-                    state.positionColumn,
-                    state.contractorColumn,
-                    state.mapNumberColumn,
-                    state.ipAddressColumn,
-                    state.subnetColumn,
-                    state.gatewayColumn,
-                    state.signalStatusColumn,
-                    state.fiberCoreCountColumn,
-                    state.fiberConnectionColumn,
-                    if (state.useTwoColumnCoordinates) state.latitudeColumn else state.coordinateColumn,
-                    if (state.useTwoColumnCoordinates) state.longitudeColumn else ""
-                )
-                val availableHeaders = allHeaders.filter { it !in excluded }
-
-                MappingSection("Vật tư & Khối lượng thiết kế") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Chọn cột công việc / khối lượng", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                text = "Chọn tất cả",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .clickable {
-                                        selectedMaterials.clear()
-                                        selectedMaterials.addAll(availableHeaders)
-                                        update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
-                                    }
-                                    .padding(4.dp)
-                            )
-                            Text(
-                                text = "Bỏ chọn",
-                                color = Color.Gray,
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .clickable {
-                                        selectedMaterials.clear()
-                                        update(workVolumeColumnsCsv = "")
-                                    }
-                                    .padding(4.dp)
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 180.dp)
-                            .background(MaterialTheme.colorScheme.background, RoundedCornerShape(8.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .verticalScroll(rememberScrollState())
-                            .padding(vertical = 4.dp)
-                    ) {
-                        availableHeaders.forEach { header ->
-                            val checked = selectedMaterials.contains(header)
-                            val sample = previews.firstOrNull { it.first == header }?.second?.joinToString(", ").orEmpty()
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (checked) selectedMaterials.remove(header) else selectedMaterials.add(header)
-                                        update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = {
-                                        if (it) selectedMaterials.add(header) else selectedMaterials.remove(header)
-                                        update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
-                                    },
-                                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                            Button(
+                                onClick = { onUpdateCoordinateMode(false) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!state.useTwoColumnCoordinates) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (!state.useTwoColumnCoordinates) MaterialTheme.colorScheme.onPrimary else Color.White
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(header, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                                    if (sample.isNotBlank()) Text("Mẫu: $sample", color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp)
+                            ) { Text("1 cột (lat,lon)", fontSize = 12.sp) }
+                            Button(
+                                onClick = { onUpdateCoordinateMode(true) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.useTwoColumnCoordinates) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.useTwoColumnCoordinates) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("2 cột (vĩ/kinh)", fontSize = 12.sp) }
+                        }
+
+                        if (!state.useTwoColumnCoordinates) {
+                            ColumnSection("Cột tọa độ GPS (lat,lon) (*)", state.coordinateColumn, allHeaders, previews) { update(coordinateColumn = it) }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    ColumnSection("Cột vĩ độ (Latitude) (*)", state.latitudeColumn, allHeaders, previews) { update(latitudeColumn = it) }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    ColumnSection("Cột kinh độ (Longitude) (*)", state.longitudeColumn, allHeaders, previews) { update(longitudeColumn = it) }
                                 }
                             }
                         }
                     }
-                }
 
-                MappingSection("Cấu hình hiển thị bản đồ") {
-                    Text("Hiển thị số trên bản đồ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { onUpdateMapVisualOptions(false, null) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!state.showNumberOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!state.showNumberOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("Ẩn số", fontSize = 12.sp) }
-                        Button(
-                            onClick = { onUpdateMapVisualOptions(true, null) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (state.showNumberOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (state.showNumberOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("Hiện số", fontSize = 12.sp) }
+                    MappingSection("Nhà thầu & Bản đồ") {
+                        ColumnSection("Cột nhà thầu", state.contractorColumn, allHeaders, previews) { update(contractorColumn = it) }
+                        ColumnSection("Cột số hiển thị trên bản đồ", state.mapNumberColumn, allHeaders, previews) { update(mapNumberColumn = it) }
                     }
 
-                    Text("Màu đối tượng trên bản đồ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { onUpdateMapVisualOptions(null, false) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!state.colorByContractorOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!state.colorByContractorOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("Đơn sắc", fontSize = 12.sp) }
-                        Button(
-                            onClick = { onUpdateMapVisualOptions(null, true) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (state.colorByContractorOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (state.colorByContractorOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
-                            )
-                        ) { Text("Theo nhà thầu", fontSize = 12.sp) }
+                    MappingSection("Thông tin mạng (Nút)") {
+                        ColumnSection("Cột IP", state.ipAddressColumn, allHeaders, previews) { update(ipAddressColumn = it) }
+                        ColumnSection("Cột Subnet", state.subnetColumn, allHeaders, previews) { update(subnetColumn = it) }
+                        ColumnSection("Cột Gateway", state.gatewayColumn, allHeaders, previews) { update(gatewayColumn = it) }
+                        ColumnSection("Cột trạng thái tín hiệu", state.signalStatusColumn, allHeaders, previews) { update(signalStatusColumn = it) }
                     }
-                }
+
+                    MappingSection("Thông tin mạng (Tuyến)") {
+                        ColumnSection("Cột số core quang", state.fiberCoreCountColumn, allHeaders, previews) { update(fiberCoreCountColumn = it) }
+                        ColumnSection("Cột sợi kết nối", state.fiberConnectionColumn, allHeaders, previews) { update(fiberConnectionColumn = it) }
+                    }
+
+                    val excluded = setOf(
+                        state.positionColumn,
+                        state.contractorColumn,
+                        state.mapNumberColumn,
+                        state.ipAddressColumn,
+                        state.subnetColumn,
+                        state.gatewayColumn,
+                        state.signalStatusColumn,
+                        state.fiberCoreCountColumn,
+                        state.fiberConnectionColumn,
+                        if (state.useTwoColumnCoordinates) state.latitudeColumn else state.coordinateColumn,
+                        if (state.useTwoColumnCoordinates) state.longitudeColumn else ""
+                    )
+                    val availableHeaders = allHeaders.filter { it !in excluded }
+
+                    MappingSection("Vật tư & Khối lượng thiết kế") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Chọn cột công việc / khối lượng", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Chọn tất cả",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .clickable {
+                                            selectedMaterials.clear()
+                                            selectedMaterials.addAll(availableHeaders)
+                                            update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
+                                        }
+                                        .padding(4.dp)
+                                )
+                                Text(
+                                    text = "Bỏ chọn",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .clickable {
+                                            selectedMaterials.clear()
+                                            update(workVolumeColumnsCsv = "")
+                                        }
+                                        .padding(4.dp)
+                                )
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 180.dp)
+                                .background(MaterialTheme.colorScheme.background, RoundedCornerShape(8.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 4.dp)
+                        ) {
+                            availableHeaders.forEach { header ->
+                                val checked = selectedMaterials.contains(header)
+                                val sample = previews.firstOrNull { it.first == header }?.second?.joinToString(", ").orEmpty()
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (checked) selectedMaterials.remove(header) else selectedMaterials.add(header)
+                                            update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = {
+                                            if (it) selectedMaterials.add(header) else selectedMaterials.remove(header)
+                                            update(workVolumeColumnsCsv = selectedMaterials.joinToString(","))
+                                        },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(header, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                        if (sample.isNotBlank()) Text("Mẫu: $sample", color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Decision D4: Custom Metadata / Unmapped Columns
+                    val unmappedHeaders = availableHeaders.filter { !selectedMaterials.contains(it) }
+                    if (unmappedHeaders.isNotEmpty()) {
+                        MappingSection("Cột mở rộng (Metadata lưu trữ thêm)") {
+                            Text("Chọn các cột chưa ánh xạ cần lưu vào trường mở rộng của đối tượng:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 140.dp)
+                                    .background(MaterialTheme.colorScheme.background, RoundedCornerShape(8.dp))
+                                    .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                unmappedHeaders.forEach { header ->
+                                    val isConfirmed = state.confirmedCustomColumns.contains(header)
+                                    val sample = previews.firstOrNull { it.first == header }?.second?.joinToString(", ").orEmpty()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onToggleConfirmedCustomColumn(header) }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isConfirmed,
+                                            onCheckedChange = { onToggleConfirmedCustomColumn(header) },
+                                            colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.secondary)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(header, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                            if (sample.isNotBlank()) Text("Mẫu: $sample", color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    MappingSection("Xử lý dữ liệu trùng & Khóa nghiệp vụ") {
+                        Text(
+                            "Chọn khóa nghiệp vụ để nhận diện bản ghi trùng. Hệ thống cho phép Bỏ qua (SKIP) hoặc Cập nhật/Ghi đè (UPDATE).",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Khóa nhận diện trùng:",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 12.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { onUpdateDeduplicationKey(DuplicateBusinessKey.CODE) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.deduplicationKey == DuplicateBusinessKey.CODE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.deduplicationKey == DuplicateBusinessKey.CODE) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) {
+                                Text("Mã vị trí" + if (state.suggestedBusinessKey == DuplicateBusinessKey.CODE) " ★" else "", fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = { onUpdateDeduplicationKey(DuplicateBusinessKey.COORDINATES) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.deduplicationKey == DuplicateBusinessKey.COORDINATES) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.deduplicationKey == DuplicateBusinessKey.COORDINATES) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) {
+                                Text("Tọa độ" + if (state.suggestedBusinessKey == DuplicateBusinessKey.COORDINATES) " ★" else "", fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = { onUpdateDeduplicationKey(DuplicateBusinessKey.COMPOSITE_CODE_COORD) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.deduplicationKey == DuplicateBusinessKey.COMPOSITE_CODE_COORD) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.deduplicationKey == DuplicateBusinessKey.COMPOSITE_CODE_COORD) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) {
+                                Text("Mã + Tọa độ" + if (state.suggestedBusinessKey == DuplicateBusinessKey.COMPOSITE_CODE_COORD) " ★" else "", fontSize = 11.sp)
+                            }
+                        }
+
+                        if (state.duplicateRowCount > 0) {
+                            Surface(
+                                color = Color(0xFFFFF3CD),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "Phát hiện ${state.duplicateRowCount} bản ghi trùng theo khóa đã chọn.",
+                                    color = Color(0xFF856404),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Chính sách xử lý khi trùng:",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 12.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { onUpdateDuplicatePolicy(DuplicateImportPolicy.SKIP) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.duplicatePolicy == DuplicateImportPolicy.SKIP) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.duplicatePolicy == DuplicateImportPolicy.SKIP) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Bỏ qua (SKIP)", fontSize = 12.sp) }
+                            Button(
+                                onClick = { onUpdateDuplicatePolicy(DuplicateImportPolicy.UPDATE) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.duplicatePolicy == DuplicateImportPolicy.UPDATE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.duplicatePolicy == DuplicateImportPolicy.UPDATE) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Cập nhật (UPDATE)", fontSize = 12.sp) }
+                        }
+                    }
+
+                    MappingSection("Cấu hình hiển thị bản đồ") {
+                        Text("Hiển thị số trên bản đồ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { onUpdateMapVisualOptions(false, null) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!state.showNumberOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (!state.showNumberOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Ẩn số", fontSize = 12.sp) }
+                            Button(
+                                onClick = { onUpdateMapVisualOptions(true, null) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.showNumberOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.showNumberOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Hiện số", fontSize = 12.sp) }
+                        }
+
+                        Text("Màu đối tượng trên bản đồ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { onUpdateMapVisualOptions(null, false) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!state.colorByContractorOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (!state.colorByContractorOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Đơn sắc", fontSize = 12.sp) }
+                            Button(
+                                onClick = { onUpdateMapVisualOptions(null, true) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.colorByContractorOnMap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (state.colorByContractorOnMap) MaterialTheme.colorScheme.onPrimary else Color.White
+                                )
+                            ) { Text("Theo nhà thầu", fontSize = 12.sp) }
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -360,18 +562,24 @@ fun ExcelMappingDialog(
                         onClick = {
                             AppLogger.d(
                                 "import.mapping.flow confirm.click file=${state.sourceFileName} " +
-                                    "headers=${state.headers.size} loading=${state.isLoading}"
+                                    "headers=${state.headers.size} loading=${state.isLoading} canConfirm=${state.canConfirm}"
                             )
                             onConfirmParse()
                         },
-                        enabled = !state.isLoading,
+                        enabled = !state.isLoading && state.canConfirm,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         Text(
-                            if (state.isLoading) "Đang nhập dữ liệu..." else "Xác nhận nhập dữ liệu",
+                            if (state.isLoading) "Đang nhập dữ liệu..."
+                            else when {
+                                !state.canConfirm && state.validationErrors.isNotEmpty() -> "Thiếu cột bắt buộc"
+                                !state.canConfirm && state.invalidRowCount > 0 -> "Có dòng dữ liệu lỗi"
+                                state.canConfirm && state.invalidRowCount > 0 -> "Nhập ${state.validRowCount} dòng hợp lệ"
+                                else -> "Xác nhận nhập dữ liệu (${state.validRowCount})"
+                            },
                             fontWeight = FontWeight.Bold
                         )
                     }

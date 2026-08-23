@@ -177,6 +177,7 @@ private class FakePhotoRepository : com.mapsupervision.domain.repository.PhotoRe
     override suspend fun add(photo: com.mapsupervision.domain.model.SitePhoto): AppResult<Unit> = AppResult.Success(Unit)
     override suspend fun byProject(projectId: String): AppResult<List<com.mapsupervision.domain.model.SitePhoto>> = AppResult.Success(emptyList())
     override suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<com.mapsupervision.domain.model.SitePhoto>> = AppResult.Success(emptyList())
+    override suspend fun listProjectsWithPendingUploads(): AppResult<List<String>> = AppResult.Success(emptyList())
     override fun observeByProject(projectId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.mapsupervision.domain.model.SitePhoto>())
 }
 

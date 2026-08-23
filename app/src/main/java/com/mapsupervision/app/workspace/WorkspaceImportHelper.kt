@@ -2,6 +2,11 @@ package com.mapsupervision.app.workspace
 
 import com.mapsupervision.domain.model.GisNode
 import com.mapsupervision.domain.model.GisRoute
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
+import com.mapsupervision.domain.model.MergeResult
+import com.mapsupervision.domain.model.DedupStats
+import com.mapsupervision.domain.model.DedupQualitySnapshot
 import java.text.Normalizer
 import java.util.Locale
 import java.util.LinkedHashSet
@@ -95,7 +100,9 @@ object WorkspaceImportHelper {
         incomingNodes: List<GisNode>,
         incomingRoutes: List<GisRoute>,
         existingNodes: List<GisNode>,
-        existingRoutes: List<GisRoute>
+        existingRoutes: List<GisRoute>,
+        duplicatePolicy: DuplicateImportPolicy = DuplicateImportPolicy.SKIP,
+        deduplicationKey: DuplicateBusinessKey = DuplicateBusinessKey.CODE
     ): MergeResult {
         val nodeByCode = HashMap<String, GisNode>(existingNodes.size * 2)
         val nodeByName = HashMap<String, GisNode>(existingNodes.size * 2)
@@ -113,7 +120,10 @@ object WorkspaceImportHelper {
             nodeByName = nodeByName,
             nodeByCoord = nodeByCoord,
             codeAlias = HashMap<String, String>(incomingNodes.size * 2 + 1),
-            existingRouteKeys = buildRouteKeySet(existingRoutes)
+            existingRouteKeys = buildRouteKeySet(existingRoutes),
+            existingRoutesByKey = existingRoutes.associateBy { routeKey(it.startNodeCode, it.endNodeCode) }.toMutableMap(),
+            duplicatePolicy = duplicatePolicy,
+            deduplicationKey = deduplicationKey
         )
     }
 
@@ -125,7 +135,10 @@ object WorkspaceImportHelper {
         nodeByName: MutableMap<String, GisNode>,
         nodeByCoord: MutableMap<Long, GisNode>,
         codeAlias: MutableMap<String, String>,
-        existingRouteKeys: MutableSet<String>
+        existingRouteKeys: MutableSet<String>,
+        existingRoutesByKey: MutableMap<String, GisRoute> = mutableMapOf(),
+        duplicatePolicy: DuplicateImportPolicy = DuplicateImportPolicy.SKIP,
+        deduplicationKey: DuplicateBusinessKey = DuplicateBusinessKey.CODE
     ): MergeResult {
         val nodesToInsert = ArrayList<GisNode>(incomingNodes.size)
         var duplicateNodes = 0
@@ -168,24 +181,16 @@ object WorkspaceImportHelper {
             byCoord: GisNode?,
             byCode: GisNode?
         ): GisNode? {
-            if (byName == null && byCoord == null && byCode == null) return null
-            val candidates = LinkedHashSet<GisNode>(3)
-            byName?.let { candidates.add(it) }
-            byCoord?.let { candidates.add(it) }
-            byCode?.let { candidates.add(it) }
-            var best: GisNode? = null
-            var bestScore = Int.MIN_VALUE
-            for (candidate in candidates) {
-                var score = 0
-                if (candidate == byCode) score += 4
-                if (candidate == byName) score += 3
-                if (candidate == byCoord) score += 2
-                if (score > bestScore) {
-                    bestScore = score
-                    best = candidate
+            return when (deduplicationKey) {
+                DuplicateBusinessKey.CODE -> byCode ?: byName
+                DuplicateBusinessKey.COORDINATES -> byCoord
+                DuplicateBusinessKey.COMPOSITE_CODE_COORD -> {
+                    val codeCandidate = byCode ?: byName
+                    if (codeCandidate != null && byCoord != null && codeCandidate.id == byCoord.id) {
+                        codeCandidate
+                    } else null
                 }
             }
-            return best
         }
 
         for (node in incomingNodes) {
@@ -206,6 +211,10 @@ object WorkspaceImportHelper {
             if (canonical != null) {
                 duplicateNodes++
                 registerAlias(node.code, codeKey, canonical.code)
+
+                if (duplicatePolicy == DuplicateImportPolicy.UPDATE) {
+                    nodesToInsert.add(node.copy(id = canonical.id))
+                }
 
                 var matchedSignals = 0
                 if (canonical == matchByCode) {
@@ -279,6 +288,11 @@ object WorkspaceImportHelper {
                 routesToInsert.add(route.copy(startNodeCode = start, endNodeCode = end))
             } else {
                 skippedDuplicateRoutes++
+                if (duplicatePolicy == DuplicateImportPolicy.UPDATE) {
+                    existingRoutesByKey[key]?.let { existing ->
+                        routesToInsert.add(route.copy(id = existing.id, startNodeCode = start, endNodeCode = end))
+                    }
+                }
             }
         }
 
@@ -376,32 +390,3 @@ object WorkspaceImportHelper {
         )
     }
 }
-
-data class MergeResult(
-    val nodesToInsert: List<GisNode>,
-    val routesToInsert: List<GisRoute>,
-    val duplicateNodes: Int,
-    val stats: DedupStats = DedupStats()
-)
-
-data class DedupQualitySnapshot(
-    val score: Int,
-    val label: String,
-    val risk: String,
-    val action: String,
-    val actionNote: String,
-    val diagnostics: String,
-    val hint: String
-)
-
-data class DedupStats(
-    val codeMatches: Int = 0,
-    val nameMatches: Int = 0,
-    val coordMatches: Int = 0,
-    val multiSignalMatches: Int = 0,
-    val strongMatches: Int = 0,
-    val weakMatches: Int = 0,
-    val coordOnlyRejected: Int = 0,
-    val skippedSelfRoutes: Int = 0,
-    val skippedDuplicateRoutes: Int = 0
-)

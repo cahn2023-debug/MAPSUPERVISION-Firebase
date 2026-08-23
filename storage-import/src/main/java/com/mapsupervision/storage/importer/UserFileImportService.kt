@@ -264,25 +264,34 @@ class UserFileImportService @Inject constructor(
         val name = resolveDisplayName(parsedUri)?.trim().orEmpty()
         if (name.isBlank()) throw IllegalArgumentException("E_URI: missing display name")
         val ext = resolveFileExtension(parsedUri, name)
-        if (ext != "xlsx") throw IllegalArgumentException("E_PARSE: only .xlsx is supported in Excel parser")
+        if (ext !in setOf("xlsx", "xls", "csv")) {
+            throw IllegalArgumentException("E_PARSE: only .xlsx, .xls, .csv are supported in Excel/tabular parser")
+        }
 
         val temp = copyUriToTempFile(parsedUri, name)
-        val sheets = listExcelSheets(parsedUri)
-        val parsed = readXlsxTable(temp, sheetName)
-        val headers = parsed.headers
-        if (headers.isEmpty()) throw IllegalArgumentException("E_PARSE: excel has no header row")
-        val suggested = autoDetectExcelMappingSuggestion(parsed)
-        val sample = parsed.rows.take(5).map { row ->
-            headers.mapIndexed { index, header -> header to row.getOrNull(index).orEmpty() }.toMap()
+        return try {
+            val sheets = listExcelSheets(parsedUri)
+            val parsed = TabularReader.readTable(temp, sheetName)
+            val headers = parsed.headers
+            if (headers.isEmpty()) throw IllegalArgumentException("E_PARSE: tabular file has no header row")
+            val suggested = autoDetectExcelMappingSuggestion(XlsxTable(parsed.headers, parsed.rows))
+            val sample = parsed.rows.take(5).map { row ->
+                headers.mapIndexed { index, header -> header to row.getOrNull(index).orEmpty() }.toMap()
+            }
+            ExcelPreview(
+                fileName = name,
+                headers = headers,
+                sampleRows = sample,
+                allRows = parsed.rows.map { row ->
+                    headers.mapIndexed { index, header -> header to row.getOrNull(index).orEmpty() }.toMap()
+                },
+                suggestedMapping = suggested?.mapping,
+                suggestedMappingConfidence = suggested?.confidence ?: 0,
+                sheets = sheets
+            )
+        } finally {
+            temp.delete()
         }
-        return ExcelPreview(
-            fileName = name,
-            headers = headers,
-            sampleRows = sample,
-            suggestedMapping = suggested?.mapping,
-            suggestedMappingConfidence = suggested?.confidence ?: 0,
-            sheets = sheets
-        )
     }
 
     override suspend fun importExcelWithMapping(projectId: String, uri: String, mapping: ExcelColumnMapping, sheetName: String?): ImportDraft {
@@ -291,13 +300,47 @@ class UserFileImportService @Inject constructor(
         val name = resolveDisplayName(parsedUri)?.trim().orEmpty()
         if (name.isBlank()) throw IllegalArgumentException("E_URI: missing display name")
         val ext = resolveFileExtension(parsedUri, name)
-        if (ext != "xlsx") throw IllegalArgumentException("E_PARSE: only .xlsx is supported in Excel parser")
+        if (ext !in setOf("xlsx", "xls", "csv")) {
+            throw IllegalArgumentException("E_PARSE: only .xlsx, .xls, .csv are supported in Excel/tabular parser")
+        }
 
         val pending = copyUriToImports(projectId, parsedUri, name)
         return try {
-            val parsed = readXlsxTable(pending, sheetName)
+            val parsed = TabularReader.readTable(pending, sheetName)
+            val rowMaps = parsed.rows.map { row ->
+                parsed.headers.mapIndexed { index, header -> header to row.getOrNull(index).orEmpty() }.toMap()
+            }
+            val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+                headers = parsed.headers,
+                rows = rowMaps,
+                positionColumn = mapping.positionColumn,
+                coordinateColumn = mapping.coordinateColumn.orEmpty(),
+                latitudeColumn = mapping.latitudeColumn.orEmpty(),
+                longitudeColumn = mapping.longitudeColumn.orEmpty(),
+                useTwoColumnCoordinates = !mapping.latitudeColumn.isNullOrBlank() || !mapping.longitudeColumn.isNullOrBlank(),
+                allowPartialImport = mapping.allowPartialImport
+            )
+            if (!validation.canConfirm) {
+                throw IllegalArgumentException("E_VALIDATION: ${validation.guidance}")
+            }
+            val rowsToImport = if (mapping.allowPartialImport && validation.invalidRows.isNotEmpty()) {
+                val invalidIndexes = validation.invalidRows.map { it.rowIndex }.toSet()
+                parsed.rows.withIndex()
+                    .filter { (index, _) -> index + 1 !in invalidIndexes }
+                    .map { it.value }
+            } else {
+                parsed.rows
+            }
             val processed = moveImportFile(projectId, pending, "processed")
-            buildExcelDraftFromTable(projectId, name, processed.absolutePath, parsed, mapping, autoDetected = false).toDomainDraft()
+            buildExcelDraftFromTable(
+                projectId = projectId,
+                name = name,
+                storedPath = processed.absolutePath,
+                parsed = XlsxTable(parsed.headers, rowsToImport),
+                mapping = mapping,
+                autoDetected = false,
+                fileType = ext
+            ).toDomainDraft()
         } catch (e: Exception) {
             moveImportFile(projectId, pending, "failed")
             throw e
@@ -310,7 +353,8 @@ class UserFileImportService @Inject constructor(
         storedPath: String,
         parsed: XlsxTable,
         mapping: ExcelColumnMapping,
-        autoDetected: Boolean
+        autoDetected: Boolean,
+        fileType: String = "xlsx"
     ): ImportedFileDraft {
         val startedAtMs = System.currentTimeMillis()
         val headerIndex = HashMap<String, Int>(parsed.headers.size * 2)
@@ -438,6 +482,29 @@ class UserFileImportService @Inject constructor(
                     }
                 }
             }
+            val extendedMetadata = buildString {
+                for (column in mapping.extendedMetadataColumns) {
+                    val idx = headerIndex[column.trim()] ?: continue
+                    val value = if (idx < rowSize) row[idx].trim() else ""
+                    if (value.isBlank()) continue
+                    if (isNotEmpty()) append('\n')
+                    append(column.trim())
+                    append(": ")
+                    append(value)
+                }
+            }
+            val metadataSummary = if (extendedMetadata.isBlank()) {
+                workVolumeSummary
+            } else {
+                buildString {
+                    if (workVolumeSummary.isNotBlank()) {
+                        append(workVolumeSummary)
+                        append('\n')
+                    }
+                    append("ExtendedData:\n")
+                    append(extendedMetadata)
+                }
+            }
             val isRoute = kind == ObjectKind.ROUTE || (kind == ObjectKind.AUTO && parsedCoords.size > 1)
             if (isRoute) {
                 val designLength = if (parsedCoords.size > 1) {
@@ -469,7 +536,7 @@ class UserFileImportService @Inject constructor(
                     latitude = lat,
                     longitude = lon,
                     mapNumberLabel = mapNumberLabel,
-                    workVolumeSummary = workVolumeSummary,
+                    workVolumeSummary = metadataSummary,
                     ipAddress = ipAddress,
                     subnet = subnet,
                     gateway = gateway,
@@ -479,7 +546,7 @@ class UserFileImportService @Inject constructor(
         }
 
         val summary = buildString {
-            append(if (autoDetected) "XLSX auto-classified" else "XLSX mapped")
+            append(if (autoDetected) "${fileType.uppercase()} auto-classified" else "${fileType.uppercase()} mapped")
             append(": ${nodes.size} nodes")
             if (skipped > 0) append(", skipped $skipped rows (missing coordinates)")
             if (routes.isNotEmpty()) append(", ${routes.size} routes")
@@ -492,7 +559,7 @@ class UserFileImportService @Inject constructor(
         )
         return ImportedFileDraft(
             fileName = name,
-            fileType = "xlsx",
+            fileType = fileType,
             storedPath = storedPath,
             summary = summary,
             suggestedNodes = nodes,
@@ -1148,30 +1215,14 @@ class UserFileImportService @Inject constructor(
     fun listExcelSheets(uri: Uri): List<String> {
         persistReadPermission(uri)
         val name = resolveDisplayName(uri)?.trim().orEmpty()
+        if (name.isBlank()) return listOf("Sheet1")
+        val ext = resolveFileExtension(uri, name)
         val temp = copyUriToTempFile(uri, name)
         return try {
-            ZipFile(temp).use { zip ->
-                val entry = zip.getEntry("xl/workbook.xml") ?: return emptyList()
-                val sheets = ArrayList<String>()
-                zip.getInputStream(entry).use { input ->
-                    val parser = xmlPullParserFactory.newPullParser()
-                    parser.setInput(InputStreamReader(input, Charsets.UTF_8))
-                    var eventType = parser.eventType
-                    while (eventType != XmlPullParser.END_DOCUMENT) {
-                        if (eventType == XmlPullParser.START_TAG && parser.name == "sheet") {
-                            val sheetName = parser.getAttributeValue(null, "name")
-                            if (!sheetName.isNullOrBlank()) {
-                                sheets.add(sheetName)
-                            }
-                        }
-                        eventType = parser.next()
-                    }
-                }
-                sheets
-            }
+            TabularReader.listSheets(temp, ext)
         } catch (e: Exception) {
             AppLogger.e(e, "listExcelSheets failed")
-            emptyList()
+            listOf("Sheet1")
         } finally {
             temp.delete()
         }

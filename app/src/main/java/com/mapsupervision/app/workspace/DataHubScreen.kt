@@ -54,6 +54,8 @@ import com.mapsupervision.domain.model.ImportedFile
 import com.mapsupervision.domain.model.Note
 import com.mapsupervision.domain.model.Task
 import com.mapsupervision.domain.model.TaskStatus
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
 import com.mapsupervision.storage.importer.ExcelClassificationMode
 import com.mapsupervision.app.workspace.WorkspaceImportHelper
 import java.io.File
@@ -106,7 +108,11 @@ fun DataHubScreen(
     onSuggestTasks: (String) -> Unit,
     onCombineFiles: (ImportedFile, ImportedFile, List<GisNode>, List<GisRoute>) -> Unit,
     onUpdateSelectedExcelSheet: (String) -> Unit,
-    onRefresh: () -> Unit = {}
+    onRefresh: () -> Unit = {},
+    onToggleAllowPartialImport: (Boolean) -> Unit = {},
+    onToggleConfirmedCustomColumn: (String) -> Unit = {},
+    onUpdateExcelDuplicatePolicy: (DuplicateImportPolicy) -> Unit = {},
+    onUpdateExcelDeduplicationKey: (DuplicateBusinessKey) -> Unit = {}
 ) {
     val extendedColors = MaterialTheme.extendedColors
     val darkBgColor = MaterialTheme.colorScheme.background
@@ -121,32 +127,32 @@ fun DataHubScreen(
             onPickerEmpty()
         } else {
             if (uris.size == 1) {
-                val uri = uris.first()
-                val mimeType = context.contentResolver.getType(uri)?.lowercase(java.util.Locale.US)
-                val displayName = context.contentResolver.query(
-                    uri,
-                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                    null,
-                    null,
-                    null
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        if (idx >= 0) cursor.getString(idx) else null
-                    } else null
-                }.orEmpty()
-                val extFromName = displayName.substringAfterLast('.', "").lowercase(java.util.Locale.US)
-                val extFromUri = uri.toString().substringAfterLast('.', "").lowercase(java.util.Locale.US)
-                val ext = when {
-                    extFromName.isNotBlank() -> extFromName
-                    extFromUri.length in 2..5 -> extFromUri
-                    mimeType?.contains("kmz") == true -> "kmz"
-                    mimeType?.contains("kml") == true -> "kml"
-                    mimeType?.contains("json") == true -> "json"
-                    else -> ""
-                }
+            val uri = uris.first()
+            val mimeType = context.contentResolver.getType(uri)?.lowercase(java.util.Locale.US)
+            val displayName = context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) cursor.getString(idx) else null
+                } else null
+            }.orEmpty()
+            val extFromName = displayName.substringAfterLast('.', "").lowercase(java.util.Locale.US)
+            val extFromUri = uri.toString().substringAfterLast('.', "").lowercase(java.util.Locale.US)
+            val ext = when {
+                extFromName.isNotBlank() -> extFromName
+                extFromUri.length in 2..5 -> extFromUri
+                mimeType?.contains("kmz") == true -> "kmz"
+                mimeType?.contains("kml") == true -> "kml"
+                mimeType?.contains("json") == true -> "json"
+                else -> ""
+            }
                 val isExcel = mimeType?.contains("excel") == true || mimeType?.contains("spreadsheet") == true ||
-                        ext == "xls" || ext == "xlsx"
+                        mimeType?.contains("csv") == true || ext == "xls" || ext == "xlsx" || ext == "csv"
                 val isKmlOrKmz = ext == "kml" || ext == "kmz" ||
                         mimeType?.contains("kml") == true || mimeType?.contains("kmz") == true
                 val isGeoJson = ext == "geojson" || ext == "json" || mimeType?.contains("json") == true
@@ -174,7 +180,11 @@ fun DataHubScreen(
             onUpdateCoordinateMode = onUpdateExcelCoordinateMode,
             onUpdateMapVisualOptions = onUpdateMapVisualOptions,
             onConfirmParse = onParseExcelToDesign,
-            onUpdateSelectedSheet = onUpdateSelectedExcelSheet
+            onUpdateSelectedSheet = onUpdateSelectedExcelSheet,
+            onToggleAllowPartialImport = onToggleAllowPartialImport,
+            onToggleConfirmedCustomColumn = onToggleConfirmedCustomColumn,
+            onUpdateDuplicatePolicy = onUpdateExcelDuplicatePolicy,
+            onUpdateDeduplicationKey = onUpdateExcelDeduplicationKey
         )
     }
 
@@ -194,15 +204,19 @@ fun DataHubScreen(
                 FloatingActionButton(
                     onClick = {
                         onOpenPicker()
-                        picker.launch(
-                            arrayOf(
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                "application/vnd.ms-excel",
-                                "application/vnd.google-earth.kml+xml",
-                                "application/vnd.google-earth.kmz",
-                                "*/*"
+                        runCatching {
+                            picker.launch(
+                                arrayOf(
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "application/vnd.ms-excel",
+                                    "application/vnd.google-earth.kml+xml",
+                                    "application/vnd.google-earth.kmz",
+                                    "*/*"
+                                )
                             )
-                        )
+                        }.onFailure {
+                            onPickerEmpty()
+                        }
                     },
                     containerColor = orangeColor,
                     contentColor = MaterialTheme.colorScheme.onPrimary,

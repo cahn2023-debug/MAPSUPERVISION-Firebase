@@ -47,6 +47,11 @@ import com.mapsupervision.storage.importer.ExcelClassificationMode
 import com.mapsupervision.storage.importer.ImportedFileDraft
 import com.mapsupervision.storage.importer.NonExcelFieldCandidateSet
 import com.mapsupervision.storage.importer.NonExcelImportMapping
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
+import com.mapsupervision.domain.model.MergeResult
+import com.mapsupervision.domain.model.DedupStats
+import com.mapsupervision.domain.model.DedupQualitySnapshot
 import com.mapsupervision.gis.ui.GisLabelField
 import com.mapsupervision.gis.ui.GisMapBridgeRegistry
 import com.mapsupervision.gis.ui.MapLayerType
@@ -165,6 +170,17 @@ fun WorkspaceViewModel.loadExcelPreview(uri: Uri, existingFileId: String? = null
             val suggestedFiberConnection = suggested?.fiberConnectionColumn.orEmpty()
             val suggestedItems = suggested?.itemColumns.orEmpty()
             val confidence = preview.suggestedMappingConfidence
+            val allRows = preview.allRows.ifEmpty { preview.sampleRows }
+            val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+                headers = preview.headers,
+                rows = allRows,
+                positionColumn = suggestedPosition,
+                coordinateColumn = suggestedCoord,
+                latitudeColumn = suggestedLat,
+                longitudeColumn = suggestedLon,
+                useTwoColumnCoordinates = suggestedLat.isNotBlank() && suggestedLon.isNotBlank(),
+                deduplicationKey = com.mapsupervision.domain.model.DuplicateBusinessKey.CODE
+            )
             val confidenceLabel = when {
                 confidence >= 80 -> "cao"
                 confidence >= 60 -> "trung bình"
@@ -182,6 +198,7 @@ fun WorkspaceViewModel.loadExcelPreview(uri: Uri, existingFileId: String? = null
                     existingFileId = existingFileId,
                     headers = preview.headers,
                     sampleRows = preview.sampleRows,
+                    allRows = allRows,
                     positionColumn = suggestedPosition,
                     coordinateColumn = suggestedCoord,
                     latitudeColumn = suggestedLat,
@@ -199,6 +216,12 @@ fun WorkspaceViewModel.loadExcelPreview(uri: Uri, existingFileId: String? = null
                     showMappingDialog = true,
                     workVolumeColumnsCsv = suggestedItems.joinToString(","),
                     suggestedItemColumns = suggestedItems,
+                    duplicateRowCount = validation.duplicateRowCount,
+                    suggestedBusinessKey = validation.suggestedBusinessKey,
+                    validationErrors = validation.requiredErrors,
+                    validRowCount = validation.validRowCount,
+                    invalidRowCount = validation.invalidRowCount,
+                    invalidRowSamples = validation.invalidRows.take(5).map { "${it.rawIdentifier}: ${it.reason}" },
                     message = " cột. Đã dùng AI gợi ý. Chọn mapping rồi bấm Parse Excel.",
                     sheets = preview.sheets,
                     selectedSheet = sheetName ?: preview.sheets.firstOrNull().orEmpty()
@@ -248,7 +271,7 @@ fun WorkspaceViewModel.repairImportedGeometry(file: ImportedFile) {
             )
         )
 
-        runCatching {
+        val draft = try {
             withContext(Dispatchers.IO) {
                 importService.importNonExcelWithMapping(
                     projectId = projectId,
@@ -257,7 +280,19 @@ fun WorkspaceViewModel.repairImportedGeometry(file: ImportedFile) {
                     confirmed = ConfirmedFieldFlags(positionField = true)
                 )
             }
-        }.onSuccess { draft ->
+        } catch (ex: Exception) {
+            AppLogger.e(ex, "repairImportedGeometry failed fileId=${file.id}")
+            _state.value = _state.value.copy(
+                importMappingUi = _state.value.importMappingUi.copy(
+                    isLoading = false,
+                    message = "Nhập lại geometry thất bại: ${ex.message}"
+                )
+            )
+            showMessage("Nhập lại geometry thất bại.")
+            return@launch
+        }
+
+        try {
             val repairedNodes = draft.suggestedNodes.map { it.copy(projectId = projectId, importedFileId = file.id) }
             val repairedRoutes = draft.suggestedRoutes.map { it.copy(projectId = projectId, importedFileId = file.id) }
             when (val result = gisRepository.replaceImportedGeometry(file.id, repairedNodes, repairedRoutes)) {
@@ -296,7 +331,7 @@ fun WorkspaceViewModel.repairImportedGeometry(file: ImportedFile) {
                     showMessage("Đã nhập lại geometry cho ${file.fileName}.")
                 }
             }
-        }.onFailure { ex ->
+        } catch (ex: Exception) {
             AppLogger.e(ex, "repairImportedGeometry failed fileId=${file.id}")
             _state.value = _state.value.copy(
                 importMappingUi = _state.value.importMappingUi.copy(
@@ -436,7 +471,7 @@ fun WorkspaceViewModel.loadNonExcelPreview(uri: Uri, existingFileId: String? = n
                 importMappingUi = _state.value.importMappingUi.copy(
                     isLoading = false,
                     showMappingDialog = false,
-                    message = "Không đọc được metadata non-Excel: "
+                    message = "Không đọc được metadata file: ${ex.message ?: "lỗi không xác định"}"
                 )
             )
         }
@@ -507,7 +542,7 @@ fun WorkspaceViewModel.setImportMappingDialogVisible(visible: Boolean) {
     updateImportMappingUiIfChanged { ui -> ui.copy(showMappingDialog = visible) }
 }
 
-private fun WorkspaceViewModel.updateImportMappingUiIfChanged(transform: (ImportMappingUiState) -> ImportMappingUiState) {
+internal fun WorkspaceViewModel.updateImportMappingUiIfChanged(transform: (ImportMappingUiState) -> ImportMappingUiState) {
     val state = _state.value
     val current = state.importMappingUi
     val updated = transform(current)
@@ -574,103 +609,25 @@ fun WorkspaceViewModel.parseNonExcelToDesign() {
             val remapExistingFileId = _state.value.importMappingUi.existingFileId
             viewModelScope.launch {
                 runCatching {
-                    commitNonExcelImportDraft(projectId = projectId, draft = draft, existingFileId = remapExistingFileId)
+                    commitNonExcelImportDraft(
+                        projectId = projectId,
+                        draft = draft,
+                        existingFileId = remapExistingFileId
+                    )
                 }.onFailure { ex ->
-                    updateImportMappingUiIfChanged { ui ->
-                        ui.copy(
+                    updateImportMappingUiIfChanged { uiState ->
+                        uiState.copy(
                             isLoading = false,
                             message = "Import non-Excel thất bại: ${ex.message}"
                         )
                     }
                 }
             }
-            return@onSuccess
-            // For KML/KMZ files, directly import without going through draft override
-            val existingFileId = _state.value.importMappingUi.existingFileId
-            if (existingFileId != null) {
-                // Re-mapping an already-imported file: only update nodes/routes, no new ImportedFile
-                runCatching {
-                    val existingNodes = _state.value.designNodes.toMutableList()
-                    val existingRoutes = _state.value.designRoutes.toMutableList()
-                    val merged = withContext(Dispatchers.Default) {
-                        deduplicateImportedGeometry(
-                            projectId = projectId,
-                            incomingNodes = draft.suggestedNodes.map { it.copy(importedFileId = existingFileId) },
-                            incomingRoutes = draft.suggestedRoutes.map { it.copy(importedFileId = existingFileId) },
-                            existingNodes = existingNodes,
-                            existingRoutes = existingRoutes
-                        )
-                    }
-                    gisRepository.upsertNodes(merged.nodesToInsert)
-                    gisRepository.upsertRoutes(merged.routesToInsert)
-                    existingNodes.addAll(merged.nodesToInsert)
-                    existingRoutes.addAll(merged.routesToInsert)
-                    updateImportMappingUiIfChanged { ui ->
-                        ui.copy(
-                            isLoading = false,
-                            showMappingDialog = false,
-                            message = "Đã cập nhật dữ liệu: +${merged.nodesToInsert.size} node, +${merged.routesToInsert.size} tuyến"
-                        )
-                    }
-                }.onFailure { ex ->
-                    updateImportMappingUiIfChanged { ui ->
-                        ui.copy(
-                            isLoading = false,
-                            message = "Cập nhật dữ liệu thất bại: "
-                        )
-                    }
-                }
-            } else {
-                val importedId = UUID.randomUUID().toString()
-                val importedFile = ImportedFile(
-                    id = importedId,
-                    projectId = projectId,
-                    fileName = draft.fileName,
-                    fileType = draft.fileType,
-                    storedPath = draft.storedPath,
-                    summary = draft.summary,
-                    importedAtEpochMs = System.currentTimeMillis()
-                )
-                val existingNodes = _state.value.designNodes.toMutableList()
-                val existingRoutes = _state.value.designRoutes.toMutableList()
-                val merged = withContext(Dispatchers.Default) {
-                    deduplicateImportedGeometry(
-                        projectId = projectId,
-                        incomingNodes = draft.suggestedNodes.map { it.copy(importedFileId = importedId) },
-                        incomingRoutes = draft.suggestedRoutes.map { it.copy(importedFileId = importedId) },
-                        existingNodes = existingNodes,
-                        existingRoutes = existingRoutes
-                    )
-                }
-                importedFileRepository.upsert(importedFile)
-                gisRepository.upsertNodes(merged.nodesToInsert)
-                gisRepository.upsertRoutes(merged.routesToInsert)
-                existingNodes.addAll(merged.nodesToInsert)
-                existingRoutes.addAll(merged.routesToInsert)
-                _state.value = _state.value.copy(
-                    importMappingUi = _state.value.importMappingUi.copy(
-                        sourceUri = null,
-                        sourceFileName = "",
-                        isLoading = false,
-                        showMappingDialog = false,
-                        message = "Đã nhập dữ liệu: +${merged.nodesToInsert.size} node, +${merged.routesToInsert.size} tuyến"
-                    ),
-                    importedFiles = _state.value.importedFiles + importedFile,
-                    designNodes = existingNodes,
-                    designRoutes = existingRoutes,
-                    dashboard = buildDashboard(
-                        existingNodes,
-                        existingRoutes,
-                        _state.value.constructionProgress,
-                        emptyList()
-                    )
-                )
-            }
         }.onFailure { ex ->
-            updateImportMappingUiIfChanged { ui ->
-                ui.copy(
+            updateImportMappingUiIfChanged { uiState ->
+                uiState.copy(
                     isLoading = false,
-                    message = "Import non-Excel thất bại: "
+                    message = "Import non-Excel thất bại: ${ex.message ?: "lỗi không xác định"}"
                 )
             }
         }
@@ -694,11 +651,25 @@ fun WorkspaceViewModel.updateExcelMapping(
     workVolumeColumnsCsv: String? = null
 ) {
     updateExcelParserUiIfChanged { ui ->
+        val newPos = positionColumn ?: ui.positionColumn
+        val newCoord = coordinateColumn ?: ui.coordinateColumn
+        val newLat = latitudeColumn ?: ui.latitudeColumn
+        val newLon = longitudeColumn ?: ui.longitudeColumn
+        val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+            headers = ui.headers,
+            rows = ui.allRows.ifEmpty { ui.sampleRows },
+            positionColumn = newPos,
+            coordinateColumn = newCoord,
+            latitudeColumn = newLat,
+            longitudeColumn = newLon,
+            useTwoColumnCoordinates = ui.useTwoColumnCoordinates,
+            allowPartialImport = ui.allowPartialImport
+        )
         ui.copy(
-            positionColumn = positionColumn ?: ui.positionColumn,
-            coordinateColumn = coordinateColumn ?: ui.coordinateColumn,
-            latitudeColumn = latitudeColumn ?: ui.latitudeColumn,
-            longitudeColumn = longitudeColumn ?: ui.longitudeColumn,
+            positionColumn = newPos,
+            coordinateColumn = newCoord,
+            latitudeColumn = newLat,
+            longitudeColumn = newLon,
             contractorColumn = contractorColumn ?: ui.contractorColumn,
             mapNumberColumn = mapNumberColumn ?: ui.mapNumberColumn,
             objectTypeColumn = objectTypeColumn ?: ui.objectTypeColumn,
@@ -708,7 +679,14 @@ fun WorkspaceViewModel.updateExcelMapping(
             signalStatusColumn = signalStatusColumn ?: ui.signalStatusColumn,
             fiberCoreCountColumn = fiberCoreCountColumn ?: ui.fiberCoreCountColumn,
             fiberConnectionColumn = fiberConnectionColumn ?: ui.fiberConnectionColumn,
-            workVolumeColumnsCsv = workVolumeColumnsCsv ?: ui.workVolumeColumnsCsv
+            workVolumeColumnsCsv = workVolumeColumnsCsv ?: ui.workVolumeColumnsCsv,
+            duplicateRowCount = validation.duplicateRowCount,
+            suggestedBusinessKey = validation.suggestedBusinessKey,
+            validationErrors = validation.requiredErrors,
+            validRowCount = validation.validRowCount,
+            invalidRowCount = validation.invalidRowCount,
+            invalidRowSamples = validation.invalidRows.take(5).map { "${it.rawIdentifier}: ${it.reason}" },
+            message = validation.guidance
         )
     }
 }
@@ -722,7 +700,94 @@ fun WorkspaceViewModel.setExcelMappingDialogVisible(visible: Boolean) {
 }
 
 fun WorkspaceViewModel.updateExcelCoordinateMode(useTwoColumn: Boolean) {
-    updateExcelParserUiIfChanged { ui -> ui.copy(useTwoColumnCoordinates = useTwoColumn) }
+    updateExcelParserUiIfChanged { ui ->
+        val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+            headers = ui.headers,
+            rows = ui.allRows.ifEmpty { ui.sampleRows },
+            positionColumn = ui.positionColumn,
+            coordinateColumn = ui.coordinateColumn,
+            latitudeColumn = ui.latitudeColumn,
+            longitudeColumn = ui.longitudeColumn,
+            useTwoColumnCoordinates = useTwoColumn,
+            allowPartialImport = ui.allowPartialImport
+        )
+        ui.copy(
+            useTwoColumnCoordinates = useTwoColumn,
+            duplicateRowCount = validation.duplicateRowCount,
+            suggestedBusinessKey = validation.suggestedBusinessKey,
+            validationErrors = validation.requiredErrors,
+            validRowCount = validation.validRowCount,
+            invalidRowCount = validation.invalidRowCount,
+            invalidRowSamples = validation.invalidRows.take(5).map { "${it.rawIdentifier}: ${it.reason}" },
+            message = validation.guidance
+        )
+    }
+}
+
+fun WorkspaceViewModel.updateExcelAllowPartialImport(allow: Boolean) {
+    updateExcelParserUiIfChanged { ui ->
+        val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+            headers = ui.headers,
+            rows = ui.allRows.ifEmpty { ui.sampleRows },
+            positionColumn = ui.positionColumn,
+            coordinateColumn = ui.coordinateColumn,
+            latitudeColumn = ui.latitudeColumn,
+            longitudeColumn = ui.longitudeColumn,
+            useTwoColumnCoordinates = ui.useTwoColumnCoordinates,
+            allowPartialImport = allow
+        )
+        ui.copy(
+            allowPartialImport = allow,
+            duplicateRowCount = validation.duplicateRowCount,
+            suggestedBusinessKey = validation.suggestedBusinessKey,
+            validationErrors = validation.requiredErrors,
+            validRowCount = validation.validRowCount,
+            invalidRowCount = validation.invalidRowCount,
+            invalidRowSamples = validation.invalidRows.take(5).map { "${it.rawIdentifier}: ${it.reason}" },
+            message = validation.guidance
+        )
+    }
+}
+
+fun WorkspaceViewModel.toggleExcelConfirmedCustomColumn(column: String) {
+    updateExcelParserUiIfChanged { ui ->
+        val updated = if (ui.confirmedCustomColumns.contains(column)) {
+            ui.confirmedCustomColumns - column
+        } else {
+            ui.confirmedCustomColumns + column
+        }
+        ui.copy(confirmedCustomColumns = updated)
+    }
+}
+
+fun WorkspaceViewModel.updateExcelDuplicatePolicy(policy: DuplicateImportPolicy) {
+    updateExcelParserUiIfChanged { it.copy(duplicatePolicy = policy) }
+}
+
+fun WorkspaceViewModel.updateExcelDeduplicationKey(key: DuplicateBusinessKey) {
+    updateExcelParserUiIfChanged { ui ->
+        val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+            headers = ui.headers,
+            rows = ui.allRows.ifEmpty { ui.sampleRows },
+            positionColumn = ui.positionColumn,
+            coordinateColumn = ui.coordinateColumn,
+            latitudeColumn = ui.latitudeColumn,
+            longitudeColumn = ui.longitudeColumn,
+            useTwoColumnCoordinates = ui.useTwoColumnCoordinates,
+            allowPartialImport = ui.allowPartialImport,
+            deduplicationKey = key
+        )
+        ui.copy(
+            deduplicationKey = key,
+            duplicateRowCount = validation.duplicateRowCount,
+            suggestedBusinessKey = validation.suggestedBusinessKey,
+            validationErrors = validation.requiredErrors,
+            validRowCount = validation.validRowCount,
+            invalidRowCount = validation.invalidRowCount,
+            invalidRowSamples = validation.invalidRows.take(5).map { "${it.rawIdentifier}: ${it.reason}" },
+            message = validation.guidance
+        )
+    }
 }
 
 fun WorkspaceViewModel.updateMapVisualOptions(showNumberOnMap: Boolean? = null, colorByContractorOnMap: Boolean? = null) {
@@ -764,31 +829,57 @@ fun WorkspaceViewModel.parseExcelToDesign() {
             .getOrNull()
         if (projectResult == null) {
             _state.value = _state.value.copy(
-                excelParserUi = ui.copy(message = "Không đọc được project active. Vui lòng thử lại.")
+                excelParserUi = ui.copy(isLoading = false, message = "Không đọc được project active. Vui lòng thử lại.")
             )
             return@launch
         }
         val projectId = (projectResult as? AppResult.Success)?.data
-        if (projectResult is AppResult.Error) {
+        if (projectResult is AppResult.Error || projectId.isNullOrBlank()) {
             AppLogger.e(
-                projectResult.throwable,
+                (projectResult as? AppResult.Error)?.throwable ?: IllegalStateException("Invalid active project"),
                 "import.mapping.flow confirm.rejected activeProject.error"
             )
             _state.value = _state.value.copy(
-                excelParserUi = ui.copy(message = "Không đọc được project active. Vui lòng thử lại.")
+                excelParserUi = ui.copy(isLoading = false, message = "Không đọc được project active. Vui lòng thử lại.")
             )
             return@launch
         }
-        if (uri == null || projectId == null) {
+        if (uri == null) {
             AppLogger.e(
-                IllegalStateException("Missing source URI or active project"),
-                "import.mapping.flow confirm.rejected uriPresent=${uri != null} projectPresent=${projectId != null}"
+                IllegalStateException("Missing source URI"),
+                "import.mapping.flow confirm.rejected uri missing"
             )
             _state.value = _state.value.copy(
-                excelParserUi = ui.copy(message = "Thiếu file Excel hoặc chưa chọn project active")
+                excelParserUi = ui.copy(isLoading = false, message = "Thiếu file Excel.")
             )
             return@launch
         }
+
+        val validation = com.mapsupervision.domain.model.TabularMappingValidator.validate(
+            headers = ui.headers,
+            rows = ui.allRows.ifEmpty { ui.sampleRows },
+            positionColumn = ui.positionColumn,
+            coordinateColumn = ui.coordinateColumn,
+            latitudeColumn = ui.latitudeColumn,
+            longitudeColumn = ui.longitudeColumn,
+            useTwoColumnCoordinates = ui.useTwoColumnCoordinates,
+            allowPartialImport = ui.allowPartialImport,
+            deduplicationKey = ui.deduplicationKey
+        )
+
+        if (!validation.canConfirm) {
+            _state.value = _state.value.copy(
+                excelParserUi = ui.copy(
+                    isLoading = false,
+                    validationErrors = validation.requiredErrors,
+                    validRowCount = validation.validRowCount,
+                    invalidRowCount = validation.invalidRowCount,
+                    message = "Chưa thể xác nhận: ${validation.guidance}"
+                )
+            )
+            return@launch
+        }
+
         _state.value = _state.value.copy(excelParserUi = ui.startExcelImport())
 
         runCatching {
@@ -812,17 +903,17 @@ fun WorkspaceViewModel.parseExcelToDesign() {
                         fiberCoreCountColumn = ui.fiberCoreCountColumn.ifBlank { null },
                         fiberConnectionColumn = ui.fiberConnectionColumn.ifBlank { null },
                         classificationMode = ui.classificationMode,
-                        itemColumns = parseworkVolumeColumnsCsv(ui.workVolumeColumnsCsv)
+                        itemColumns = parseworkVolumeColumnsCsv(ui.workVolumeColumnsCsv),
+                        allowPartialImport = ui.allowPartialImport,
+                        extendedMetadataColumns = ui.confirmedCustomColumns,
+                        duplicatePolicy = ui.duplicatePolicy,
+                        deduplicationKey = ui.deduplicationKey
                     ),
                     sheetName = ui.selectedSheet.takeIf { it.isNotBlank() }
                 )
             }
         }.onSuccess { draft ->
-            AppLogger.d(
-                "import.mapping.flow confirm.import.success nodes=${draft.suggestedNodes.size} " +
-                    "routes=${draft.suggestedRoutes.size}"
-            )
-            val remapExistingFileId = ui.existingFileId
+            val remapExistingFileId = _state.value.excelParserUi.existingFileId
             viewModelScope.launch {
                 runCatching {
                     commitExcelImportDraft(
@@ -832,127 +923,21 @@ fun WorkspaceViewModel.parseExcelToDesign() {
                         excelUi = ui
                     )
                 }.onFailure { ex ->
-                    AppLogger.e(ex, "import.mapping.flow confirm.commit.failure")
+                    AppLogger.e(ex, "import.mapping.flow commitExcelImportDraft.failure")
                     _state.value = _state.value.copy(
-                        excelParserUi = ui.copy(
+                        excelParserUi = _state.value.excelParserUi.copy(
                             isLoading = false,
-                            message = "Parse Excel thất bại. Vui lòng thử lại."
+                            message = "Nhập Excel thất bại: ${ex.message ?: "Vui lòng kiểm tra lại file và mapping."}"
                         )
                     )
                 }
             }
-            return@onSuccess
-            val existingFileId = ui.existingFileId
-            val importedId = existingFileId ?: UUID.randomUUID().toString()
-            val importedFile = if (existingFileId == null) {
-                ImportedFile(
-                    id = importedId,
-                    projectId = projectId,
-                    fileName = draft.fileName,
-                    fileType = draft.fileType,
-                    storedPath = draft.storedPath,
-                    summary = draft.summary,
-                    importedAtEpochMs = System.currentTimeMillis()
-                ).also { importedFileRepository.upsert(it) }
-            } else {
-                null
-            }
-            val existingNodes = _state.value.designNodes.toMutableList()
-            val existingRoutes = _state.value.designRoutes.toMutableList()
-            val merged = withContext(Dispatchers.Default) {
-                deduplicateImportedGeometry(
-                    projectId = projectId,
-                    incomingNodes = draft.suggestedNodes.map { it.copy(importedFileId = importedId) },
-                    incomingRoutes = draft.suggestedRoutes.map { it.copy(importedFileId = importedId) },
-                    existingNodes = existingNodes,
-                    existingRoutes = existingRoutes
-                )
-            }
-            gisRepository.upsertNodes(merged.nodesToInsert)
-            gisRepository.upsertRoutes(merged.routesToInsert)
-            existingNodes.addAll(merged.nodesToInsert)
-            existingRoutes.addAll(merged.routesToInsert)
-            val quality = dedupQualitySnapshot(
-                incomingNodes = draft.suggestedNodes.size,
-                strongMatches = merged.stats.strongMatches,
-                weakMatches = merged.stats.weakMatches,
-                coordOnlyRejected = merged.stats.coordOnlyRejected,
-                incomingRoutes = draft.suggestedRoutes.size,
-                skippedSelfRoutes = merged.stats.skippedSelfRoutes,
-                skippedDuplicateRoutes = merged.stats.skippedDuplicateRoutes
-            )
-            val excelRiskSummary = DedupRiskSummaryFormatter.summarizeSingleRisk(quality.risk)
-            val excelRiskByFile = DedupRiskSummaryFormatter.format(excelRiskSummary)
-            val excelBatchBundle = DedupBatchDecisionAdvisor.bundleFromSummaryText(excelRiskByFile)
-            AppLogger.d(
-                "dedup.excel inNodes=${draft.suggestedNodes.size} newNodes=${merged.nodesToInsert.size} " +
-                    "dupNodes=${merged.duplicateNodes} matchCode=${merged.stats.codeMatches} " +
-                    "matchName=${merged.stats.nameMatches} matchCoord=${merged.stats.coordMatches} " +
-                    "matchMulti=${merged.stats.multiSignalMatches} matchStrong=${merged.stats.strongMatches} " +
-                    "matchWeak=${merged.stats.weakMatches} coordOnlyRejected=${merged.stats.coordOnlyRejected} " +
-                    "score=${quality.score}/100 risk=${quality.risk} action=${quality.action} note=${quality.actionNote} " +
-                    "$excelRiskByFile batchDecision=${excelBatchBundle.decision} batchPriority=${excelBatchBundle.priority} " +
-                    "diag=[${quality.diagnostics}] " +
-                    "newRoutes=${merged.routesToInsert.size} " +
-                    "skipSelfRoute=${merged.stats.skippedSelfRoutes} skipDupRoute=${merged.stats.skippedDuplicateRoutes}"
-            )
-            _state.value = _state.value.copy(
-                excelParserUi = _state.value.excelParserUi.copy(
-                    sourceUri = null,
-                    sourceFileName = "",
-                    headers = emptyList(),
-                    sampleRows = emptyList(),
-                    isLoading = false,
-                    showMappingDialog = false,
-                    message = run {
-                        val quality = dedupQualitySnapshot(
-                            incomingNodes = draft.suggestedNodes.size,
-                            strongMatches = merged.stats.strongMatches,
-                            weakMatches = merged.stats.weakMatches,
-                            coordOnlyRejected = merged.stats.coordOnlyRejected,
-                            incomingRoutes = draft.suggestedRoutes.size,
-                            skippedSelfRoutes = merged.stats.skippedSelfRoutes,
-                            skippedDuplicateRoutes = merged.stats.skippedDuplicateRoutes
-                        )
-                        val riskSummary = DedupRiskSummaryFormatter.summarize(
-                            high = if (quality.risk == "high") 1 else 0,
-                            medium = if (quality.risk == "medium") 1 else 0,
-                            low = if (quality.risk == "low") 1 else 0
-                        )
-                        val riskByFile = DedupRiskSummaryFormatter.format(riskSummary)
-                        val batchBundle = DedupBatchDecisionAdvisor.bundleFromSummaryText(riskByFile)
-                        "Excel parsed: +${merged.nodesToInsert.size} node, +${merged.routesToInsert.size} tuyến, trùng ${merged.duplicateNodes} node, " +
-                            DedupAiSummaryFormatter.format(
-                                score = quality.score,
-                                label = quality.label,
-                                risk = quality.risk,
-                                action = quality.action,
-                                actionNote = quality.actionNote,
-                                diagnostics = quality.diagnostics,
-                                riskByFile = riskByFile,
-                                batchDecision = batchBundle.decision,
-                                batchPriority = batchBundle.priority,
-                                batchNote = batchBundle.note,
-                                hint = quality.hint
-                            )
-                    }
-                ),
-                importedFiles = if (importedFile != null) _state.value.importedFiles + importedFile else _state.value.importedFiles,
-                designNodes = existingNodes,
-                designRoutes = existingRoutes,
-                dashboard = buildDashboard(
-                    existingNodes,
-                    existingRoutes,
-                    _state.value.constructionProgress,
-                    emptyList()
-                )
-            )
         }.onFailure { ex ->
             AppLogger.e(ex, "import.mapping.flow confirm.import.failure")
             _state.value = _state.value.copy(
                 excelParserUi = _state.value.excelParserUi.copy(
                     isLoading = false,
-                    message = "Parse Excel thất bại. Vui lòng kiểm tra lại file và mapping."
+                    message = "Parse Excel thất bại: ${ex.message ?: "Vui lòng kiểm tra lại file và mapping."}"
                 )
             )
         }
@@ -965,9 +950,19 @@ internal fun WorkspaceViewModel.deduplicateImportedGeometry(
     incomingNodes: List<GisNode>,
     incomingRoutes: List<GisRoute>,
     existingNodes: List<GisNode>,
-    existingRoutes: List<GisRoute>
+    existingRoutes: List<GisRoute>,
+    duplicatePolicy: DuplicateImportPolicy = DuplicateImportPolicy.SKIP,
+    deduplicationKey: DuplicateBusinessKey = _state.value.excelParserUi.deduplicationKey
 ): MergeResult {
-    val result = WorkspaceImportHelper.deduplicateImportedGeometry(projectId, incomingNodes, incomingRoutes, existingNodes, existingRoutes)
+    val result = WorkspaceImportHelper.deduplicateImportedGeometry(
+        projectId = projectId,
+        incomingNodes = incomingNodes,
+        incomingRoutes = incomingRoutes,
+        existingNodes = existingNodes,
+        existingRoutes = existingRoutes,
+        duplicatePolicy = duplicatePolicy,
+        deduplicationKey = deduplicationKey
+    )
     return MergeResult(
         nodesToInsert = result.nodesToInsert,
         routesToInsert = result.routesToInsert,
@@ -1139,57 +1134,18 @@ private suspend fun WorkspaceViewModel.commitNonExcelImportDraft(
             incomingNodes = draft.suggestedNodes.map { it.copy(importedFileId = importedId) },
             incomingRoutes = draft.suggestedRoutes.map { it.copy(importedFileId = importedId) },
             existingNodes = baseNodes,
-            existingRoutes = baseRoutes
+            existingRoutes = baseRoutes,
+            duplicatePolicy = DuplicateImportPolicy.SKIP
         )
     }
 
-    val saveResult = if (existingFileId != null) {
-        gisRepository.replaceImportedGeometry(
-            importedFileId = existingFileId,
-            nodes = merged.nodesToInsert,
-            routes = merged.routesToInsert
-        )
-    } else {
-        if (importedFile != null) {
-            when (val importedFileResult = importedFileRepository.upsert(importedFile)) {
-                is AppResult.Error -> {
-                    updateImportMappingUiIfChanged { ui ->
-                        ui.copy(
-                            isLoading = false,
-                            message = "Import non-Excel thất bại: ${importedFileResult.throwable.message}"
-                        )
-                    }
-                    return
-                }
-                is AppResult.Success -> Unit
-            }
-        }
-        when (val nodesResult = gisRepository.upsertNodes(merged.nodesToInsert)) {
-            is AppResult.Error -> {
-                updateImportMappingUiIfChanged { ui ->
-                    ui.copy(
-                        isLoading = false,
-                        message = "Import non-Excel thất bại: ${nodesResult.throwable.message}"
-                    )
-                }
-                return
-            }
-            is AppResult.Success -> Unit
-        }
-        when (val routesResult = gisRepository.upsertRoutes(merged.routesToInsert)) {
-            is AppResult.Error -> {
-                updateImportMappingUiIfChanged { ui ->
-                    ui.copy(
-                        isLoading = false,
-                        message = "Import non-Excel thất bại: ${routesResult.throwable.message}"
-                    )
-                }
-                return
-            }
-            is AppResult.Success -> Unit
-        }
-        AppResult.Success(Unit)
-    }
+    val saveResult = gisRepository.commitImportedGeometry(
+        projectId = projectId,
+        importedFile = importedFile,
+        replacingImportedFileId = existingFileId,
+        nodes = merged.nodesToInsert,
+        routes = merged.routesToInsert
+    )
 
     if (saveResult is AppResult.Error) {
         updateImportMappingUiIfChanged { ui ->
@@ -1220,6 +1176,7 @@ private suspend fun WorkspaceViewModel.commitNonExcelImportDraft(
                 replacingExistingFile = existingFileId != null
             )
         ),
+        importedFiles = if (importedFile != null) stateSnapshot.importedFiles + importedFile else stateSnapshot.importedFiles,
         designNodes = updatedNodes,
         designRoutes = updatedRoutes,
         dashboard = buildDashboard(
@@ -1273,57 +1230,19 @@ private suspend fun WorkspaceViewModel.commitExcelImportDraft(
             incomingNodes = draft.suggestedNodes.map { it.copy(importedFileId = importedId) },
             incomingRoutes = draft.suggestedRoutes.map { it.copy(importedFileId = importedId) },
             existingNodes = baseNodes,
-            existingRoutes = baseRoutes
+            existingRoutes = baseRoutes,
+            duplicatePolicy = excelUi.duplicatePolicy,
+            deduplicationKey = excelUi.deduplicationKey
         )
     }
 
-    val saveResult = if (existingFileId != null) {
-        gisRepository.replaceImportedGeometry(
-            importedFileId = existingFileId,
-            nodes = merged.nodesToInsert,
-            routes = merged.routesToInsert
-        )
-    } else {
-        if (importedFile != null) {
-            when (val importedFileResult = importedFileRepository.upsert(importedFile)) {
-                is AppResult.Error -> {
-                    _state.value = stateSnapshot.copy(
-                        excelParserUi = excelUi.copy(
-                            isLoading = false,
-                            message = "Parse Excel thất bại: ${importedFileResult.throwable.message}"
-                        )
-                    )
-                    return
-                }
-                is AppResult.Success -> Unit
-            }
-        }
-        when (val nodesResult = gisRepository.upsertNodes(merged.nodesToInsert)) {
-            is AppResult.Error -> {
-                _state.value = stateSnapshot.copy(
-                    excelParserUi = excelUi.copy(
-                        isLoading = false,
-                        message = "Parse Excel thất bại: ${nodesResult.throwable.message}"
-                    )
-                )
-                return
-            }
-            is AppResult.Success -> Unit
-        }
-        when (val routesResult = gisRepository.upsertRoutes(merged.routesToInsert)) {
-            is AppResult.Error -> {
-                _state.value = stateSnapshot.copy(
-                    excelParserUi = excelUi.copy(
-                        isLoading = false,
-                        message = "Parse Excel thất bại: ${routesResult.throwable.message}"
-                    )
-                )
-                return
-            }
-            is AppResult.Success -> Unit
-        }
-        AppResult.Success(Unit)
-    }
+    val saveResult = gisRepository.commitImportedGeometry(
+        projectId = projectId,
+        importedFile = importedFile,
+        replacingImportedFileId = existingFileId,
+        nodes = merged.nodesToInsert,
+        routes = merged.routesToInsert
+    )
 
     if (saveResult is AppResult.Error) {
         _state.value = stateSnapshot.copy(
@@ -1380,6 +1299,7 @@ private suspend fun WorkspaceViewModel.commitExcelImportDraft(
                 replacingExistingFile = existingFileId != null
             )
         ),
+        importedFiles = if (importedFile != null) stateSnapshot.importedFiles + importedFile else stateSnapshot.importedFiles,
         designNodes = updatedNodes,
         designRoutes = updatedRoutes,
         dashboard = buildDashboard(
@@ -1395,5 +1315,3 @@ private suspend fun WorkspaceViewModel.commitExcelImportDraft(
     }
     markProjectChanged(projectId, if (existingFileId != null) "design_import_remapped" else "design_import_completed")
 }
-
-

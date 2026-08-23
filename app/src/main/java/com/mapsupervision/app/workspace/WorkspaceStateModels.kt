@@ -18,6 +18,8 @@ import com.mapsupervision.gis.ui.GisLabelField
 import com.mapsupervision.domain.model.ExcelClassificationMode
 import com.mapsupervision.domain.model.NonExcelFieldCandidateSet
 import com.mapsupervision.domain.model.NodeSignalStatus
+import com.mapsupervision.domain.model.DuplicateImportPolicy
+import com.mapsupervision.domain.model.DuplicateBusinessKey
 
 enum class WorkspaceTab {
     MAP,
@@ -712,7 +714,7 @@ data class ImportUiState(
     val failedFiles: Int = 0,
     val failures: List<String> = emptyList(),
     val retryableFailures: List<ImportFailure> = emptyList(),
-    val warnings: List<String> = emptyList(), // Discrepancy Warnings
+    val warnings: List<String> = emptyList(),
     val message: String = ""
 )
 
@@ -722,6 +724,7 @@ data class ExcelParserUiState(
     val existingFileId: String? = null,
     val headers: List<String> = emptyList(),
     val sampleRows: List<Map<String, String>> = emptyList(),
+    val allRows: List<Map<String, String>> = emptyList(),
     val positionColumn: String = "",
     val coordinateColumn: String = "",
     val latitudeColumn: String = "",
@@ -742,11 +745,24 @@ data class ExcelParserUiState(
     val classificationMode: ExcelClassificationMode = ExcelClassificationMode.AUTO,
     val workVolumeColumnsCsv: String = "",
     val suggestedItemColumns: List<String> = emptyList(),
+    val allowPartialImport: Boolean = false,
+    val confirmedCustomColumns: Set<String> = emptySet(),
+    val duplicatePolicy: DuplicateImportPolicy = DuplicateImportPolicy.SKIP,
+    val deduplicationKey: DuplicateBusinessKey = DuplicateBusinessKey.CODE,
+    val duplicateRowCount: Int = 0,
+    val suggestedBusinessKey: DuplicateBusinessKey = DuplicateBusinessKey.CODE,
+    val validationErrors: List<String> = emptyList(),
+    val validRowCount: Int = 0,
+    val invalidRowCount: Int = 0,
+    val invalidRowSamples: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val message: String = "",
     val sheets: List<String> = emptyList(),
     val selectedSheet: String = ""
-)
+) {
+    val canConfirm: Boolean
+        get() = validationErrors.isEmpty() && validRowCount > 0 && (invalidRowCount == 0 || allowPartialImport)
+}
 
 data class ImportMappingUiState(
     val sourceUri: Uri? = null,
@@ -814,10 +830,10 @@ data class MapUiState(
     val showNodes: Boolean = true,
     val showRoutes: Boolean = true,
     val measureEnabled: Boolean = false,
-    val measureDistanceText: String = "",   // e.g. "1.23 km" or "456 m"
+    val measureDistanceText: String = "",
     val filterContractor: String? = null,
     val filterMaterialType: String? = null,
-    val contractorColors: Map<String, String> = emptyMap(), // contractor name -> hex color
+    val contractorColors: Map<String, String> = emptyMap(),
     val hiddenContractors: Set<String> = emptySet(),
     val searchQuery: String = "",
     val message: String = "",

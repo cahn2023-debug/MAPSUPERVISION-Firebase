@@ -8,8 +8,10 @@ import com.mapsupervision.data.db.dao.GisNodeDao
 import com.mapsupervision.data.db.dao.GisRouteDao
 import com.mapsupervision.data.db.entity.GisNodeEntity
 import com.mapsupervision.data.db.entity.GisRouteEntity
+import com.mapsupervision.data.db.entity.ImportedFileEntity
 import com.mapsupervision.domain.model.GisNode
 import com.mapsupervision.domain.model.GisRoute
+import com.mapsupervision.domain.model.ImportedFile
 import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.GisRepository
 import javax.inject.Inject
@@ -105,6 +107,49 @@ class GisRepositoryImpl @Inject constructor(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to search nodes", it)) }
     ) }
+
+    override suspend fun commitImportedGeometry(
+        projectId: String,
+        importedFile: ImportedFile?,
+        replacingImportedFileId: String?,
+        nodes: List<GisNode>,
+        routes: List<GisRoute>
+    ): AppResult<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(nodes.all { it.projectId == projectId }) { "Imported node belongs to another project" }
+            require(routes.all { it.projectId == projectId }) { "Imported route belongs to another project" }
+            val db = databaseFor(projectId)
+            val now = System.currentTimeMillis()
+            db.withTransaction {
+                importedFile?.let { file ->
+                    require(file.projectId == projectId) { "Imported file belongs to another project" }
+                    db.importedFileDao().upsert(
+                        ImportedFileEntity(
+                            id = file.id,
+                            projectId = file.projectId,
+                            fileName = file.fileName,
+                            fileType = file.fileType,
+                            storedPath = file.storedPath,
+                            summary = file.summary,
+                            importedAtEpochMs = file.importedAtEpochMs,
+                            updatedAtEpochMs = if (file.updatedAtEpochMs == 0L) now else file.updatedAtEpochMs,
+                            isDeleted = file.isDeleted,
+                            deletedAtEpochMs = file.deletedAtEpochMs
+                        )
+                    )
+                }
+                if (replacingImportedFileId != null) {
+                    db.gisNodeDao().markDeletedByImportedFileId(projectId, replacingImportedFileId, now, now)
+                    db.gisRouteDao().markDeletedByImportedFileId(projectId, replacingImportedFileId, now, now)
+                }
+                if (nodes.isNotEmpty()) db.gisNodeDao().upsertAll(nodes.map { it.copy(updatedAtEpochMs = if (it.updatedAtEpochMs == 0L) now else it.updatedAtEpochMs).toEntity() })
+                if (routes.isNotEmpty()) db.gisRouteDao().upsertAll(routes.map { it.copy(updatedAtEpochMs = if (it.updatedAtEpochMs == 0L) now else it.updatedAtEpochMs).toEntity() })
+            }
+        }.fold(
+            onSuccess = { AppResult.Success(Unit) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to commit imported geometry", it)) }
+        )
+    }
 
     override suspend fun searchRoutes(projectId: String, query: String): AppResult<List<GisRoute>> = withContext(Dispatchers.IO) { runCatching {
         val scopedDao = routeDao(projectId)

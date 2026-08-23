@@ -18,11 +18,12 @@ import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-import org.xmlpull.v1.XmlPullParserFactory
 
 enum class KmlGeometryKind { POINT, LINE }
 
@@ -419,7 +420,8 @@ fun haversineMeters(point: Pair<Double, Double>, previous: Pair<Double, Double>)
     val lat2 = Math.toRadians(point.first)
     val dLat = lat2 - lat1
     val dLon = Math.toRadians(point.second - previous.second)
-    val h = sin(dLat / 2).let { it * it } + cos(lat1) * cos(lat2) * sin(dLon / 2).let { it * it }
+    val h = kotlin.math.sin(dLat / 2).let { it * it } +
+        cos(lat1) * cos(lat2) * kotlin.math.sin(dLon / 2).let { it * it }
     return 2 * earthRadius * atan2(sqrt(h), sqrt(1 - h))
 }
 
@@ -575,7 +577,7 @@ internal fun parseKmlContentStreaming(
     var placemarkCount = 0
     var coordinateBlocks = 0
     val base = sourceName.substringBeforeLast(".").take(12).uppercase(Locale.US)
-    val parser = xmlPullParserFactory.newPullParser()
+    val parser = createXmlPullParser()
     parser.setInput(stream.reader())
     var currentPlacemark: StreamingPlacemark? = null
     var currentGeometryTag: String? = null
@@ -829,8 +831,32 @@ val documentBuilderFactory: DocumentBuilderFactory =
         isNamespaceAware = true
     }
 val xmlPullParserFactory: XmlPullParserFactory by lazy {
-    XmlPullParserFactory.newInstance().apply {
-        isNamespaceAware = false
+    try {
+        XmlPullParserFactory.newInstance().apply {
+            isNamespaceAware = false
+        }
+    } catch (_: Throwable) {
+        try {
+            XmlPullParserFactory.newInstance("org.kxml2.io.KXmlParser,org.kxml2.io.KXmlSerializer", null).apply {
+                isNamespaceAware = false
+            }
+        } catch (_: Throwable) {
+            XmlPullParserFactory.newInstance(System.getProperty(XmlPullParserFactory.PROPERTY_NAME), null).apply {
+                isNamespaceAware = false
+            }
+        }
+    }
+}
+
+fun createXmlPullParser(): XmlPullParser {
+    return try {
+        xmlPullParserFactory.newPullParser()
+    } catch (_: Throwable) {
+        try {
+            Class.forName("org.kxml2.io.KXmlParser").getDeclaredConstructor().newInstance() as XmlPullParser
+        } catch (_: Throwable) {
+            Class.forName("org.xmlpull.mxp1.MXParser").getDeclaredConstructor().newInstance() as XmlPullParser
+        }
     }
 }
 val ITEM_COLUMN_KEYWORDS = listOf(

@@ -82,8 +82,13 @@ fun WorkspaceViewModel.retryFailedImports() {
     importDesignFiles(uris)
 }
 
-fun WorkspaceViewModel.onOpenPicker() {}
-fun WorkspaceViewModel.onPickerEmpty() {}
+fun WorkspaceViewModel.onOpenPicker() {
+    showMessage("Đang mở bộ chọn file nhập liệu...")
+}
+
+fun WorkspaceViewModel.onPickerEmpty() {
+    showMessage("Không có file nhập liệu được chọn hoặc bộ chọn file không thể mở.")
+}
 
 fun WorkspaceViewModel.updateWorkVolumeProgress(nodeCode: String, workName: String, progress: String) {
     // Update in-memory state immediately for responsive UI
@@ -197,6 +202,7 @@ fun WorkspaceViewModel.combineImportedFiles(
 
 fun WorkspaceViewModel.importDesignFiles(uris: List<Uri>) {
     viewModelScope.launch {
+        try {
         val startedAtMs = System.currentTimeMillis()
         val projectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
         if (projectId == null) {
@@ -631,6 +637,17 @@ fun WorkspaceViewModel.importDesignFiles(uris: List<Uri>) {
         AppLogger.d("perf.import.breakdown parseMs=$parseTotalMs dedupMs=$dedupTotalMs flushMs=$flushTotalMs")
         AppLogger.d("dedup.id_collision_summary nodes=$dedupNodeIdCollisionTotal routes=$dedupRouteIdCollisionTotal")
         AppLogger.d("import.post project=$projectId nodes=${refreshedNodes.size} routes=${refreshedRoutes.size} nodeSig=${identitySignature(refreshedNodes.asSequence().map { it.id })} routeSig=${identitySignature(refreshedRoutes.asSequence().map { it.id })}")
+        } catch (ex: Exception) {
+            AppLogger.e(ex, "import.failed.unhandled")
+            _state.value = _state.value.copy(
+                importUi = _state.value.importUi.copy(
+                    status = ImportStatus.FAILED,
+                    message = "Nhập dữ liệu thất bại: ${ex.message ?: "lỗi không xác định"}",
+                    failures = listOf(ex.message ?: "Lỗi không xác định")
+                )
+            )
+            showMessage("Nhập dữ liệu thất bại. Vui lòng kiểm tra dự án active và file đã chọn.")
+        }
     }
 }
 

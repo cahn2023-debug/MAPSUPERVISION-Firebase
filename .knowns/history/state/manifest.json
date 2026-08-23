@@ -1,6 +1,38 @@
 {
   "schemaVersion": 1,
   "entries": {
+    "doc:doc-0d5cbeea345b160498365b0db3f50583": {
+      "entityType": "doc",
+      "entityId": "doc-0d5cbeea345b160498365b0db3f50583",
+      "path": "docs/specs/2026-08-23/data-mapping-import-reliability.md",
+      "hash": "32e02e8a5ec6e87226f82c027114adeb2e3601ccd2356b16e37fcd6690ac9671",
+      "revision": 2,
+      "headHash": "32e02e8a5ec6e87226f82c027114adeb2e3601ccd2356b16e37fcd6690ac9671"
+    },
+    "doc:doc-ab0e87ebf1bff31d721ff635fd59110f": {
+      "entityType": "doc",
+      "entityId": "doc-ab0e87ebf1bff31d721ff635fd59110f",
+      "path": "docs/specs/2026-08-23/firebase-project-download-approval.md",
+      "hash": "f4d7c7c67c7909d7ac37d3dddd9378fccbb974ed0f78ec0dc795b66e32979679",
+      "revision": 2,
+      "headHash": "f4d7c7c67c7909d7ac37d3dddd9378fccbb974ed0f78ec0dc795b66e32979679"
+    },
+    "doc:doc-aeafeb612778d57e9f6bc4b51ea86773": {
+      "entityType": "doc",
+      "entityId": "doc-aeafeb612778d57e9f6bc4b51ea86773",
+      "path": "docs/specs/2026-08-23/firebase-project-sync-approval.md",
+      "hash": "d2e95446f65bc8307cf14559aee99436a9a1c8641eb5b46335532c67d4421b56",
+      "revision": 2,
+      "headHash": "d2e95446f65bc8307cf14559aee99436a9a1c8641eb5b46335532c67d4421b56"
+    },
+    "doc:doc-baf498e6634889e44a28297b5ab33ca6": {
+      "entityType": "doc",
+      "entityId": "doc-baf498e6634889e44a28297b5ab33ca6",
+      "path": "docs/specs/2026-08-23/firebase-project-sync-approval-approved.md",
+      "hash": "0b0c41ae9a0952581b755c96206de09200851ecb5e03b10c829594cbf5b245b6",
+      "revision": 3,
+      "headHash": "0b0c41ae9a0952581b755c96206de09200851ecb5e03b10c829594cbf5b245b6"
+    },
     "doc:doc-f48b73dd56ca6eca0c419753f1b4d6f0": {
       "entityType": "doc",
       "entityId": "doc-f48b73dd56ca6eca0c419753f1b4d6f0",
@@ -17,6 +49,46 @@
       "revision": 4,
       "headHash": "eee452c30e31fd41cf5eb7e03de4be9592dd7d8ac578d467fe1188d6b06f2a3f"
     },
+    "task:3rw9vs": {
+      "entityType": "task",
+      "entityId": "3rw9vs",
+      "path": "tasks/task-3rw9vs - data-mapping-import-reliability-02-Sửa-luồng-xác.md",
+      "hash": "e9615fe073eecfa9caff890a11f0c2a17b02d7775cbdc9be30d396a1fa2e05d8",
+      "revision": 6,
+      "headHash": "e9615fe073eecfa9caff890a11f0c2a17b02d7775cbdc9be30d396a1fa2e05d8"
+    },
+    "task:4hpjy5": {
+      "entityType": "task",
+      "entityId": "4hpjy5",
+      "path": "tasks/task-4hpjy5 - firebase-project-sync-approval-03-Hiển-thị-catalo.md",
+      "hash": "2887e9f45b783333d5561c7594f19f8f2c564a4216d07ac77b644b3652f22c1d",
+      "revision": 9,
+      "headHash": "2887e9f45b783333d5561c7594f19f8f2c564a4216d07ac77b644b3652f22c1d"
+    },
+    "task:5lh0mh": {
+      "entityType": "task",
+      "entityId": "5lh0mh",
+      "path": "tasks/task-5lh0mh - firebase-project-sync-approval-05-Quản-trị-phê-du.md",
+      "hash": "ad0b9aa49bb5a83a48f95cd0ab545fefc243fe372f7650c3dee564fe60e3fc93",
+      "revision": 9,
+      "headHash": "ad0b9aa49bb5a83a48f95cd0ab545fefc243fe372f7650c3dee564fe60e3fc93"
+    },
+    "task:8b4bgf": {
+      "entityType": "task",
+      "entityId": "8b4bgf",
+      "path": "tasks/task-8b4bgf - firebase-project-sync-approval-07-Tải-hợp-nhất-và.md",
+      "hash": "d96e72a4b6199492137403f2b8fb6f9ae2d9fa4f46e29bbc02c46e1b9177850e",
+      "revision": 8,
+      "headHash": "d96e72a4b6199492137403f2b8fb6f9ae2d9fa4f46e29bbc02c46e1b9177850e"
+    },
+    "task:93i0ba": {
+      "entityType": "task",
+      "entityId": "93i0ba",
+      "path": "tasks/task-93i0ba - firebase-project-sync-approval-01-Xây-dựng-catalo.md",
+      "hash": "7f71392fb12f57d61df7a24a82bb86faa4786e5afea2fba69fe512ac7d4ba789",
+      "revision": 9,
+      "headHash": "7f71392fb12f57d61df7a24a82bb86faa4786e5afea2fba69fe512ac7d4ba789"
+    },
     "task:baywan": {
       "entityType": "task",
       "entityId": "baywan",
@@ -25,6 +97,14 @@
       "revision": 4,
       "headHash": "a7c949157648bcc41ee08f18e61e61631d82846224ab38302a5183011bb102c5"
     },
+    "task:cfhjsv": {
+      "entityType": "task",
+      "entityId": "cfhjsv",
+      "path": "tasks/task-cfhjsv - data-mapping-import-reliability-05-Kiểm-thử-file.md",
+      "hash": "9e21e7255e48fd74c6cf323d85c42ece9dd2a60a0b74812b04b2d89f9035062d",
+      "revision": 5,
+      "headHash": "9e21e7255e48fd74c6cf323d85c42ece9dd2a60a0b74812b04b2d89f9035062d"
+    },
     "task:cur2hl": {
       "entityType": "task",
       "entityId": "cur2hl",
@@ -32,6 +112,14 @@
       "hash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949",
       "revision": 4,
       "headHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949"
+    },
+    "task:hzbfzu": {
+      "entityType": "task",
+      "entityId": "hzbfzu",
+      "path": "tasks/task-hzbfzu - data-mapping-import-reliability-04-Bảo-đảm-import.md",
+      "hash": "add977b6d84d65e7a89ab93b130144d2ea4a5269f91768283d991001a0b9a8de",
+      "revision": 5,
+      "headHash": "add977b6d84d65e7a89ab93b130144d2ea4a5269f91768283d991001a0b9a8de"
     },
     "task:ko9dx0": {
       "entityType": "task",
@@ -57,6 +145,14 @@
       "revision": 4,
       "headHash": "ddf00eba976e4a7fb7c395436b528514f7f8104408040dc197f355b2b7d6f3b6"
     },
+    "task:n77z6v": {
+      "entityType": "task",
+      "entityId": "n77z6v",
+      "path": "tasks/task-n77z6v - firebase-project-sync-approval-06-Thực-thi-quyền.md",
+      "hash": "0d417b558519e5ff5c35ac501563d6d624a39f0a437d45ee3164310fb14a9001",
+      "revision": 7,
+      "headHash": "0d417b558519e5ff5c35ac501563d6d624a39f0a437d45ee3164310fb14a9001"
+    },
     "task:nd6e8j": {
       "entityType": "task",
       "entityId": "nd6e8j",
@@ -73,6 +169,22 @@
       "revision": 4,
       "headHash": "d99f11edd4dc54e0215f28fc23e96f52cb60e7ad6f313f866947b0c23b55f9b6"
     },
+    "task:pxpscs": {
+      "entityType": "task",
+      "entityId": "pxpscs",
+      "path": "tasks/task-pxpscs - firebase-project-sync-approval-04-Quản-trị-phê-du.md",
+      "hash": "81dfe4b05ba4c807b77aa8367057b29831eb8b1101e65e8b57aa81315a486f56",
+      "revision": 10,
+      "headHash": "81dfe4b05ba4c807b77aa8367057b29831eb8b1101e65e8b57aa81315a486f56"
+    },
+    "task:q74bwe": {
+      "entityType": "task",
+      "entityId": "q74bwe",
+      "path": "tasks/task-q74bwe - firebase-project-sync-approval-02-Hoàn-thiện-vòng.md",
+      "hash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058",
+      "revision": 11,
+      "headHash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058"
+    },
     "task:s9g76i": {
       "entityType": "task",
       "entityId": "s9g76i",
@@ -81,6 +193,14 @@
       "revision": 4,
       "headHash": "7ad305a8c46b8c0a42096453b00300b8910fc06dfe5fe092669636dc2a3af5d7"
     },
+    "task:sjidgd": {
+      "entityType": "task",
+      "entityId": "sjidgd",
+      "path": "tasks/task-sjidgd - data-mapping-import-reliability-03-Xử-lý-dữ-liệu.md",
+      "hash": "437d342d356b86830d987e77ee962ae8e633cad16ba18f3da56127982c2a53c2",
+      "revision": 7,
+      "headHash": "437d342d356b86830d987e77ee962ae8e633cad16ba18f3da56127982c2a53c2"
+    },
     "task:u9qrz7": {
       "entityType": "task",
       "entityId": "u9qrz7",
@@ -88,6 +208,22 @@
       "hash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469",
       "revision": 4,
       "headHash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469"
+    },
+    "task:uie7ix": {
+      "entityType": "task",
+      "entityId": "uie7ix",
+      "path": "tasks/task-uie7ix - firebase-project-sync-approval-08-Kiểm-thử-tích-h.md",
+      "hash": "64cc76c8d64a10fab9d21e392e0e419bd6ad172a46c9dd7c925cf75b5d7d012a",
+      "revision": 7,
+      "headHash": "64cc76c8d64a10fab9d21e392e0e419bd6ad172a46c9dd7c925cf75b5d7d012a"
+    },
+    "task:wlkka3": {
+      "entityType": "task",
+      "entityId": "wlkka3",
+      "path": "tasks/task-wlkka3 - data-mapping-import-reliability-01-Chuẩn-hóa-bộ-đ.md",
+      "hash": "a1003b06be99e422415eb7617006f0ae33734eda7f79494f46af4986f65bf720",
+      "revision": 4,
+      "headHash": "a1003b06be99e422415eb7617006f0ae33734eda7f79494f46af4986f65bf720"
     }
   }
 }

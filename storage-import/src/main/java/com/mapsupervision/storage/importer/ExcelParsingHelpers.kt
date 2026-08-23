@@ -14,9 +14,13 @@ import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipFile
 import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
+import javax.xml.parsers.DocumentBuilderFactory
+
+
 fun readXlsxTable(file: File, sheetName: String? = null): XlsxTable {
     val totalStartedAtMs = System.currentTimeMillis()
-    ZipFile(file).use { zip ->
+    return ZipFile(file).use { zip ->
         val sharedStartedAtMs = System.currentTimeMillis()
         val sharedStrings = readSharedStrings(zip)
         val sharedMs = System.currentTimeMillis() - sharedStartedAtMs
@@ -25,16 +29,13 @@ fun readXlsxTable(file: File, sheetName: String? = null): XlsxTable {
         val scanned = zip.getInputStream(sheetEntry).use { parseWorksheet(it, sharedStrings) }
         val scanMs = System.currentTimeMillis() - scanStartedAtMs
         val rowMaps = scanned.rowMaps
-        if (rowMaps.isEmpty()) return XlsxTable(emptyList(), emptyList())
+        if (rowMaps.isEmpty()) return@use XlsxTable(emptyList(), emptyList())
         var maxCol = scanned.maxCol
         val merges = scanned.merges
         merges.forEach { maxCol = maxOf(maxCol, it.endCol) }
 
-        val denseStartedAtMs = System.currentTimeMillis()
-        val sortedRows = ArrayList<Map.Entry<Int, MutableMap<Int, String>>>(rowMaps.size)
-        sortedRows.addAll(rowMaps.entries)
-        sortedRows.sortBy { it.key }
-        if (sortedRows.isEmpty()) return XlsxTable(emptyList(), emptyList())
+        val sortedRows = rowMaps.entries.sortedBy { it.key }
+        if (sortedRows.isEmpty()) return@use XlsxTable(emptyList(), emptyList())
 
         val rowIndexToDense = HashMap<Int, Int>(sortedRows.size)
         val rows = MutableList(sortedRows.size) { MutableList(maxCol + 1) { "" } }
@@ -60,19 +61,16 @@ fun readXlsxTable(file: File, sheetName: String? = null): XlsxTable {
                 endCol = merge.endCol
             )
         }
-        val denseMs = System.currentTimeMillis() - denseStartedAtMs
-
-        val mergeApplyStartedAtMs = System.currentTimeMillis()
         val resolvedRows = applyMergedCells(rows, denseMerges)
-        val mergeApplyMs = System.currentTimeMillis() - mergeApplyStartedAtMs
-        val headerStartedAtMs = System.currentTimeMillis()
-        val headerRows = detectHeaderRows(resolvedRows)
-        val headers = flattenHeaders(resolvedRows, headerRows)
+        val headerRange = TabularReader.detectHeaderRowRange(resolvedRows)
+        val headers = TabularReader.flattenHeaderRows(resolvedRows, headerRange)
         val expectedCols = headers.size
-        val dataCount = (resolvedRows.size - headerRows).coerceAtLeast(0)
+        val dataStart = headerRange.last + 1
+        val dataCount = (resolvedRows.size - dataStart).coerceAtLeast(0)
         val dataRows = ArrayList<List<String>>(dataCount)
-        for (rowIndex in headerRows until resolvedRows.size) {
+        for (rowIndex in dataStart until resolvedRows.size) {
             val row = resolvedRows[rowIndex]
+            if (row.all { it.isBlank() }) continue
             if (row.size == expectedCols) {
                 dataRows += row
                 continue
@@ -83,18 +81,17 @@ fun readXlsxTable(file: File, sheetName: String? = null): XlsxTable {
             while (adjusted.size < expectedCols) adjusted.add("")
             dataRows.add(adjusted)
         }
-        val headerMs = System.currentTimeMillis() - headerStartedAtMs
+        val headerMs = System.currentTimeMillis() - scanStartedAtMs
         AppLogger.d(
-            "perf.xlsx.table sharedMs=$sharedMs scanMs=$scanMs denseMs=$denseMs mergeMs=$mergeApplyMs " +
-                "headerMs=$headerMs totalMs=${System.currentTimeMillis() - totalStartedAtMs} " +
+            "perf.xlsx.table sharedMs=$sharedMs scanMs=$scanMs totalMs=${System.currentTimeMillis() - totalStartedAtMs} " +
                 "rows=${dataRows.size} headers=${headers.size} merges=${merges.size} sharedStrings=${sharedStrings.size}"
         )
-        return XlsxTable(headers = headers, rows = dataRows)
+        XlsxTable(headers = headers, rows = dataRows)
     }
 }
 
 fun parseWorksheet(input: InputStream, sharedStrings: List<String>): WorksheetScan {
-    val parser = xmlPullParserFactory.newPullParser()
+    val parser = createXmlPullParser()
     parser.setInput(InputStreamReader(input, Charsets.UTF_8))
 
     val rowMaps = HashMap<Int, MutableMap<Int, String>>(512)
@@ -120,7 +117,8 @@ fun parseWorksheet(input: InputStream, sharedStrings: List<String>): WorksheetSc
                 when (parser.name) {
                     "row" -> {
                         val attr = parser.getAttributeValue(null, "r")
-                        currentRowIndex = attr?.let { parsePositiveInt(it)?.minus(1) } ?: nextImplicitRowIndex
+                        val rInt = attr?.let { parsePositiveInt(it) }
+                        currentRowIndex = if (rInt != null) rInt - 1 else nextImplicitRowIndex
                         nextImplicitRowIndex = currentRowIndex + 1
                         currentRowMap = null
                         nextImplicitCol = 0
@@ -192,17 +190,12 @@ fun findFirstWorksheetEntry(zip: ZipFile): java.util.zip.ZipEntry? {
         val entry = enumeration.nextElement()
         if (entry.isDirectory) continue
         val name = entry.name
-        if (
-            name.length >= 24 &&
-            name.regionMatches(0, "xl/worksheets/sheet", 0, 19, ignoreCase = true) &&
-            name.regionMatches(name.length - 4, ".xml", 0, 4, ignoreCase = true)
-        ) {
+        if (name.startsWith("xl/worksheets/sheet", ignoreCase = true) && name.endsWith(".xml", ignoreCase = true)) {
             return entry
         }
     }
     return null
 }
-
 
 fun findWorksheetEntryForSheet(zip: ZipFile, sheetName: String?): java.util.zip.ZipEntry? {
     if (sheetName == null) return findFirstWorksheetEntry(zip)
@@ -211,13 +204,18 @@ fun findWorksheetEntryForSheet(zip: ZipFile, sheetName: String?): java.util.zip.
     if (relsEntry != null) {
         runCatching {
             zip.getInputStream(relsEntry).use { input ->
-                val parser = xmlPullParserFactory.newPullParser()
+                val parser = createXmlPullParser()
                 parser.setInput(InputStreamReader(input, Charsets.UTF_8))
                 var eventType = parser.eventType
                 while (eventType != XmlPullParser.END_DOCUMENT) {
-                    if (eventType == XmlPullParser.START_TAG && parser.name == "Relationship") {
-                        val id = parser.getAttributeValue(null, "Id")
-                        val target = parser.getAttributeValue(null, "Target")
+                    if (eventType == XmlPullParser.START_TAG && parser.name?.substringAfterLast(':').equals("Relationship", ignoreCase = true)) {
+                        var id: String? = null
+                        var target: String? = null
+                        for (i in 0 until parser.attributeCount) {
+                            val attrLocal = parser.getAttributeName(i).substringAfterLast(':')
+                            if (attrLocal.equals("Id", ignoreCase = true)) id = parser.getAttributeValue(i)
+                            if (attrLocal.equals("Target", ignoreCase = true)) target = parser.getAttributeValue(i)
+                        }
                         if (!id.isNullOrBlank() && !target.isNullOrBlank()) {
                             rIdToTarget[id] = target
                         }
@@ -234,28 +232,31 @@ fun findWorksheetEntryForSheet(zip: ZipFile, sheetName: String?): java.util.zip.
     var currentIdx = 0
     runCatching {
         zip.getInputStream(workbookEntry).use { input ->
-            val parser = xmlPullParserFactory.newPullParser()
+            val parser = createXmlPullParser()
             parser.setInput(InputStreamReader(input, Charsets.UTF_8))
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
-                if (eventType == XmlPullParser.START_TAG && parser.name == "sheet") {
-                    val name = parser.getAttributeValue(null, "name")
-                    if (name.equals(sheetName, ignoreCase = true)) {
+                if (eventType == XmlPullParser.START_TAG) {
+                    val tagName = parser.name?.substringAfterLast(':').orEmpty()
+                    if (tagName.equals("sheet", ignoreCase = true)) {
+                        var name: String? = null
                         for (i in 0 until parser.attributeCount) {
-                            val attrName = parser.getAttributeName(i)
-                            if (attrName == "id" || attrName.endsWith(":id") || parser.getAttributeNamespace(i).contains("relationships")) {
+                            val attrLocal = parser.getAttributeName(i).substringAfterLast(':')
+                            if (attrLocal.equals("name", ignoreCase = true)) {
+                                name = parser.getAttributeValue(i)
+                            }
+                            if (attrLocal.equals("id", ignoreCase = true)) {
                                 targetRid = parser.getAttributeValue(i)
                             }
                         }
-                        if (targetRid == null) {
-                            val rIdVal = parser.getAttributeValue("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")
-                            if (!rIdVal.isNullOrBlank()) {
-                                targetRid = rIdVal
-                            }
+                        if (name.equals(sheetName, ignoreCase = true)) {
+                            sheetIndex = currentIdx
+                            break
+                        } else {
+                            targetRid = null
                         }
-                        sheetIndex = currentIdx
+                        currentIdx++
                     }
-                    currentIdx++
                 }
                 eventType = parser.next()
             }
@@ -279,9 +280,8 @@ fun findWorksheetEntryForSheet(zip: ZipFile, sheetName: String?): java.util.zip.
             val entry = enumeration.nextElement()
             if (entry.isDirectory) continue
             val name = entry.name
-            if (name.length >= 24 &&
-                name.regionMatches(0, "xl/worksheets/sheet", 0, 19, ignoreCase = true) &&
-                name.regionMatches(name.length - 4, ".xml", 0, 4, ignoreCase = true)
+            if (name.startsWith("xl/worksheets/sheet", ignoreCase = true) &&
+                name.endsWith(".xml", ignoreCase = true)
             ) {
                 sheets.add(entry)
             }
@@ -424,8 +424,8 @@ fun autoDetectExcelMapping(table: XlsxTable): ExcelColumnMapping? {
 fun autoDetectExcelMappingSuggestion(table: XlsxTable): ExcelMappingSuggestion? {
     val headers = table.headers
     if (headers.isEmpty()) return null
-    val normalizedHeaders = ArrayList<String>(headers.size)
-    for (header in headers) normalizedHeaders.add(normalizeText(header))
+
+    val normalizedHeaders = headers.map { normalizeHeader(it) }
     val headerCount = headers.size
     val sampleLimit = 5
     val sampleCounts = IntArray(headerCount)
@@ -507,97 +507,93 @@ fun autoDetectExcelMappingSuggestion(table: XlsxTable): ExcelMappingSuggestion? 
             longitudeIndex = i
             remaining--
         }
-        if (contractorIndex < 0 && (normalized.contains("nha thau") || normalized.contains("contractor") || normalized.contains("don vi thi cong") || normalized.contains("doi thi cong"))) {
+        if (contractorIndex < 0 && (normalized.contains("nha thau") || normalized.contains("contractor") || normalized.contains("don vi") || normalized.contains("team"))) {
             contractorIndex = i
             remaining--
         }
-        if (objectTypeIndex < 0 && (normalized.contains("loai doi tuong") || normalized.contains("doi tuong") || normalized.contains("object type") || normalized.contains("object") || normalized.contains("phan loai"))) {
+        if (objectTypeIndex < 0 && (normalized.contains("loai doi tuong") || normalized.contains("object type") || normalized.contains("phan loai") || normalized == "loai")) {
             objectTypeIndex = i
             remaining--
         }
         if (remaining == 0) break
     }
-    if (positionIndex < 0) positionIndex = fallbackCodeIndex
 
-    if (positionIndex < 0 || (coordinateIndex < 0 && (latitudeIndex < 0 || longitudeIndex < 0))) return null
+    if (positionIndex < 0 && fallbackCodeIndex >= 0) {
+        positionIndex = fallbackCodeIndex
+    }
 
-    val structuralByIndex = BooleanArray(headers.size)
-    structuralByIndex[positionIndex] = true
-    if (coordinateIndex >= 0) structuralByIndex[coordinateIndex] = true
-    if (latitudeIndex >= 0) structuralByIndex[latitudeIndex] = true
-    if (longitudeIndex >= 0) structuralByIndex[longitudeIndex] = true
-    if (contractorIndex >= 0) structuralByIndex[contractorIndex] = true
-    if (objectTypeIndex >= 0) structuralByIndex[objectTypeIndex] = true
+    val positionColumn = headers.getOrNull(positionIndex) ?: headers.firstOrNull() ?: ""
+    val hasTwoColumnCoordinates = latitudeIndex >= 0 && longitudeIndex >= 0
+    val coordinateColumn = if (hasTwoColumnCoordinates) "" else (headers.getOrNull(coordinateIndex) ?: "")
+    val latitudeColumn = if (hasTwoColumnCoordinates) headers.getOrNull(latitudeIndex).orEmpty() else ""
+    val longitudeColumn = if (hasTwoColumnCoordinates) headers.getOrNull(longitudeIndex).orEmpty() else ""
+    val contractorColumn = headers.getOrNull(contractorIndex) ?: ""
+    val objectTypeColumn = headers.getOrNull(objectTypeIndex) ?: ""
 
-    val itemColumns = ArrayList<String>(headers.size)
-    for (index in headers.indices) {
-        if (structuralByIndex[index]) continue
-        if (
-            isLikelyItemColumn(
-                normalizedHeader = normalizedHeaders[index],
-                numericHint = sampleNumericHintByIndex[index]
-            )
-        ) {
-            itemColumns.add(headers[index])
+    val itemColumns = mutableListOf<String>()
+    for (i in headers.indices) {
+        if (i == positionIndex || i == coordinateIndex || i == latitudeIndex || i == longitudeIndex || i == contractorIndex || i == objectTypeIndex) {
+            continue
+        }
+        val normalized = normalizedHeaders[i]
+        val sampleNumericHint = sampleNumericHintByIndex.getOrNull(i) == true
+        if (sampleNumericHint || isWorkVolumeKey(normalized)) {
+            itemColumns.add(headers[i])
         }
     }
 
-    var confidence = 45
-    if (positionIndex >= 0) confidence += 20
-    if (coordinateIndex >= 0) confidence += 25
-    if (latitudeIndex >= 0 && longitudeIndex >= 0) confidence += 20
-    if (contractorIndex >= 0) confidence += 5
-    if (objectTypeIndex >= 0) confidence += 5
-    if (itemColumns.isNotEmpty()) confidence += 5
-    if (positionIndex >= 0 && coordinateIndex < 0 && (latitudeIndex < 0 || longitudeIndex < 0)) {
-        confidence = minOf(confidence, 50)
-    }
-    confidence = confidence.coerceIn(0, 100)
-
+    val mapping = ExcelColumnMapping(
+        positionColumn = positionColumn,
+        coordinateColumn = coordinateColumn.ifBlank { null },
+        latitudeColumn = latitudeColumn.ifBlank { null },
+        longitudeColumn = longitudeColumn.ifBlank { null },
+        contractorColumn = contractorColumn.ifBlank { null },
+        objectTypeColumn = objectTypeColumn.ifBlank { null },
+        itemColumns = itemColumns,
+        classificationMode = ExcelClassificationMode.AUTO
+    )
     return ExcelMappingSuggestion(
-        mapping = ExcelColumnMapping(
-            positionColumn = headers[positionIndex],
-            coordinateColumn = headers.getOrNull(coordinateIndex),
-            latitudeColumn = headers.getOrNull(latitudeIndex),
-            longitudeColumn = headers.getOrNull(longitudeIndex),
-            contractorColumn = headers.getOrNull(contractorIndex),
-            mapNumberColumn = headers.getOrNull(positionIndex),
-            objectTypeColumn = headers.getOrNull(objectTypeIndex),
-            itemColumns = itemColumns
-        ),
-        confidence = confidence
+        mapping = mapping,
+        confidence = 100
     )
 }
 
-fun parseObjectKind(value: String): ObjectKind {
-    val normalized = normalizeText(value)
-    return when {
-        normalized.contains("route") || normalized.contains("line") || normalized.contains("tuyen") -> ObjectKind.ROUTE
-        normalized.contains("node") || normalized.contains("nut") || normalized.contains("diem") || normalized.contains("point") -> ObjectKind.NODE
-        else -> ObjectKind.AUTO
+private val NON_ALPHANUMERIC_REGEX = Regex("[^a-z0-9\\s]")
+
+fun normalizeHeader(text: String): String {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return ""
+    val normalized = Normalizer.normalize(trimmed, Normalizer.Form.NFD)
+    return normalized
+        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .replace('đ', 'd')
+        .replace('Đ', 'd')
+        .lowercase(Locale.US)
+        .replace(NON_ALPHANUMERIC_REGEX, " ")
+        .replace(MULTI_SPACE_REGEX, " ")
+}
+
+fun normalizeText(text: String): String = normalizeHeader(text)
+
+fun parseObjectKind(text: String): ObjectKind {
+    val norm = normalizeHeader(text)
+    return if (norm.contains("tuyen") || norm.contains("cap") || norm.contains("route") || norm.contains("line") || norm.contains("edge")) {
+        ObjectKind.ROUTE
+    } else {
+        ObjectKind.NODE
     }
 }
 
-fun isLikelyItemColumn(normalizedHeader: String, numericHint: Boolean): Boolean {
-    val keywordMatch = ITEM_COLUMN_KEYWORDS.any { normalizedHeader.contains(it) }
-    if (keywordMatch) return true
-    return numericHint
-}
-
-fun normalizeText(value: String): String {
-    val stripped = Normalizer.normalize(value.lowercase(Locale.US), Normalizer.Form.NFD)
-        .replace(COMBINING_MARKS_REGEX, "")
-    return stripped
-        .replace("đ", "d")
-        .replace(NON_ALNUM_SPACE_REGEX, " ")
-        .trim()
-        .replace(MULTI_SPACE_REGEX, " ")
+fun parseXml(input: InputStream): org.w3c.dom.Document {
+    val factory = DocumentBuilderFactory.newInstance()
+    factory.isNamespaceAware = true
+    return factory.newDocumentBuilder().parse(input)
 }
 
 fun readSharedStrings(zip: ZipFile): List<String> {
     val entry = zip.getEntry("xl/sharedStrings.xml") ?: return emptyList()
     val values = ArrayList<String>(1024)
-    val parser = xmlPullParserFactory.newPullParser()
+    val parser = createXmlPullParser()
     zip.getInputStream(entry).use { input ->
         parser.setInput(InputStreamReader(input, Charsets.UTF_8))
         var eventType = parser.eventType
@@ -637,92 +633,26 @@ fun readSharedStrings(zip: ZipFile): List<String> {
     return values
 }
 
-fun parseXml(input: InputStream): org.w3c.dom.Document =
-    documentBuilderFactory.newDocumentBuilder().parse(input)
-
 fun resolveCellValue(
     sharedString: Boolean,
     inlineString: Boolean,
-    value: StringBuilder,
-    inline: StringBuilder,
+    value: CharSequence,
+    inline: CharSequence,
     sharedStrings: List<String>
 ): String {
-    return when {
-        sharedString -> parsePositiveInt(value)?.let { idx -> sharedStrings.getOrNull(idx).orEmpty() }.orEmpty()
-        inlineString -> inline.toString()
-        else -> value.toString()
-    }.trim()
+    if (inlineString) return inline.toString().trim()
+    val raw = value.toString().trim()
+    if (sharedString) {
+        val index = raw.toIntOrNull() ?: return ""
+        return sharedStrings.getOrNull(index).orEmpty().trim()
+    }
+    return raw
 }
 
-fun parsePositiveInt(builder: StringBuilder): Int? {
-    if (builder.isEmpty()) return null
-    var value = 0
-    for (i in 0 until builder.length) {
-        val ch = builder[i]
-        if (ch !in '0'..'9') return null
-        value = (value * 10) + (ch.code - '0'.code)
-    }
-    return value
-}
-
-fun parsePositiveInt(text: String): Int? {
-    if (text.isEmpty()) return null
-    var value = 0
-    for (i in text.indices) {
-        val ch = text[i]
-        if (ch !in '0'..'9') return null
-        value = (value * 10) + (ch.code - '0'.code)
-    }
-    return value
-}
-
-fun colIndexFromRef(ref: String, start: Int = 0, endExclusive: Int = ref.length): Int {
-    var result = 0
-    var i = start
-    var hasLetter = false
-    while (i < endExclusive) {
-        val ch = ref[i]
-        val normalized = when {
-            ch in 'A'..'Z' -> ch
-            ch in 'a'..'z' -> (ch.code - 32).toChar()
-            else -> break
-        }
-        hasLetter = true
-        result = result * 26 + (normalized.code - 'A'.code + 1)
-        i++
-    }
-    if (!hasLetter) return 0
-    return (result - 1).coerceAtLeast(0)
-}
-
-fun rowIndexFromRef(ref: String, start: Int = 0, endExclusive: Int = ref.length): Int {
-    var i = start
-    while (i < endExclusive && ref[i].isLetter()) i++
-    if (i >= endExclusive) return -1
-    var value = 0
-    var hasDigit = false
-    while (i < endExclusive) {
-        val ch = ref[i]
-        if (!ch.isDigit()) break
-        hasDigit = true
-        value = value * 10 + (ch.code - '0'.code)
-        i++
-    }
-    if (!hasDigit) return -1
-    return value - 1
-}
-
-fun parseCoordinatesRobust(coordStr: String): List<Pair<Double, Double>> {
-    val coords = mutableListOf<Pair<Double, Double>>()
-    val normalized = coordStr.trim()
-    if (normalized.isBlank()) return coords
-    // Fast-path for the most common form "lat,lon" to avoid regex-heavy parsing.
-    if (!normalized.contains(';') && !normalized.contains('\n') && !normalized.contains('\r')) {
-        parseSingleCoordinatePairFast(normalized)?.let { pair ->
-            coords += pair
-            return coords
-        }
-    }
+fun parseCoordinatesRobust(value: String): List<Pair<Double, Double>> {
+    if (value.isBlank()) return emptyList()
+    val normalized = value.trim()
+    val coords = ArrayList<Pair<Double, Double>>(2)
 
     var segmentStart = 0
     val length = normalized.length
@@ -805,4 +735,62 @@ fun isCoordinateCandidate(value: String): Boolean {
         if (hasDigit && hasSeparator) return true
     }
     return false
+}
+
+fun colIndexFromRef(ref: String, start: Int = 0, end: Int = ref.length): Int {
+    var col = 0
+    var hasCol = false
+    for (i in start until end) {
+        val ch = ref[i]
+        if (ch in 'A'..'Z') {
+            col = col * 26 + (ch - 'A' + 1)
+            hasCol = true
+        } else if (ch in 'a'..'z') {
+            col = col * 26 + (ch - 'a' + 1)
+            hasCol = true
+        } else {
+            break
+        }
+    }
+    return if (hasCol) col - 1 else -1
+}
+
+fun rowIndexFromRef(ref: String, start: Int = 0, end: Int = ref.length): Int {
+    var row = 0
+    var hasRow = false
+    for (i in start until end) {
+        val ch = ref[i]
+        if (ch in '0'..'9') {
+            row = row * 10 + (ch - '0')
+            hasRow = true
+        }
+    }
+    return if (hasRow) row - 1 else -1
+}
+
+fun isWorkVolumeKey(normalized: String): Boolean {
+    return normalized.contains("kl") ||
+            normalized.contains("khoi luong") ||
+            normalized.contains("so luong") ||
+            normalized.contains("sl") ||
+            normalized.contains("met") ||
+            normalized.contains("chieu dai") ||
+            normalized.contains("volume") ||
+            normalized.contains("quantity") ||
+            normalized.contains("qty") ||
+            normalized.contains("cap") ||
+            normalized.contains("ong") ||
+            normalized.contains("cot") ||
+            normalized.contains("be")
+}
+
+fun parsePositiveInt(text: String): Int? {
+    if (text.isEmpty()) return null
+    var result = 0
+    for (i in 0 until text.length) {
+        val ch = text[i]
+        if (ch !in '0'..'9') return null
+        result = result * 10 + (ch - '0')
+    }
+    return result
 }
