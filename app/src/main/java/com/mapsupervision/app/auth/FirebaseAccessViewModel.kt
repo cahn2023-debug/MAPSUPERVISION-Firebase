@@ -10,8 +10,14 @@ import com.mapsupervision.domain.model.FirebaseAccessAdminAction
 import com.mapsupervision.domain.model.ContractorScope
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
+import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
 import com.mapsupervision.domain.model.FirebaseUserSession
+import com.mapsupervision.domain.model.Project
+import com.mapsupervision.domain.model.ProjectStorageMode
+import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
+import com.mapsupervision.domain.repository.FirebaseSyncRepository
+import com.mapsupervision.domain.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -50,7 +56,10 @@ data class FirebaseAccessUiState(
 @HiltViewModel
 class FirebaseAccessViewModel @Inject constructor(
     private val firebaseAccessRepository: FirebaseAccessRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val projectRepository: ProjectRepository? = null,
+    private val activeProjectRepository: ActiveProjectRepository? = null,
+    private val firebaseSyncRepository: FirebaseSyncRepository? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(FirebaseAccessUiState())
     val uiState: StateFlow<FirebaseAccessUiState> = _uiState.asStateFlow()
@@ -411,6 +420,129 @@ class FirebaseAccessViewModel @Inject constructor(
                 is AppResult.Error -> _uiState.value = _uiState.value.copy(
                     adminBusyRequestId = null,
                     adminError = result.throwable.message ?: "Không thể cập nhật quyền truy cập."
+                )
+            }
+        }
+    }
+
+    fun openOrDownloadProject(
+        entry: FirebaseProjectCatalogEntry,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isBusy = true, error = "", message = "Đang chuẩn bị dự án...")
+            try {
+                if (projectRepository != null) {
+                    val localProjects = (projectRepository.list(true) as? AppResult.Success)?.data.orEmpty()
+                    val existing = localProjects.find { it.id == entry.projectId }
+                    if (existing == null) {
+                        val sanitizedSlug = entry.projectCode.lowercase(java.util.Locale.ROOT)
+                            .replace(Regex("[^a-z0-9-]"), "-")
+                            .trim('-')
+                            .ifBlank { entry.projectId.take(8).lowercase(java.util.Locale.ROOT) }
+                        val project = Project(
+                            id = entry.projectId,
+                            name = entry.projectName,
+                            slug = sanitizedSlug,
+                            isArchived = entry.status == FirebaseProjectCatalogStatus.ARCHIVED,
+                            createdAtEpochMs = entry.updatedAtEpochMs,
+                            metadataVersion = 3,
+                            updatedAtEpochMs = entry.updatedAtEpochMs,
+                            storageMode = ProjectStorageMode.PROJECT_DB,
+                            projectDbPath = "",
+                            mediaStorageProvider = "GOOGLE_DRIVE",
+                            mediaStorageFolderId = "",
+                            mediaStorageFolderUrl = "",
+                            mediaStorageUpdatedAtEpochMs = 0L,
+                            isDeleted = false,
+                            deletedAtEpochMs = null
+                        )
+                        when (val importRes = projectRepository.importProject(project)) {
+                            is AppResult.Success -> Unit
+                            is AppResult.Error -> throw importRes.throwable
+                        }
+                    }
+                }
+
+                if (activeProjectRepository != null) {
+                    when (val activeRes = activeProjectRepository.setActive(entry.projectId)) {
+                        is AppResult.Success -> {
+                            if (firebaseSyncRepository != null) {
+                                viewModelScope.launch {
+                                    runCatching {
+                                        firebaseSyncRepository.pullChanges(entry.projectId)
+                                    }
+                                }
+                            }
+                            _uiState.value = _uiState.value.copy(isBusy = false, message = "")
+                            onSuccess()
+                        }
+                        is AppResult.Error -> {
+                            _uiState.value = _uiState.value.copy(
+                                isBusy = false,
+                                error = "Không thể kích hoạt dự án: ${activeRes.throwable.message}"
+                            )
+                        }
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(isBusy = false, message = "")
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isBusy = false,
+                    error = e.message ?: "Không thể mở dự án từ Cloud."
+                )
+            }
+        }
+    }
+
+    fun createCloudProject(
+        name: String,
+        customPath: String? = null,
+        onSuccess: () -> Unit = {}
+    ) {
+        val trimmedName = name.trim()
+        if (trimmedName.isBlank()) {
+            _uiState.value = _uiState.value.copy(error = "Tên dự án không được để trống.")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isBusy = true, error = "", message = "Đang tạo dự án Cloud...")
+            try {
+                if (projectRepository != null) {
+                    when (val createRes = projectRepository.create(trimmedName, customPath)) {
+                        is AppResult.Success -> {
+                            val created = createRes.data
+                            activeProjectRepository?.setActive(created.id)
+                            if (firebaseSyncRepository != null) {
+                                runCatching {
+                                    firebaseSyncRepository.pushPending(created.id)
+                                }
+                            }
+                            _uiState.value = _uiState.value.copy(
+                                isBusy = false,
+                                message = "Đã tạo dự án thành công: ${created.name}"
+                            )
+                            refreshProjectCatalog()
+                            onSuccess()
+                        }
+                        is AppResult.Error -> {
+                            _uiState.value = _uiState.value.copy(
+                                isBusy = false,
+                                error = "Không thể tạo dự án: ${createRes.throwable.message}"
+                            )
+                        }
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(isBusy = false, message = "Đã tạo dự án thành công.")
+                    refreshProjectCatalog()
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isBusy = false,
+                    error = e.message ?: "Tạo dự án thất bại."
                 )
             }
         }

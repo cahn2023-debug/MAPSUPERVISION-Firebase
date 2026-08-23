@@ -77,4 +77,40 @@ class FirebaseProjectCatalogParserTest {
             )
         )
     }
+
+    @Test
+    fun extracts_catalog_entry_from_envelope_project_doc() {
+        val entry = extractCatalogEntryFromProjectDoc(
+            projectId = "proj-100",
+            docData = mapOf(
+                "payload" to mapOf(
+                    "name" to "Metro Line 1",
+                    "slug" to "metro-line-1",
+                    "projectCode" to "ML-01",
+                    "updatedAtEpochMs" to 999999L,
+                    "isDeleted" to false,
+                    "isArchived" to false
+                )
+            )
+        )
+        assertEquals("proj-100", entry?.projectId)
+        assertEquals("Metro Line 1", entry?.projectName)
+        assertEquals("ML-01", entry?.projectCode)
+        assertEquals(999999L, entry?.updatedAtEpochMs)
+        assertEquals(FirebaseProjectCatalogStatus.ACTIVE, entry?.status)
+    }
+
+    @Test
+    fun ignores_deleted_project_doc() {
+        val entry = extractCatalogEntryFromProjectDoc(
+            projectId = "proj-200",
+            docData = mapOf(
+                "payload" to mapOf(
+                    "name" to "Deleted Project",
+                    "isDeleted" to true
+                )
+            )
+        )
+        assertNull(entry)
+    }
 }

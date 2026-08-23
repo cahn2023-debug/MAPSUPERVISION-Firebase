@@ -9,8 +9,14 @@ import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
 import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
 import com.mapsupervision.domain.model.FirebaseUserSession
+import com.mapsupervision.domain.model.Project
 import com.mapsupervision.domain.model.ProjectAccess
+import com.mapsupervision.domain.model.ProjectStorageMode
+import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
+import com.mapsupervision.domain.repository.FirebaseSyncRepository
+import com.mapsupervision.domain.repository.ProjectRepository
+import com.mapsupervision.domain.repository.SyncBatchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -107,6 +113,51 @@ class FirebaseAccessViewModelTest {
         waitUntil { viewModel.accessStatusFor("project-1") == FirebaseAccessRequestStatus.PENDING }
         assertEquals(1, repository.requestCalls)
     }
+
+    @Test
+    fun openOrDownloadProject_imports_and_activates_project() = runBlocking {
+        val repository = FakeFirebaseAccessRepository()
+        val projectRepo = FakeProjectRepository()
+        val activeRepo = FakeActiveProjectRepository()
+        val syncRepo = FakeFirebaseSyncRepository()
+        val viewModel = FirebaseAccessViewModel(repository, context, projectRepo, activeRepo, syncRepo)
+
+        val entry = FirebaseProjectCatalogEntry(
+            projectId = "project-1",
+            projectName = "Project One",
+            projectCode = "P-001",
+            updatedAtEpochMs = 1000L,
+            status = FirebaseProjectCatalogStatus.ACTIVE
+        )
+
+        var openCalled = false
+        viewModel.openOrDownloadProject(entry) {
+            openCalled = true
+        }
+
+        assertTrue(openCalled)
+        assertEquals("project-1", (activeRepo.getActive() as AppResult.Success).data)
+        assertEquals(1, projectRepo.projects.size)
+        assertEquals("project-1", projectRepo.projects[0].id)
+    }
+
+    @Test
+    fun createCloudProject_creates_and_activates() = runBlocking {
+        val repository = FakeFirebaseAccessRepository()
+        val projectRepo = FakeProjectRepository()
+        val activeRepo = FakeActiveProjectRepository()
+        val syncRepo = FakeFirebaseSyncRepository()
+        val viewModel = FirebaseAccessViewModel(repository, context, projectRepo, activeRepo, syncRepo)
+
+        var created = false
+        viewModel.createCloudProject("New Cloud Proj") {
+            created = true
+        }
+
+        assertTrue(created)
+        assertEquals(1, projectRepo.projects.size)
+        assertEquals("New Cloud Proj", projectRepo.projects[0].name)
+    }
 }
 
 private suspend fun waitUntil(condition: () -> Boolean) {
@@ -199,4 +250,80 @@ private class FakeFirebaseAccessRepository : FirebaseAccessRepository {
         AppResult.Success(null)
 
     override fun projectAccess(projectId: String): ProjectAccess? = state.value.permissionsByProject[projectId]
+}
+
+private class FakeProjectRepository : ProjectRepository {
+    val projects = mutableListOf<Project>()
+
+    override suspend fun create(name: String, customPath: String?): AppResult<Project> {
+        val proj = Project(
+            id = "proj-${projects.size + 1}",
+            name = name,
+            slug = name.lowercase().replace(" ", "-"),
+            isArchived = false,
+            createdAtEpochMs = System.currentTimeMillis(),
+            metadataVersion = 3,
+            updatedAtEpochMs = System.currentTimeMillis(),
+            storageMode = ProjectStorageMode.PROJECT_DB,
+            projectDbPath = "",
+            mediaStorageProvider = "GOOGLE_DRIVE",
+            mediaStorageFolderId = "",
+            mediaStorageFolderUrl = "",
+            mediaStorageUpdatedAtEpochMs = 0L,
+            isDeleted = false,
+            deletedAtEpochMs = null
+        )
+        projects.add(proj)
+        return AppResult.Success(proj)
+    }
+
+    override suspend fun list(includeArchived: Boolean): AppResult<List<Project>> = AppResult.Success(projects.toList())
+
+    override suspend fun clone(projectId: String, newName: String): AppResult<Project> =
+        create(newName)
+
+    override suspend fun archive(projectId: String): AppResult<Unit> = AppResult.Success(Unit)
+
+    override suspend fun importProject(project: Project): AppResult<Unit> {
+        projects.removeAll { it.id == project.id }
+        projects.add(project)
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun clearProject(projectId: String): AppResult<Unit> = AppResult.Success(Unit)
+    override suspend fun touch(projectId: String): AppResult<Unit> = AppResult.Success(Unit)
+    override suspend fun updateStoragePath(projectId: String, newPath: String): AppResult<Unit> = AppResult.Success(Unit)
+}
+
+private class FakeActiveProjectRepository : ActiveProjectRepository {
+    private val activeFlow = MutableStateFlow<String?>("default-proj")
+    override val activeProjectId: StateFlow<String?> = activeFlow
+
+    override suspend fun getActive(): AppResult<String> {
+        val current = activeFlow.value
+        return if (current != null) AppResult.Success(current) else AppResult.Error(IllegalStateException("No active project"))
+    }
+
+    override suspend fun setActive(projectId: String): AppResult<Unit> {
+        activeFlow.value = projectId
+        return AppResult.Success(Unit)
+    }
+}
+
+private class FakeFirebaseSyncRepository : FirebaseSyncRepository {
+    var pushCalls = 0
+    var pullCalls = 0
+
+    override suspend fun pushPending(projectId: String): AppResult<SyncBatchResult> {
+        pushCalls++
+        return AppResult.Success(SyncBatchResult(pushed = 1))
+    }
+
+    override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> {
+        pullCalls++
+        return AppResult.Success(SyncBatchResult(pulled = 1))
+    }
+
+    override suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult> =
+        AppResult.Success(SyncBatchResult(uploadedMedia = 0))
 }

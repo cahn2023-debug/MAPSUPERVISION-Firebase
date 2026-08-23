@@ -141,6 +141,14 @@ fun AppRoot(
             onAdminTransition = { request, action ->
                 accessViewModel.transitionProjectAccess(request, action)
             },
+            onOpenProject = { entry ->
+                accessViewModel.openOrDownloadProject(entry) {
+                    showProjectCatalog = false
+                }
+            },
+            onCreateCloudProject = if (session.isAdmin) { name, code ->
+                accessViewModel.createCloudProject(name, code)
+            } else null,
             onContinueToWorkspace = { showProjectCatalog = false }
         )
         return

@@ -370,6 +370,12 @@ export async function createProjectDocument(
     isDisabled: false,
     projectIds: arrayUnion(ref.id)
   }, { merge: true });
+  batch.set(doc(firestore, "projectCatalog", ref.id), {
+    projectName: name,
+    projectCode: projectCode || payload.slug.toUpperCase(),
+    updatedAtEpochMs: now,
+    status: "ACTIVE"
+  });
   await batch.commit();
   return {
     id: ref.id,

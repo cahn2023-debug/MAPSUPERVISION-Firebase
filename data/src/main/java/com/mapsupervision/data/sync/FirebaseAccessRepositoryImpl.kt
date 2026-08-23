@@ -360,7 +360,8 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         require((startAfterUpdatedAtEpochMs == null) == (startAfterProjectId == null)) {
             "Catalog cursor must include both updatedAtEpochMs and projectId."
         }
-        var query = firebaseRuntime.firestore()
+        val firestore = firebaseRuntime.firestore()
+        var query = firestore
             .collection("projectCatalog")
             .orderBy("updatedAtEpochMs", Query.Direction.DESCENDING)
             .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
@@ -368,13 +369,48 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         if (startAfterUpdatedAtEpochMs != null && startAfterProjectId != null) {
             query = query.startAfter(startAfterUpdatedAtEpochMs, startAfterProjectId)
         }
-        query
-            .get()
-            .await()
-            .documents
-            .mapNotNull { document ->
-                parseFirebaseProjectCatalog(document.id, document.data.orEmpty())
+        val catalogDocuments = query.get().await().documents
+        val entries = catalogDocuments.mapNotNull { document ->
+            parseFirebaseProjectCatalog(document.id, document.data.orEmpty())
+        }.toMutableList()
+
+        val isAdmin = _accessState.value.session?.isAdmin == true
+        if (isAdmin && startAfterUpdatedAtEpochMs == null) {
+            runCatching {
+                val projectDocs = firestore.collection("projects").get().await().documents
+                val catalogIds = entries.map { it.projectId }.toSet()
+                val missingEntries = mutableListOf<FirebaseProjectCatalogEntry>()
+
+                for (doc in projectDocs) {
+                    val entry = extractCatalogEntryFromProjectDoc(doc.id, doc.data.orEmpty())
+                    if (entry != null && entry.projectId !in catalogIds) {
+                        missingEntries.add(entry)
+                    }
+                }
+
+                if (missingEntries.isNotEmpty()) {
+                    val batch = firestore.batch()
+                    missingEntries.forEach { entry ->
+                        val catalogDocRef = firestore.collection("projectCatalog").document(entry.projectId)
+                        batch.set(
+                            catalogDocRef,
+                            mapOf(
+                                "projectName" to entry.projectName,
+                                "projectCode" to entry.projectCode,
+                                "updatedAtEpochMs" to entry.updatedAtEpochMs,
+                                "status" to entry.status.name
+                            )
+                        )
+                    }
+                    batch.commit().await()
+                    entries.addAll(missingEntries)
+                    entries.sortByDescending { it.updatedAtEpochMs }
+                }
+            }.onFailure { error ->
+                AppLogger.d("firebase.access.catalog_backfill_failed: ${error.message}")
             }
+        }
+        entries.toList()
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(it) }
@@ -642,6 +678,36 @@ internal fun parseFirebaseProjectCatalog(
         projectName = projectName,
         projectCode = projectCode,
         updatedAtEpochMs = updatedAtEpochMs,
+        status = status
+    )
+}
+
+internal fun extractCatalogEntryFromProjectDoc(
+    projectId: String,
+    docData: Map<String, Any?>
+): FirebaseProjectCatalogEntry? {
+    @Suppress("UNCHECKED_CAST")
+    val payload = (docData["payload"] as? Map<String, Any?>) ?: docData
+    val isDeleted = (payload["isDeleted"] as? Boolean) ?: (docData["isDeleted"] as? Boolean) ?: false
+    if (isDeleted) return null
+    val name = ((payload["name"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim().orEmpty()
+    val slug = ((payload["slug"] ?: docData["slug"]) as? String)?.trim().orEmpty()
+    val projectCode = ((payload["projectCode"] ?: docData["projectCode"]) as? String)?.trim().orEmpty()
+        .ifBlank { slug.ifBlank { projectId.take(8).uppercase(Locale.ROOT) } }
+    val updatedAt = when (val value = payload["updatedAtEpochMs"] ?: docData["updatedAtEpochMs"]) {
+        is Long -> value
+        is Int -> value.toLong()
+        is Number -> value.toLong()
+        else -> System.currentTimeMillis()
+    }
+    val isArchived = (payload["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
+    val status = if (isArchived) FirebaseProjectCatalogStatus.ARCHIVED else FirebaseProjectCatalogStatus.ACTIVE
+    if (name.isBlank() || projectId.isBlank()) return null
+    return FirebaseProjectCatalogEntry(
+        projectId = projectId.trim(),
+        projectName = name,
+        projectCode = projectCode,
+        updatedAtEpochMs = updatedAt,
         status = status
     )
 }
