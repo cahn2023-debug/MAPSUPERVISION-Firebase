@@ -33,6 +33,14 @@
       "revision": 3,
       "headHash": "0b0c41ae9a0952581b755c96206de09200851ecb5e03b10c829594cbf5b245b6"
     },
+    "doc:doc-f1129579c07034a2a63ea39677e1408d": {
+      "entityType": "doc",
+      "entityId": "doc-f1129579c07034a2a63ea39677e1408d",
+      "path": "docs/specs/2026-08-23/permanent-project-deletion.md",
+      "hash": "760cf8d8b5779cc9222e57ab043d0fb8e93c0c1188428944eb193a91691b6205",
+      "revision": 2,
+      "headHash": "760cf8d8b5779cc9222e57ab043d0fb8e93c0c1188428944eb193a91691b6205"
+    },
     "doc:doc-f48b73dd56ca6eca0c419753f1b4d6f0": {
       "entityType": "doc",
       "entityId": "doc-f48b73dd56ca6eca0c419753f1b4d6f0",
@@ -129,6 +137,14 @@
       "revision": 4,
       "headHash": "58ecd0c54d5df856d079401a65b94b974cba57f4d6abea1581c81fb38f2923a5"
     },
+    "task:ks43wq": {
+      "entityType": "task",
+      "entityId": "ks43wq",
+      "path": "tasks/task-ks43wq - permanent-project-deletion-04-Add-Android-deletio.md",
+      "hash": "de4c76e20e31e108dd511ed2b0c99e93966e8825494a86cbfdb3f5839e165d19",
+      "revision": 7,
+      "headHash": "de4c76e20e31e108dd511ed2b0c99e93966e8825494a86cbfdb3f5839e165d19"
+    },
     "task:lxza27": {
       "entityType": "task",
       "entityId": "lxza27",
@@ -136,6 +152,14 @@
       "hash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9",
       "revision": 4,
       "headHash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9"
+    },
+    "task:mdhe4q": {
+      "entityType": "task",
+      "entityId": "mdhe4q",
+      "path": "tasks/task-mdhe4q - permanent-project-deletion-05-Verify-deletion-sec.md",
+      "hash": "c5c3c44a8ca7f0f4e565508c8e69d55b614fdb1116e354968eb308d2a1070527",
+      "revision": 8,
+      "headHash": "c5c3c44a8ca7f0f4e565508c8e69d55b614fdb1116e354968eb308d2a1070527"
     },
     "task:mn9jia": {
       "entityType": "task",
@@ -161,6 +185,14 @@
       "revision": 4,
       "headHash": "c2b631be296c0aa7f00d369524f7747ae074a320e8535c246d064d868c0d51f6"
     },
+    "task:nygceq": {
+      "entityType": "task",
+      "entityId": "nygceq",
+      "path": "tasks/task-nygceq - permanent-project-deletion-03-Propagate-deletion.md",
+      "hash": "a48c7616fc313b746590d217ecbbcab9b3a6a57e3817e554bc8404d4f7cf2e4b",
+      "revision": 8,
+      "headHash": "a48c7616fc313b746590d217ecbbcab9b3a6a57e3817e554bc8404d4f7cf2e4b"
+    },
     "task:ole2i0": {
       "entityType": "task",
       "entityId": "ole2i0",
@@ -184,6 +216,14 @@
       "hash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058",
       "revision": 11,
       "headHash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058"
+    },
+    "task:qwr70h": {
+      "entityType": "task",
+      "entityId": "qwr70h",
+      "path": "tasks/task-qwr70h - permanent-project-deletion-01-Define-deletion-con.md",
+      "hash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686",
+      "revision": 11,
+      "headHash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686"
     },
     "task:s9g76i": {
       "entityType": "task",
@@ -216,6 +256,14 @@
       "hash": "64cc76c8d64a10fab9d21e392e0e419bd6ad172a46c9dd7c925cf75b5d7d012a",
       "revision": 7,
       "headHash": "64cc76c8d64a10fab9d21e392e0e419bd6ad172a46c9dd7c925cf75b5d7d012a"
+    },
+    "task:ut3bss": {
+      "entityType": "task",
+      "entityId": "ut3bss",
+      "path": "tasks/task-ut3bss - permanent-project-deletion-02-Enforce-Firebase-de.md",
+      "hash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63",
+      "revision": 11,
+      "headHash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63"
     },
     "task:wlkka3": {
       "entityType": "task",

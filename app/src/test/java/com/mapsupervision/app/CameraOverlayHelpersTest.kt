@@ -427,4 +427,12 @@ class CameraOverlayHelpersTest {
         assertEquals(10.12345, mapScene.centerLatitude)
         assertEquals(106.98765, mapScene.centerLongitude)
     }
+
+    @Test
+    fun `formatRecordingDuration produces clean MM SS output`() {
+        assertEquals("00:00", formatRecordingDuration(0))
+        assertEquals("00:05", formatRecordingDuration(5))
+        assertEquals("01:25", formatRecordingDuration(85))
+        assertEquals("12:03", formatRecordingDuration(723))
+    }
 }

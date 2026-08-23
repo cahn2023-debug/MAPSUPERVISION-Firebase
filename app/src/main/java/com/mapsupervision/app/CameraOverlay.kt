@@ -113,6 +113,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
@@ -513,6 +521,7 @@ fun CameraOverlay(
     var cachedTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var cachedTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
     var recordingStartElapsedMs by remember { mutableStateOf<Long?>(null) }
+    var recordingDurationSeconds by remember { mutableStateOf(0) }
     var recordingTimelineTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val recordingTimelineSamples = remember { mutableStateListOf<VideoStampTimelineSample>() }
     val addressCache = remember { mutableMapOf<RoundedLocationKey, String>() }
@@ -534,6 +543,20 @@ fun CameraOverlay(
     }
 
     val controlsEnabled = !isRecording && !isProcessingVideoStamp && !photoCaptureSession.isCapturingPhoto
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingDurationSeconds = 0
+            while (isRecording) {
+                delay(1000)
+                if (isRecording) {
+                    recordingDurationSeconds += 1
+                }
+            }
+        } else {
+            recordingDurationSeconds = 0
+        }
+    }
 
     LaunchedEffect(
         isRecording,
@@ -824,6 +847,21 @@ fun CameraOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { previewSurfaceSize = it }
+                .pointerInput(controlsEnabled, isRecording, isVideoMode) {
+                    if (!controlsEnabled || isRecording) return@pointerInput
+                    var totalDragX = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDragX = 0f },
+                        onHorizontalDrag = { _, dragAmount -> totalDragX += dragAmount },
+                        onDragEnd = {
+                            if (totalDragX < -50f && !isVideoMode) {
+                                isVideoMode = true
+                            } else if (totalDragX > 50f && isVideoMode) {
+                                isVideoMode = false
+                            }
+                        }
+                    )
+                }
         ) {
             AndroidView(
                 factory = { previewView },
@@ -907,11 +945,11 @@ fun CameraOverlay(
                 Text(
                     text = when {
                         isProcessingVideoStamp -> "ĐANG ĐÓNG STAMP VIDEO..."
-                        isRecording -> "ĐANG QUAY..."
-                        nodeCode.isBlank() -> "Chụp ảnh hiện trường"
+                        isRecording -> "ĐANG GHI HÌNH..."
+                        nodeCode.isBlank() -> "Chụp ảnh / Quay video"
                         else -> "Đối tượng: $nodeCode"
                     },
-                    color = if (isRecording || isProcessingVideoStamp) Color.Red else Color.White,
+                    color = if (isRecording || isProcessingVideoStamp) Color(0xFFFF5252) else Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     maxLines = 1,
@@ -1188,32 +1226,13 @@ fun CameraOverlay(
             }
 
             if (!isKeyboardVisible) {
-                // Thanh chọn chế độ ẢNH / VIDEO
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "ẢNH",
-                        color = if (!isVideoMode) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.6f),
-                        fontSize = 13.sp,
-                        fontWeight = if (!isVideoMode) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(enabled = controlsEnabled) { isVideoMode = false }
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = "VIDEO",
-                        color = if (isVideoMode) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.6f),
-                        fontSize = 13.sp,
-                        fontWeight = if (isVideoMode) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(enabled = controlsEnabled) { isVideoMode = true }
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                if (isRecording) {
+                    CameraRecordingTimerBadge(durationSeconds = recordingDurationSeconds)
+                } else {
+                    CameraModeSelector(
+                        isVideoMode = isVideoMode,
+                        onModeSelected = { isVideoMode = it },
+                        enabled = controlsEnabled
                     )
                 }
             }
@@ -1257,7 +1276,13 @@ fun CameraOverlay(
                             .clip(CircleShape)
                             .let {
                                 if (isVideoMode) {
-                                    it.background(if (isRecording) Color.Red else Color.White)
+                                    if (isRecording) {
+                                        it.background(Color(0x33FF1744))
+                                          .border(2.dp, Color(0xFFFF1744), CircleShape)
+                                    } else {
+                                        it.background(Color(0x22FFFFFF))
+                                          .border(2.dp, Color.White, CircleShape)
+                                    }
                                 } else {
                                     it.background(Color(0x22FFFFFF))
                                       .border(1.5.dp, Color.White, CircleShape)
@@ -1472,9 +1497,9 @@ fun CameraOverlay(
                         if (isVideoMode) {
                             Box(
                                 modifier = Modifier
-                                    .size(if (isRecording) 24.dp else 60.dp)
+                                    .size(if (isRecording) 24.dp else 56.dp)
                                     .clip(if (isRecording) RoundedCornerShape(6.dp) else CircleShape)
-                                    .background(if (isRecording) Color.White else Color.Red)
+                                    .background(Color(0xFFFF1744))
                             )
                         } else {
                             Icon(
@@ -1748,4 +1773,103 @@ private fun resolveCaptureFolderType(code: String, routes: List<GisRoute>): Capt
     val isRoute = routes.any { it.code.equals(code, ignoreCase = true) }
     return if (isRoute) CaptureFolderType.ROUTE else CaptureFolderType.NODE
 }
+
+@Composable
+internal fun CameraModeSelector(
+    isVideoMode: Boolean,
+    onModeSelected: (Boolean) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0x66000000))
+            .border(1.dp, Color(0x3300E5FF), RoundedCornerShape(999.dp))
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (!isVideoMode) Color(0xFF00E5FF) else Color.Transparent)
+                .clickable(enabled = enabled) { onModeSelected(false) }
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "ẢNH",
+                color = if (!isVideoMode) Color(0xFF060814) else Color.White.copy(alpha = 0.75f),
+                fontSize = 13.sp,
+                fontWeight = if (!isVideoMode) FontWeight.Bold else FontWeight.Medium
+            )
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (isVideoMode) Color(0xFF00E5FF) else Color.Transparent)
+                .clickable(enabled = enabled) { onModeSelected(true) }
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "VIDEO",
+                color = if (isVideoMode) Color(0xFF060814) else Color.White.copy(alpha = 0.75f),
+                fontSize = 13.sp,
+                fontWeight = if (isVideoMode) FontWeight.Bold else FontWeight.Medium
+            )
+        }
+    }
+}
+
+internal fun formatRecordingDuration(durationSeconds: Int): String {
+    val minutes = durationSeconds / 60
+    val seconds = durationSeconds % 60
+    return String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
+}
+
+@Composable
+internal fun CameraRecordingTimerBadge(
+    durationSeconds: Int,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "recording_pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rec_dot_alpha"
+    )
+    val timeFormatted = remember(durationSeconds) {
+        formatRecordingDuration(durationSeconds)
+    }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xCCB00020))
+            .border(1.dp, Color(0x66FF1744), RoundedCornerShape(999.dp))
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = alpha))
+        )
+        Text(
+            text = "REC $timeFormatted",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
+    }
+}
+
 

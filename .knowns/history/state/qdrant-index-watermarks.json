@@ -126,12 +126,30 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:ks43wq": {
+    "entityType": "task",
+    "entityId": "ks43wq",
+    "canonicalHash": "de4c76e20e31e108dd511ed2b0c99e93966e8825494a86cbfdb3f5839e165d19",
+    "revision": 7,
+    "path": "tasks/ks43wq.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
   "task:lxza27": {
     "entityType": "task",
     "entityId": "lxza27",
     "canonicalHash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9",
     "revision": 4,
     "path": "tasks/lxza27.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
+  "task:mdhe4q": {
+    "entityType": "task",
+    "entityId": "mdhe4q",
+    "canonicalHash": "c5c3c44a8ca7f0f4e565508c8e69d55b614fdb1116e354968eb308d2a1070527",
+    "revision": 8,
+    "path": "tasks/mdhe4q.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
@@ -162,6 +180,15 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:nygceq": {
+    "entityType": "task",
+    "entityId": "nygceq",
+    "canonicalHash": "a48c7616fc313b746590d217ecbbcab9b3a6a57e3817e554bc8404d4f7cf2e4b",
+    "revision": 8,
+    "path": "tasks/nygceq.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
   "task:ole2i0": {
     "entityType": "task",
     "entityId": "ole2i0",
@@ -186,6 +213,15 @@
     "canonicalHash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058",
     "revision": 11,
     "path": "tasks/q74bwe.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
+  "task:qwr70h": {
+    "entityType": "task",
+    "entityId": "qwr70h",
+    "canonicalHash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686",
+    "revision": 11,
+    "path": "tasks/qwr70h.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
@@ -222,6 +258,15 @@
     "canonicalHash": "64cc76c8d64a10fab9d21e392e0e419bd6ad172a46c9dd7c925cf75b5d7d012a",
     "revision": 7,
     "path": "tasks/uie7ix.md",
+    "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
+  "task:ut3bss": {
+    "entityType": "task",
+    "entityId": "ut3bss",
+    "canonicalHash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63",
+    "revision": 11,
+    "path": "tasks/ut3bss.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
