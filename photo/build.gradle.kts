@@ -54,7 +54,7 @@ dependencies {
     implementation("androidx.media3:media3-effect:1.7.1")
     implementation("androidx.media3:media3-transformer:1.7.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
 
     implementation("com.google.dagger:hilt-android:2.57.2")
     ksp("com.google.dagger:hilt-compiler:2.57.2")

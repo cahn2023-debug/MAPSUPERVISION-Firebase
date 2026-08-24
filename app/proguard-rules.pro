@@ -35,6 +35,7 @@
 -keep class com.mapsupervision.photo.worker.** { *; }
 -keep class coil.decode.VideoFrameDecoder** { *; }
 
-# Google Play Services Location
--dontwarn com.google.android.gms.internal.location.**
+# Google Play Services
+-dontwarn com.google.android.gms.**
+-dontnote com.google.android.gms.**
 
