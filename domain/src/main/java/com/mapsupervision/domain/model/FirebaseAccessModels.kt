@@ -19,6 +19,14 @@ data class FirebaseProjectCatalogEntry(
     val createdByUid: String? = null
 )
 
+data class FirebaseCatalogMigrationReport(
+    val status: String,
+    val warningCount: Int,
+    val discrepancyCount: Int,
+    val warnings: List<String> = emptyList(),
+    val discrepancies: List<String> = emptyList()
+)
+
 data class FirebaseUserSession(
     val uid: String,
     val email: String,

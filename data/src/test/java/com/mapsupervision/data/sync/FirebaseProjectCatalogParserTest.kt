@@ -13,6 +13,7 @@ class FirebaseProjectCatalogParserTest {
             fields = mapOf(
                 "projectName" to "Project One",
                 "projectCode" to "P-001",
+                "createdByUid" to "owner-1",
                 "updatedAtEpochMs" to 123L,
                 "status" to "ACTIVE"
             )
@@ -21,6 +22,7 @@ class FirebaseProjectCatalogParserTest {
         assertEquals("project-1", entry?.projectId)
         assertEquals("Project One", entry?.projectName)
         assertEquals("P-001", entry?.projectCode)
+        assertEquals("owner-1", entry?.createdByUid)
         assertEquals(123L, entry?.updatedAtEpochMs)
         assertEquals(FirebaseProjectCatalogStatus.ACTIVE, entry?.status)
     }
@@ -32,6 +34,7 @@ class FirebaseProjectCatalogParserTest {
             fields = mapOf(
                 "projectName" to "Project Two",
                 "projectCode" to "P-002",
+                "createdByUid" to "owner-2",
                 "updatedAtEpochMs" to 456,
                 "status" to " archived "
             )
@@ -45,10 +48,22 @@ class FirebaseProjectCatalogParserTest {
     fun rejects_missing_or_invalid_allowlisted_fields() {
         assertNull(
             parseFirebaseProjectCatalog(
+                projectId = "project-missing-owner",
+                fields = mapOf(
+                    "projectName" to "Project Missing Owner",
+                    "projectCode" to "P-000",
+                    "updatedAtEpochMs" to 1L,
+                    "status" to "ACTIVE"
+                )
+            )
+        )
+        assertNull(
+            parseFirebaseProjectCatalog(
                 projectId = "project-3",
                 fields = mapOf(
                     "projectName" to "Project Three",
                     "projectCode" to "P-003",
+                    "createdByUid" to "owner-3",
                     "updatedAtEpochMs" to 789L,
                     "status" to "DELETED"
                 )
@@ -60,6 +75,7 @@ class FirebaseProjectCatalogParserTest {
                 fields = mapOf(
                     "projectName" to " ",
                     "projectCode" to "P-004",
+                    "createdByUid" to "owner-4",
                     "updatedAtEpochMs" to -1L,
                     "status" to "ACTIVE"
                 )
@@ -71,6 +87,7 @@ class FirebaseProjectCatalogParserTest {
                 fields = mapOf(
                     "projectName" to "Project Five",
                     "projectCode" to "P-005",
+                    "createdByUid" to "owner-5",
                     "updatedAtEpochMs" to 123.9,
                     "status" to "ACTIVE"
                 )
@@ -87,6 +104,7 @@ class FirebaseProjectCatalogParserTest {
                     "name" to "Metro Line 1",
                     "slug" to "metro-line-1",
                     "projectCode" to "ML-01",
+                    "createdByUid" to "owner-100",
                     "updatedAtEpochMs" to 999999L,
                     "isDeleted" to false,
                     "isArchived" to false
@@ -111,6 +129,22 @@ class FirebaseProjectCatalogParserTest {
                 )
             )
         )
+        assertNull(entry)
+    }
+
+    @Test
+    fun ignores_project_doc_without_owner_until_migration_repairs_it() {
+        val entry = extractCatalogEntryFromProjectDoc(
+            projectId = "proj-300",
+            docData = mapOf(
+                "payload" to mapOf(
+                    "name" to "Legacy Project",
+                    "projectCode" to "LEGACY-300",
+                    "isDeleted" to false
+                )
+            )
+        )
+
         assertNull(entry)
     }
 }

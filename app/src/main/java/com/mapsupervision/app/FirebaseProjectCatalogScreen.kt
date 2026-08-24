@@ -24,6 +24,7 @@ import com.mapsupervision.domain.model.FirebaseAccessAdminAction
 import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
+import com.mapsupervision.domain.model.FirebaseCatalogMigrationReport
 import java.text.DateFormat
 import java.util.Date
 
@@ -33,6 +34,7 @@ fun FirebaseProjectCatalogScreen(
     statusFor: (String) -> FirebaseAccessRequestStatus,
     isLoading: Boolean,
     error: String,
+    migrationReport: FirebaseCatalogMigrationReport? = null,
     requestingProjectId: String?,
     message: String,
     isAdmin: Boolean,
@@ -41,6 +43,7 @@ fun FirebaseProjectCatalogScreen(
     adminError: String,
     adminBusyRequestId: String?,
     onRefresh: () -> Unit,
+    onMigrationRefresh: () -> Unit = {},
     onRequestAccess: (String) -> Unit,
     onAdminRefresh: () -> Unit,
     onAdminTransition: (FirebaseProjectAccessRequest, FirebaseAccessAdminAction) -> Unit,
@@ -164,6 +167,16 @@ fun FirebaseProjectCatalogScreen(
             }
         }
 
+        if (isAdmin && migrationReport?.status == "COMPLETED_WITH_WARNINGS") {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Migration catalog cần rà soát", fontWeight = FontWeight.Bold)
+                    Text("${migrationReport.warningCount} cảnh báo, ${migrationReport.discrepancyCount} sai lệch. Người dùng thường không thấy báo cáo này.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onMigrationRefresh) { Text("Cập nhật báo cáo") }
+                }
+            }
+        }
+
         // Admin Access Queue (if Admin)
         if (isAdmin && adminRequests.isNotEmpty()) {
             AdminAccessQueue(
@@ -190,6 +203,16 @@ fun FirebaseProjectCatalogScreen(
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     Text("Đang tải danh sách dự án Cloud...", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else if (error.isNotBlank()) {
+            ElevatedCard(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("Không thể tải danh sách dự án Cloud", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = onRefresh) { Text("Thử lại") }
                 }
             }
         } else if (entries.isEmpty()) {

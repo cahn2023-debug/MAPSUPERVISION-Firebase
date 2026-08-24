@@ -72,6 +72,25 @@ service cloud.firestore {
           request.resource.data.activeProjectId is string);
     }
 
+    function validProjectCatalogShape(data) {
+      return data.keys().hasOnly([
+        "projectName",
+        "projectCode",
+        "createdByUid",
+        "updatedAtEpochMs",
+        "status"
+      ]) &&
+        data.projectName is string &&
+        data.projectName.size() > 0 &&
+        data.projectCode is string &&
+        data.projectCode.size() > 0 &&
+        data.createdByUid is string &&
+        data.createdByUid.size() > 0 &&
+        data.updatedAtEpochMs is int &&
+        data.updatedAtEpochMs >= 0 &&
+        (data.status == "ACTIVE" || data.status == "ARCHIVED");
+    }
+
     function validAccessRequestShape(data) {
       return data.keys().hasOnly([
         "projectId",
@@ -162,19 +181,16 @@ service cloud.firestore {
       // is enforced for all client/admin writes below; project detail fields
       // are never read from /projects by catalog clients.
       allow read: if isSignedIn();
-      allow create, update: if isAdmin() &&
-        request.resource.data.keys().hasOnly([
-          "projectName",
-          "projectCode",
-          "updatedAtEpochMs",
-          "status"
-        ]) &&
-        request.resource.data.projectName is string &&
-        request.resource.data.projectCode is string &&
-        request.resource.data.updatedAtEpochMs is int &&
-        (request.resource.data.status == "ACTIVE" ||
-          request.resource.data.status == "ARCHIVED");
+      allow create: if isAdmin() && validProjectCatalogShape(request.resource.data);
+      allow update: if isAdmin() &&
+        validProjectCatalogShape(request.resource.data) &&
+        request.resource.data.createdByUid == resource.data.createdByUid;
       allow delete: if isAdmin();
+    }
+
+    match /catalogMigrations/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /accessRequests/{requestId} {

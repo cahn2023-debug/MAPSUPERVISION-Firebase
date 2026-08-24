@@ -20,6 +20,7 @@ import {
   subscribeProjectAccessRequests,
   transitionProjectAccessRequest,
   subscribeProjects,
+  subscribeLatestCatalogMigration,
   subscribeProjectTable,
   subscribeUsersDirectory,
   syncTables,
@@ -254,6 +255,7 @@ export default function HomePage() {
   const [authNotice, setAuthNotice] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [projects, setProjects] = useState<ProjectDoc[]>([]);
+  const [catalogMigrationReport, setCatalogMigrationReport] = useState<import("@/lib/sync").CatalogMigrationReport | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [manualProjectId, setManualProjectId] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>(emptyProjectDraft);
@@ -359,11 +361,22 @@ export default function HomePage() {
       },
       (error) => {
         setProjects([]);
+        setAccessError(`Không thể tải danh sách dự án Cloud: ${error.message}`);
         console.warn("Failed to subscribe projects list:", error);
       }
     );
     return unsubscribe;
   }, [user]);
+
+  useEffect(() => {
+    if (!db || !user || !isAdmin) {
+      setCatalogMigrationReport(null);
+      return;
+    }
+    return subscribeLatestCatalogMigration(db, setCatalogMigrationReport, (error) => {
+      console.warn("Failed to subscribe catalog migration report:", error);
+    });
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (!db || !user || !isAdmin) {
@@ -867,6 +880,10 @@ export default function HomePage() {
                 ))}
               </select>
               <span className="field-hint">{isAdmin ? "Admin" : "User"} - {projects.length} dự án đã tải</span>
+              {accessError && <span className="field-error">{accessError} <button type="button" className="ghost-button" onClick={() => window.location.reload()}>Thử lại</button></span>}
+              {isAdmin && catalogMigrationReport?.status === "COMPLETED_WITH_WARNINGS" && (
+                <span className="field-warning">Migration catalog: {catalogMigrationReport.counts.warning ?? 0} cảnh báo, {catalogMigrationReport.counts.discrepancy ?? 0} sai lệch.</span>
+              )}
             </label>
 
             <label>

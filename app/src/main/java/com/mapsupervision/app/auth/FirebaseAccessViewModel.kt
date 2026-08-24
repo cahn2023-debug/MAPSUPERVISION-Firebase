@@ -11,6 +11,7 @@ import com.mapsupervision.domain.model.ContractorScope
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
 import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
+import com.mapsupervision.domain.model.FirebaseCatalogMigrationReport
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.model.Project
 import com.mapsupervision.domain.model.ProjectStorageMode
@@ -46,6 +47,7 @@ data class FirebaseAccessUiState(
     val accessRequestsByProject: Map<String, FirebaseProjectAccessRequest> = emptyMap(),
     val catalogLoading: Boolean = false,
     val catalogError: String = "",
+    val migrationReport: FirebaseCatalogMigrationReport? = null,
     val requestingProjectId: String? = null,
     val adminRequests: List<FirebaseProjectAccessRequest> = emptyList(),
     val adminLoading: Boolean = false,
@@ -94,6 +96,7 @@ class FirebaseAccessViewModel @Inject constructor(
                         accessRequestsByProject = emptyMap(),
                         catalogLoading = false,
                         catalogError = "",
+                        migrationReport = null,
                         adminRequests = emptyList(),
                         adminLoading = false,
                         adminError = ""
@@ -102,6 +105,7 @@ class FirebaseAccessViewModel @Inject constructor(
                     lastCatalogUid = session.uid
                     refreshProjectCatalog()
                     if (session.isAdmin) refreshAdminRequests()
+                    if (session.isAdmin) refreshMigrationReport()
                 }
             }
         }
@@ -346,6 +350,16 @@ class FirebaseAccessViewModel @Inject constructor(
                     catalogLoading = false,
                     catalogError = error.message ?: "Không tải được danh mục dự án Firebase."
                 )
+            }
+        }
+    }
+
+    fun refreshMigrationReport() {
+        if (_uiState.value.user?.isAdmin != true) return
+        viewModelScope.launch {
+            when (val result = firebaseAccessRepository.latestCatalogMigrationReport()) {
+                is AppResult.Success -> _uiState.value = _uiState.value.copy(migrationReport = result.data)
+                is AppResult.Error -> Unit
             }
         }
     }

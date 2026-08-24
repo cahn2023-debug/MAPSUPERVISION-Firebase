@@ -50,6 +50,13 @@ export type ProjectDraft = {
   projectCode?: string;
 };
 
+export type CatalogMigrationReport = {
+  status: string;
+  counts: { warning?: number; discrepancy?: number };
+  warnings?: string[];
+  discrepancies?: string[];
+};
+
 export type ProjectRow = {
   id: string;
   createdByUid: string;
@@ -706,6 +713,18 @@ export function subscribeProjects(
         .sort((left, right) => right.updatedAtEpochMs - left.updatedAtEpochMs);
       onRows(rows);
     },
+    onError
+  );
+}
+
+export function subscribeLatestCatalogMigration(
+  firestore: Firestore,
+  onReport: (report: CatalogMigrationReport | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(firestore, "catalogMigrations"), orderBy("completedAtEpochMs", "desc"), limit(1)),
+    (snapshot) => onReport((snapshot.docs[0]?.data() as CatalogMigrationReport | undefined) ?? null),
     onError
   );
 }

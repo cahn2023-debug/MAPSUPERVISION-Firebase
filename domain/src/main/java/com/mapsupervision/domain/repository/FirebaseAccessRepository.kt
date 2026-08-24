@@ -7,6 +7,7 @@ import com.mapsupervision.domain.model.FirebaseAccessAdminAction
 import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
+import com.mapsupervision.domain.model.FirebaseCatalogMigrationReport
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.model.ProjectAccess
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +51,8 @@ interface FirebaseAccessRepository {
         startAfterProjectId: String? = null
     ): AppResult<List<FirebaseProjectCatalogEntry>> =
         AppResult.Error(UnsupportedOperationException("Firebase project catalog is not supported"))
+    suspend fun latestCatalogMigrationReport(): AppResult<FirebaseCatalogMigrationReport?> =
+        AppResult.Error(UnsupportedOperationException("Firebase catalog migration reports are not supported"))
     suspend fun projectCreatorUid(projectId: String): AppResult<String?> =
         AppResult.Error(UnsupportedOperationException("Firebase project ownership lookup is not supported"))
     fun projectAccess(projectId: String): ProjectAccess?

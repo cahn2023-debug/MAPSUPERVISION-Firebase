@@ -15,6 +15,7 @@ import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
 import com.mapsupervision.domain.model.FirebaseProjectCatalogStatus
+import com.mapsupervision.domain.model.FirebaseCatalogMigrationReport
 import com.mapsupervision.domain.model.FirebaseUserSession
 import com.mapsupervision.domain.model.ProjectAccess
 import com.mapsupervision.domain.model.canRequestAgain
@@ -417,6 +418,24 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         onFailure = { AppResult.Error(it) }
     )
 
+    override suspend fun latestCatalogMigrationReport(): AppResult<FirebaseCatalogMigrationReport?> = runCatching {
+        ensureConfigured()
+        check(_accessState.value.session?.isAdmin == true) { "Admin access is required." }
+        val document = firebaseRuntime.firestore().collection("catalogMigrations")
+            .orderBy("completedAtEpochMs", Query.Direction.DESCENDING)
+            .limit(1)
+            .get().await().documents.firstOrNull() ?: return@runCatching null
+        val data = document.data.orEmpty()
+        val counts = data["counts"] as? Map<*, *> ?: emptyMap<Any, Any>()
+        FirebaseCatalogMigrationReport(
+            status = data["status"] as? String ?: "COMPLETED",
+            warningCount = (counts["warning"] as? Number)?.toInt() ?: 0,
+            discrepancyCount = (counts["discrepancy"] as? Number)?.toInt() ?: 0,
+            warnings = (data["warnings"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+            discrepancies = (data["discrepancies"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        )
+    }.fold(onSuccess = { AppResult.Success(it) }, onFailure = { AppResult.Error(it) })
+
     override suspend fun projectCreatorUid(projectId: String): AppResult<String?> = runCatching {
         ensureConfigured()
         val snapshot = firebaseRuntime.firestore().collection("projects").document(projectId).get().await()
@@ -694,6 +713,7 @@ internal fun parseFirebaseProjectCatalog(
         else -> null
     }
     if (normalizedProjectId.isBlank() || projectName.isBlank() || projectCode.isBlank() ||
+        createdByUid == null ||
         updatedAtEpochMs == null || updatedAtEpochMs < 0L || status == null
     ) {
         return null
@@ -729,7 +749,7 @@ internal fun extractCatalogEntryFromProjectDoc(
     val isArchived = (payload["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
     val createdByUid = ((payload["createdByUid"] ?: docData["createdByUid"]) as? String)?.trim()?.takeIf { it.isNotBlank() }
     val status = if (isArchived) FirebaseProjectCatalogStatus.ARCHIVED else FirebaseProjectCatalogStatus.ACTIVE
-    if (name.isBlank() || projectId.isBlank()) return null
+    if (name.isBlank() || projectId.isBlank() || createdByUid == null) return null
     return FirebaseProjectCatalogEntry(
         projectId = projectId.trim(),
         projectName = name,

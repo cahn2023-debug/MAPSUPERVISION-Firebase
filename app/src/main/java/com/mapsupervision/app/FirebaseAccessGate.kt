@@ -128,6 +128,7 @@ fun AppRoot(
             statusFor = accessViewModel::accessStatusFor,
             isLoading = accessState.catalogLoading,
             error = accessState.catalogError,
+            migrationReport = accessState.migrationReport,
             requestingProjectId = accessState.requestingProjectId,
             message = accessState.message,
             isAdmin = session.isAdmin,
@@ -136,6 +137,7 @@ fun AppRoot(
             adminError = accessState.adminError,
             adminBusyRequestId = accessState.adminBusyRequestId,
             onRefresh = accessViewModel::refreshProjectCatalog,
+            onMigrationRefresh = accessViewModel::refreshMigrationReport,
             onRequestAccess = accessViewModel::requestProjectAccess,
             onAdminRefresh = accessViewModel::refreshAdminRequests,
             onAdminTransition = { request, action ->
