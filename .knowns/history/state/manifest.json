@@ -33,6 +33,22 @@
       "revision": 3,
       "headHash": "0b0c41ae9a0952581b755c96206de09200851ecb5e03b10c829594cbf5b245b6"
     },
+    "doc:doc-d418befc2828fded54fabfa2cc945d72": {
+      "entityType": "doc",
+      "entityId": "doc-d418befc2828fded54fabfa2cc945d72",
+      "path": "docs/specs/2026-08-24/firebase-project-catalog-recovery-approved.md",
+      "hash": "174ad98e1ff6cf5d319378cdb2e7d0000c50da413df5acfe9892e9c38158be4c",
+      "revision": 2,
+      "headHash": "174ad98e1ff6cf5d319378cdb2e7d0000c50da413df5acfe9892e9c38158be4c"
+    },
+    "doc:doc-ed69bd064dc60a78c68a15077a90884c": {
+      "entityType": "doc",
+      "entityId": "doc-ed69bd064dc60a78c68a15077a90884c",
+      "path": "docs/specs/2026-08-24/firebase-project-catalog-recovery.md",
+      "hash": "88241ac403e32cdf2f1b7e53c301acf6bd3bd328c7276468f7aeb18952834d49",
+      "revision": 2,
+      "headHash": "88241ac403e32cdf2f1b7e53c301acf6bd3bd328c7276468f7aeb18952834d49"
+    },
     "doc:doc-f1129579c07034a2a63ea39677e1408d": {
       "entityType": "doc",
       "entityId": "doc-f1129579c07034a2a63ea39677e1408d",
@@ -121,6 +137,14 @@
       "revision": 4,
       "headHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949"
     },
+    "task:gh61ke": {
+      "entityType": "task",
+      "entityId": "gh61ke",
+      "path": "tasks/task-gh61ke - firebase-project-catalog-recovery-05-Khôi-phục-Fi.md",
+      "hash": "fba7f460e7c0ff115e43b2dd0cdd8d8dd75544c9fe089d71834afb20016183e0",
+      "revision": 5,
+      "headHash": "fba7f460e7c0ff115e43b2dd0cdd8d8dd75544c9fe089d71834afb20016183e0"
+    },
     "task:hzbfzu": {
       "entityType": "task",
       "entityId": "hzbfzu",
@@ -128,6 +152,14 @@
       "hash": "add977b6d84d65e7a89ab93b130144d2ea4a5269f91768283d991001a0b9a8de",
       "revision": 5,
       "headHash": "add977b6d84d65e7a89ab93b130144d2ea4a5269f91768283d991001a0b9a8de"
+    },
+    "task:i7odyl": {
+      "entityType": "task",
+      "entityId": "i7odyl",
+      "path": "tasks/task-i7odyl - firebase-project-catalog-recovery-04-Xác-minh-bảo.md",
+      "hash": "b3f869c31b7b753423ae6150f92a30fac24f20b3340701365744f1697eb3cec6",
+      "revision": 5,
+      "headHash": "b3f869c31b7b753423ae6150f92a30fac24f20b3340701365744f1697eb3cec6"
     },
     "task:ko9dx0": {
       "entityType": "task",
@@ -152,6 +184,14 @@
       "hash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9",
       "revision": 4,
       "headHash": "b89f1b722e791256839d935c158c8a50eb956675a7f9b9b2df796c7321662fd9"
+    },
+    "task:ly12b4": {
+      "entityType": "task",
+      "entityId": "ly12b4",
+      "path": "tasks/task-ly12b4 - firebase-project-catalog-recovery-02-Khôi-phục-ca.md",
+      "hash": "c52672a3c84491598fd2106374413173b0dfe5d9e7af28901288d78ec1a09ebb",
+      "revision": 6,
+      "headHash": "c52672a3c84491598fd2106374413173b0dfe5d9e7af28901288d78ec1a09ebb"
     },
     "task:mdhe4q": {
       "entityType": "task",
@@ -225,6 +265,14 @@
       "revision": 11,
       "headHash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686"
     },
+    "task:ry4iav": {
+      "entityType": "task",
+      "entityId": "ry4iav",
+      "path": "tasks/task-ry4iav - firebase-project-catalog-recovery-01-Chuẩn-hóa-hợ.md",
+      "hash": "4cce5395cc92f9f1aa69853c60e0f9aef85b526a4f5bd2511af0a5b8f0454fb0",
+      "revision": 8,
+      "headHash": "4cce5395cc92f9f1aa69853c60e0f9aef85b526a4f5bd2511af0a5b8f0454fb0"
+    },
     "task:s9g76i": {
       "entityType": "task",
       "entityId": "s9g76i",
@@ -240,6 +288,14 @@
       "hash": "437d342d356b86830d987e77ee962ae8e633cad16ba18f3da56127982c2a53c2",
       "revision": 7,
       "headHash": "437d342d356b86830d987e77ee962ae8e633cad16ba18f3da56127982c2a53c2"
+    },
+    "task:u5blkn": {
+      "entityType": "task",
+      "entityId": "u5blkn",
+      "path": "tasks/task-u5blkn - firebase-project-catalog-recovery-03-Hiển-thị-cản.md",
+      "hash": "fdecb7bf9270bc34fe50db2349ed5c8782482d6cc72d7dfc302cff0dee8e89cf",
+      "revision": 4,
+      "headHash": "fdecb7bf9270bc34fe50db2349ed5c8782482d6cc72d7dfc302cff0dee8e89cf"
     },
     "task:u9qrz7": {
       "entityType": "task",
@@ -264,6 +320,14 @@
       "hash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63",
       "revision": 11,
       "headHash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63"
+    },
+    "task:vy4got": {
+      "entityType": "task",
+      "entityId": "vy4got",
+      "path": "tasks/task-vy4got - permanent-project-deletion-revision-Đặc-tả-xóa-lo.md",
+      "hash": "bef5876780bd886ea3e291af487f9cc92c4f881b072a395400404554c500bdc6",
+      "revision": 2,
+      "headHash": "bef5876780bd886ea3e291af487f9cc92c4f881b072a395400404554c500bdc6"
     },
     "task:wlkka3": {
       "entityType": "task",

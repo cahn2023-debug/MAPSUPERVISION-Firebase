@@ -1,3 +1,11 @@
 {
-  "active": []
+  "active": [
+    {
+      "taskId": "ly12b4",
+      "taskTitle": "[firebase-project-catalog-recovery-02] Khôi phục catalog bằng migration idempotent",
+      "startedAt": "2026-08-24T03:33:29.419Z",
+      "pausedAt": null,
+      "totalPausedMs": 0
+    }
+  ]
 }
