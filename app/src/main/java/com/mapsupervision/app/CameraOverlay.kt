@@ -62,15 +62,17 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cached
 import androidx.compose.material.icons.outlined.Close
@@ -508,6 +510,8 @@ fun CameraOverlay(
 
     var selectedAspectRatio by remember { mutableStateOf(CameraAspectRatio.RATIO_4_3) }
     val isKeyboardVisible = WindowInsets.isImeVisible
+    var isNoteFocused by remember { mutableStateOf(false) }
+    val isKeyboardActive = isKeyboardVisible && isNoteFocused
     var showZoomIndicator by remember { mutableStateOf(false) }
 
     LaunchedEffect(zoomRatio) {
@@ -1083,16 +1087,17 @@ fun CameraOverlay(
         }
 
         // Cụm các nút điều khiển phía dưới màn hình hoàn toàn trong suốt
-        // Bố cục thích ứng: đo chiều cao khả dụng để bật chế độ compact (spec D4).
+        // Bố cục thích ứng: đo chiều cao khả dụng để bật chế độ compact và giới hạn max width cho tablet.
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
         ) {
             val controlsLayout = computeCameraControlsLayout(maxHeight.value.roundToInt())
             val compactSpacing = controlsLayout.useCompactSpacing
-            val showNoteField = controlsLayout.showNoteField || isKeyboardVisible
+            val showNoteField = controlsLayout.showNoteField || isKeyboardActive
             Column(
                 modifier = Modifier
+                    .widthIn(max = 560.dp)
                     .fillMaxWidth()
                     .background(Color.Transparent)
                     .windowInsetsPadding(
@@ -1100,9 +1105,9 @@ fun CameraOverlay(
                             WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
                         )
                     )
-                    .padding(horizontal = 20.dp, vertical = if (compactSpacing) 6.dp else 12.dp)
+                    .padding(horizontal = 20.dp, vertical = if (compactSpacing) 4.dp else 10.dp)
                     .align(Alignment.BottomCenter),
-                verticalArrangement = Arrangement.spacedBy(if (compactSpacing) 8.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compactSpacing) 6.dp else 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
             // Trường nhập ghi chú bán trong suốt (ẩn ở màn rất thấp, trừ khi đang gõ)
@@ -1115,10 +1120,14 @@ fun CameraOverlay(
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 16.dp)
+                        .onFocusChanged { isNoteFocused = it.isFocused },
                     shape = RoundedCornerShape(24.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    keyboardActions = KeyboardActions(onDone = {
+                        focusManager.clearFocus()
+                        isNoteFocused = false
+                    }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
@@ -1131,7 +1140,7 @@ fun CameraOverlay(
                 )
             }
 
-            if (!isKeyboardVisible && controlsLayout.showZoomBar) {
+            if (!isKeyboardActive && controlsLayout.showZoomBar) {
                 // Thanh Zoom và Cài đặt
                 Box(
                     modifier = Modifier
@@ -1225,7 +1234,7 @@ fun CameraOverlay(
                 }
             }
 
-            if (!isKeyboardVisible) {
+            if (!isKeyboardActive) {
                 if (isRecording) {
                     CameraRecordingTimerBadge(durationSeconds = recordingDurationSeconds)
                 } else {

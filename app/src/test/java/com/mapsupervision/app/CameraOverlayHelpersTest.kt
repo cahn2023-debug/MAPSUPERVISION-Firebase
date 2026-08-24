@@ -100,6 +100,26 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `camera controls layout adapts smoothly to tablet landscape and portrait heights`() {
+        // Tablet 10" Portrait (height ~800-1200dp): Hiển thị đầy đủ mọi điều khiển
+        val tabletPortrait = computeCameraControlsLayout(900)
+        assertTrue(tabletPortrait.showNoteField)
+        assertTrue(tabletPortrait.showZoomBar)
+        assertFalse(tabletPortrait.useCompactSpacing)
+
+        // Tablet Landscape hoặc màn hình thấp (height ~400-550dp): Giữ compact, ưu tiên Mode Selector và Shutter
+        val tabletLandscapeCompact = computeCameraControlsLayout(500)
+        assertTrue(tabletLandscapeCompact.showNoteField)
+        assertFalse(tabletLandscapeCompact.showZoomBar)
+        assertTrue(tabletLandscapeCompact.useCompactSpacing)
+
+        val smallLandscape = computeCameraControlsLayout(420)
+        assertFalse(smallLandscape.showNoteField)
+        assertFalse(smallLandscape.showZoomBar)
+        assertTrue(smallLandscape.useCompactSpacing)
+    }
+
+    @Test
     fun `photo capture session blocks double start until finished`() {
         val session = PhotoCaptureSession()
 
