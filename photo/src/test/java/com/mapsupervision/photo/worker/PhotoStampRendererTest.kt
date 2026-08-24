@@ -124,6 +124,32 @@ class PhotoStampRendererTest {
     }
 
     @Test
+    fun `latched minimap zoom does not restore close zoom after returning`() {
+        val rect = RectF(0f, 0f, 270f, 270f)
+        val scene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            movementPath = listOf(
+                21.0280 to 105.8340,
+                21.0300 to 105.8390
+            ),
+            minimapZoom = PhotoStampRenderer.MINIMAP_MIN_ZOOM
+        )
+
+        val viewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 25f,
+            borderWidth = 6f,
+            outerDotRadius = 20f,
+            mapScene = scene
+        )
+
+        assertEquals(PhotoStampRenderer.MINIMAP_MIN_ZOOM, viewport.zoom)
+    }
+
+    @Test
     fun `resolveMinimapViewport keeps camera cone away from minimap edges`() {
         val rect = RectF(0f, 0f, 270f, 270f)
         val scene = CaptureStampMapScene(

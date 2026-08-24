@@ -38,6 +38,14 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `minimap zoom starts close and only moves outward`() {
+        assertEquals(18, resolveLatchedMinimapZoom(18, 18))
+        assertEquals(17, resolveLatchedMinimapZoom(17, 18))
+        assertEquals(17, resolveLatchedMinimapZoom(18, 17))
+        assertEquals(15, resolveLatchedMinimapZoom(15, 17))
+    }
+
+    @Test
     fun `camera controls layout shows everything on tall screens`() {
         val layout = computeCameraControlsLayout(800)
 
@@ -185,6 +193,28 @@ class CameraOverlayHelpersTest {
 
         assertEquals(listOf(10.0 to 106.0), firstSession.snapshot())
         assertTrue(secondSession.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `capture stamp carries latched minimap zoom into timeline state`() {
+        val location = PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0)
+
+        val sample = buildVideoStampTimelineSample(
+            recordingStartElapsedMs = 100L,
+            nowElapsedMs = 350L,
+            location = location,
+            address = "",
+            note = "",
+            bearingDeg = 0f,
+            movementPath = listOf(10.0 to 106.0, 10.1 to 106.1),
+            minimapZoom = 16
+        )
+
+        assertEquals(16, sample.stamp.mapScene?.minimapZoom)
+        assertEquals(
+            listOf(10.0 to 106.0, 10.1 to 106.1),
+            sample.stamp.mapScene?.movementPath
+        )
     }
 
     @Test

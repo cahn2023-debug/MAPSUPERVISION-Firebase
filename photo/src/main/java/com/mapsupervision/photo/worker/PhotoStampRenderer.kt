@@ -617,13 +617,16 @@ object PhotoStampRenderer {
         val scopedNodes = mapScene?.nodes.orEmpty()
         val scopedRoutes = mapScene?.routes.orEmpty()
         val movementPath = mapScene?.movementPath.orEmpty()
+        val maxAllowedZoom = mapScene?.minimapZoom
+            ?.coerceIn(MINIMAP_MIN_ZOOM, MINIMAP_MAX_ZOOM)
+            ?: MINIMAP_MAX_ZOOM
         val hasScopedMap = scopedNodes.isNotEmpty() || scopedRoutes.isNotEmpty() || movementPath.isNotEmpty()
         if (!hasScopedMap) {
             return MinimapViewport(
                 centerLat = cameraLat,
                 centerLng = cameraLng,
-                zoom = MINIMAP_MAX_ZOOM,
-                frame = buildMinimapTileFrame(cameraLat, cameraLng, MINIMAP_MAX_ZOOM)
+                zoom = maxAllowedZoom,
+                frame = buildMinimapTileFrame(cameraLat, cameraLng, maxAllowedZoom)
             )
         }
 
@@ -641,7 +644,7 @@ object PhotoStampRenderer {
 
         val latitudes = mapPoints.map { it.first }
         val longitudes = mapPoints.map { it.second }
-        for (zoom in MINIMAP_MAX_ZOOM downTo MINIMAP_MIN_ZOOM) {
+        for (zoom in maxAllowedZoom downTo MINIMAP_MIN_ZOOM) {
             val worldPoints = mapPoints.map { worldPixelPosition(it.first, it.second, zoom) }
             val cameraWorld = worldPixelPosition(cameraLat, cameraLng, zoom)
             val maxDeltaX = worldPoints.maxOf { kotlin.math.abs(it.first - cameraWorld.first) }
