@@ -317,9 +317,11 @@ export default function HomePage() {
 
   useEffect(() => {
     let isCancelled = false;
-    setIsAdmin(false);
-    if (!user) return;
-    getFirebaseUserAdminClaim(user)
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    getFirebaseUserAdminClaim(user, true)
       .then((admin) => {
         if (!isCancelled) setIsAdmin(admin);
       })
@@ -366,7 +368,7 @@ export default function HomePage() {
       }
     );
     return unsubscribe;
-  }, [user]);
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (!db || !user || !isAdmin) {

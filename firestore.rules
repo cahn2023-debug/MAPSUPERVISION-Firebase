@@ -14,12 +14,10 @@ service cloud.firestore {
     }
 
     function approvedAccess(projectId) {
-      return projectIsActive(projectId) && (
-        isAdmin() ||
-        (
-          exists(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))) &&
-          get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.status == "APPROVED"
-        )
+      return isAdmin() || (
+        projectIsActive(projectId) &&
+        exists(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))) &&
+        get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.status == "APPROVED"
       );
     }
 
@@ -249,7 +247,7 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      allow read: if approvedAccess(projectId);
+      allow read: if isAdmin() || approvedAccess(projectId);
       allow create: if isAdmin();
       allow update: if isAdmin() && projectIsActive(projectId) &&
         (!("deletionState" in request.resource.data) ||

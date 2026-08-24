@@ -67,7 +67,8 @@ export async function signOutCurrentUser(): Promise<void> {
   await signOut(auth);
 }
 
-export async function getFirebaseUserAdminClaim(user: User): Promise<boolean> {
-  const token = await getIdTokenResult(user);
-  return token.claims.admin === true;
+export async function getFirebaseUserAdminClaim(user: User, forceRefresh = true): Promise<boolean> {
+  const token = await getIdTokenResult(user, forceRefresh);
+  return token.claims.admin === true || token.claims.superAdmin === true || token.claims.role === "super-admin";
 }
+
