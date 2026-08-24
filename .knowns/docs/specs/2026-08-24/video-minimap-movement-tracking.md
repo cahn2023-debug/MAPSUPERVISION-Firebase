@@ -3,10 +3,10 @@ id: doc-91779fad2cc654c757a0a6e7e401003f
 title: Video Minimap Movement Tracking
 description: Specification for live movement marker, route polyline, adaptive zoom, and timeline video stamping in video-mode minimap
 createdAt: '2026-08-24T04:52:18.295Z'
-updatedAt: '2026-08-24T04:52:18.295Z'
+updatedAt: '2026-08-24T08:07:22.784Z'
 tags:
   - spec
-  - draft
+  - approved
   - camera
   - minimap
   - video
@@ -102,8 +102,29 @@ Bổ sung hành vi theo dõi hành trình cho minimap ở chế độ video tron
 
 ## Task Links
 
-Chưa tạo task. Sau khi spec được duyệt, dùng `/kn-plan --from @doc/specs/2026-08-24/video-minimap-movement-tracking` hoặc `/kn-flow @doc/specs/2026-08-24/video-minimap-movement-tracking`.
+- @task-ua65je [video-minimap-movement-tracking-01] Establish session movement path and timeline contract — done
+- @task-0ri7hn [video-minimap-movement-tracking-02] Render live movement minimap with adaptive viewport — done
+- @task-zfv69f [video-minimap-movement-tracking-03] Verify timeline export and minimap regression coverage — done
+- @task-4a5rim [video-minimap-movement-tracking-04] Giữ zoom minimap theo phạm vi hành trình — done
 
 ## Open Questions
 
 Không còn câu hỏi mở.
+
+## Zoom Policy Revision
+
+This revision supersedes the earlier adaptive-zoom wording for video mode.
+
+### Locked Decisions
+
+- D3: Use zoom 18 while the current position remains within the actual viewport around the session's first position.
+- D4: Zoom out only when the current position is about to leave that zoom-18 viewport; determine the trigger from the real minimap viewport, not a fixed meter threshold.
+- D5: After zooming out, retain a zoom level that shows the full accumulated movement path. Returning near the first position must not zoom back in; zoom out further only if the route expands.
+- D6: Apply the same zoom state and path visibility to the live minimap and stamped video timeline.
+
+### Acceptance Criteria
+
+- [ ] AC-10: Short movement that remains within the zoom-18 viewport keeps zoom 18.
+- [ ] AC-11: Movement approaching the edge of the zoom-18 viewport causes only the zoom-out needed to show the current marker and full path.
+- [ ] AC-12: Returning near the initial position after zooming out keeps the full route visible and does not restore zoom 18.
+- [ ] AC-13: A new CameraOverlay session resets the zoom policy and movement path.
