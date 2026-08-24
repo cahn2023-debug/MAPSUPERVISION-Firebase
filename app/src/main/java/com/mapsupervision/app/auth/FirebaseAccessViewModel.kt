@@ -482,10 +482,9 @@ class FirebaseAccessViewModel @Inject constructor(
                     when (val activeRes = activeProjectRepository.setActive(entry.projectId)) {
                         is AppResult.Success -> {
                             if (firebaseSyncRepository != null) {
-                                viewModelScope.launch {
-                                    runCatching {
-                                        firebaseSyncRepository.pullChanges(entry.projectId)
-                                    }
+                                when (val pullRes = firebaseSyncRepository.pullChanges(entry.projectId)) {
+                                    is AppResult.Success -> Unit
+                                    is AppResult.Error -> throw pullRes.throwable
                                 }
                             }
                             _uiState.value = _uiState.value.copy(isBusy = false, message = "")

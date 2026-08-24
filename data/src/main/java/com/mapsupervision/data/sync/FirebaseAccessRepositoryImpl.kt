@@ -584,6 +584,29 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
                 allowedContractors = allowedContractors
             )
         }
+
+        // Android approvals are stored on the access request itself. Include
+        // approved requests in the local access state so opening a catalog
+        // entry also satisfies WorkspaceViewModel's permission gate, even
+        // when no legacy projectMembers projection exists yet.
+        val approvedRequests = firestore
+            .collection(ACCESS_REQUESTS_COLLECTION)
+            .whereEqualTo("userId", session.uid)
+            .whereEqualTo("status", FirebaseAccessRequestStatus.APPROVED.name)
+            .get()
+            .await()
+            .documents
+
+        approvedRequests.forEach { requestSnapshot ->
+            val request = parseFirebaseProjectAccessRequest(requestSnapshot.id, requestSnapshot.data.orEmpty())
+                ?: return@forEach
+            permissions[request.projectId] = ProjectAccess(
+                projectId = request.projectId,
+                isActive = true,
+                contractorScope = request.contractorScope,
+                allowedContractors = request.allowedContractors
+            )
+        }
         return permissions
     }
 
