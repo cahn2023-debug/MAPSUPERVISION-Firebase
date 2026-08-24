@@ -42,6 +42,8 @@ import java.text.SimpleDateFormat
 import java.text.Normalizer
 import java.util.*
 
+private val LOCALE_VN = Locale.forLanguageTag("vi-VN")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaterialsHubScreen(
@@ -67,7 +69,7 @@ fun MaterialsHubScreen(
     var selectedContractor by remember { mutableStateOf("Tất cả nhà thầu") }
     var selectedNodeFilter by remember { mutableStateOf("Tất cả vị trí") }
     var selectedMonthFilter by remember { mutableStateOf("Tất cả tháng") }
-    val currentMonthKey = remember { SimpleDateFormat("MM/yyyy", Locale("vi", "VN")).format(Date()) }
+    val currentMonthKey = remember { SimpleDateFormat("MM/yyyy", LOCALE_VN).format(Date()) }
 
     var contractorDropdownExpanded by remember { mutableStateOf(false) }
     var nodeDropdownExpanded by remember { mutableStateOf(false) }
@@ -218,8 +220,8 @@ fun MaterialsHubScreen(
                                     }
                                     .sortedWith(
                                         compareByDescending<HandoverMaterialSummary> { it.totalQuantity }
-                                            .thenBy { it.materialLabel.lowercase(Locale("vi", "VN")) }
-                                            .thenBy { it.workLabel.lowercase(Locale("vi", "VN")) }
+                                            .thenBy { it.materialLabel.lowercase(LOCALE_VN) }
+                                            .thenBy { it.workLabel.lowercase(LOCALE_VN) }
                                     )
                             )
                         }
@@ -301,10 +303,10 @@ fun MaterialsHubScreen(
                 ).joinToString("|")
             }
             .sortedWith(
-                compareBy<HandoverCandidate> { it.contractor.lowercase(Locale("vi", "VN")) }
-                    .thenBy { it.nodeCode.lowercase(Locale("vi", "VN")) }
-                    .thenBy { it.workName.lowercase(Locale("vi", "VN")) }
-                    .thenBy { it.materialName.lowercase(Locale("vi", "VN")) }
+                compareBy<HandoverCandidate> { it.contractor.lowercase(LOCALE_VN) }
+                    .thenBy { it.nodeCode.lowercase(LOCALE_VN) }
+                    .thenBy { it.workName.lowercase(LOCALE_VN) }
+                    .thenBy { it.materialName.lowercase(LOCALE_VN) }
             )
     }
 
@@ -1655,7 +1657,7 @@ fun AddHandoverDialog(
 
     val formattedDate = remember(selectedDateMillis) {
         val date = Date(selectedDateMillis)
-        SimpleDateFormat("dd/MM/yyyy", Locale("vi", "VN")).format(date)
+        SimpleDateFormat("dd/MM/yyyy", LOCALE_VN).format(date)
     }
 
     val dateEpochDay = remember(selectedDateMillis) {
@@ -2004,7 +2006,7 @@ internal fun resolveContractorPlannedWorkQty(
 }
 
 internal fun normalizeMatchText(value: String): String {
-    val stripped = Normalizer.normalize(value.lowercase(Locale("vi", "VN")), Normalizer.Form.NFD)
+    val stripped = Normalizer.normalize(value.lowercase(LOCALE_VN), Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "")
         .replace('đ', 'd')
     return stripped
@@ -2201,7 +2203,7 @@ private fun QuickAddHandoverDialog(
 
     val formattedDate = remember(selectedDateMillis) {
         val date = Date(selectedDateMillis)
-        SimpleDateFormat("dd/MM/yyyy", Locale("vi", "VN")).format(date)
+        SimpleDateFormat("dd/MM/yyyy", LOCALE_VN).format(date)
     }
 
     val dateEpochDay = remember(selectedDateMillis) {
@@ -2673,17 +2675,17 @@ private fun formatQty(qty: Float): String {
 
 private fun formatEpochDay(epochDay: Long): String {
     val date = Date(epochDay * 24 * 60 * 60 * 1000)
-    return SimpleDateFormat("dd/MM/yyyy", Locale("vi", "VN")).format(date)
+    return SimpleDateFormat("dd/MM/yyyy", LOCALE_VN).format(date)
 }
 
 private fun formatMonthKey(epochDay: Long): String {
     val date = Date(epochDay * 24 * 60 * 60 * 1000)
-    return SimpleDateFormat("MM/yyyy", Locale("vi", "VN")).format(date)
+    return SimpleDateFormat("MM/yyyy", LOCALE_VN).format(date)
 }
 
 private fun monthKeyToEpochMillis(monthKey: String): Long {
     return runCatching {
-        SimpleDateFormat("MM/yyyy", Locale("vi", "VN")).parse(monthKey)?.time ?: 0L
+        SimpleDateFormat("MM/yyyy", LOCALE_VN).parse(monthKey)?.time ?: 0L
     }.getOrDefault(0L)
 }
 

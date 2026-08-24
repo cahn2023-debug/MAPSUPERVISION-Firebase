@@ -411,6 +411,7 @@ internal fun BindCameraOverlayState(
         }
     }
 
+    @Suppress("DEPRECATION")
     DisposableEffect(context) {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)

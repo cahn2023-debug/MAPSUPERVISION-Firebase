@@ -290,7 +290,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         }
         val args = when (table.tableName) {
             "projects" -> arrayOf<Any>(projectId)
-            else -> arrayOf(projectId, changedAfter)
+            else -> arrayOf<Any>(projectId, changedAfter)
         }
         return readable.query(SimpleSQLiteQuery(query, args)).use { cursor -> cursor.toRowMaps() }
     }

@@ -139,12 +139,13 @@ class DiaryCalendarWidget : GlanceAppWidget() {
             val monthShortLabel = "TH${currentMonth + 1}"
             val monthTitle = "THÁNG ${currentMonth + 1}"
             val selectedTitle = "$selectedDay $monthShortLabel"
-            val selectedDaySummary = SimpleDateFormat("EEEE, dd/MM", Locale("vi", "VN"))
+            val localeVn = Locale.forLanguageTag("vi-VN")
+            val selectedDaySummary = SimpleDateFormat("EEEE, dd/MM", localeVn)
                 .format(selectedCalendar.time)
-                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("vi", "VN")) else it.toString() }
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(localeVn) else it.toString() }
 
-            val dayOfWeekStr = SimpleDateFormat("EEEE", Locale("vi", "VN")).format(selectedCalendar.time)
-                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("vi", "VN")) else it.toString() }
+            val dayOfWeekStr = SimpleDateFormat("EEEE", localeVn).format(selectedCalendar.time)
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(localeVn) else it.toString() }
             val selectedDayHeaderStr = "${SimpleDateFormat("dd/MM", Locale.US).format(selectedCalendar.time)} $dayOfWeekStr"
 
             val addIntent = Intent(context, MainActivity::class.java).apply {

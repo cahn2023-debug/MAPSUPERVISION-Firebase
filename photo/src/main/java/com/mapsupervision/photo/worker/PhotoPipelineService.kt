@@ -246,6 +246,7 @@ open class PhotoPipelineService @Inject constructor(
     }
 
     @OptIn(markerClass = [UnstableApi::class])
+    @Suppress("DEPRECATION")
     override suspend fun exportVideoStamp(file: File, stamp: CaptureStamp, tileBitmap: Any?) {
         val bitmap = tileBitmap as? Bitmap
         val (frameWidth, frameHeight) = PhotoStampRenderer.resolveVideoOverlaySize(file)
@@ -304,6 +305,7 @@ open class PhotoPipelineService @Inject constructor(
     }
 
     @OptIn(markerClass = [UnstableApi::class])
+    @Suppress("DEPRECATION")
     override suspend fun exportVideoStamp(file: File, samples: List<VideoStampTimelineSample>) {
         if (samples.isEmpty()) {
             super<IPhotoPipelineService>.exportVideoStamp(file, samples)

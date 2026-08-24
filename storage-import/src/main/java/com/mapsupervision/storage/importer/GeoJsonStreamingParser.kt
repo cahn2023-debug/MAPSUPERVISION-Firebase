@@ -1,5 +1,6 @@
 package com.mapsupervision.storage.importer
 
+import com.google.gson.Strictness
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import com.mapsupervision.domain.model.GisNode
@@ -133,7 +134,7 @@ private fun readGeoJsonFeatures(
     onFeature: (GeoJsonFeatureData) -> Unit
 ) {
     JsonReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-        reader.isLenient = true
+        reader.strictness = Strictness.LENIENT
         reader.beginObject()
         var rootType = ""
         var singleFeature: GeoJsonFeatureData? = null
