@@ -67,7 +67,7 @@ fun calculateAspectCropRect(
 
 object PhotoStampRenderer {
     const val MINIMAP_MIN_ZOOM = 14
-    const val MINIMAP_MAX_ZOOM = 18
+    const val MINIMAP_MAX_ZOOM = 19
     internal const val MINIMAP_TILE_ALPHA = 204
 
     fun resolveMinimapZoom(
@@ -847,7 +847,7 @@ object PhotoStampRenderer {
         val cameraLng = mapScene?.cameraLongitude ?: lng
         val (cx, cy) = getCanvasCoords(cameraLat, cameraLng, frame, rect, tileBitmap?.width ?: 512, viewport.zoom)
         val bearingRad = Math.toRadians(bearingDeg.toDouble()).toFloat()
-        val coneAngle = Math.toRadians(45.0).toFloat()
+        val coneAngle = Math.toRadians(30.0).toFloat()
         val coneLen = rect.width() * 0.42f * 0.8f
 
         val coneFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

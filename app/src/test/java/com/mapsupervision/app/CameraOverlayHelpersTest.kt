@@ -39,8 +39,8 @@ class CameraOverlayHelpersTest {
 
     @Test
     fun `minimap zoom starts close and only moves outward`() {
-        assertEquals(18, resolveLatchedMinimapZoom(18, 18))
-        assertEquals(17, resolveLatchedMinimapZoom(17, 18))
+        assertEquals(19, resolveLatchedMinimapZoom(19, 19))
+        assertEquals(17, resolveLatchedMinimapZoom(17, 19))
         assertEquals(17, resolveLatchedMinimapZoom(18, 17))
         assertEquals(15, resolveLatchedMinimapZoom(15, 17))
     }
