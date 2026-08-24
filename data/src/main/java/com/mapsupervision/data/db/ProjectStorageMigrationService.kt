@@ -82,7 +82,10 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
             deletionState = project.deletionState,
             deletionRequestId = project.deletionRequestId,
             deletionErrorCode = project.deletionErrorCode,
-            cloudDeletionCompletedAtEpochMs = project.cloudDeletionCompletedAtEpochMs
+            cloudDeletionCompletedAtEpochMs = project.cloudDeletionCompletedAtEpochMs,
+            cloudDataConfirmed = project.cloudDataConfirmed,
+            cloudDecisionRequestId = project.cloudDecisionRequestId,
+            localDeletionErrorCode = project.localDeletionErrorCode
         )
         return migrateProjectEntityIfNeeded(entity)
     }

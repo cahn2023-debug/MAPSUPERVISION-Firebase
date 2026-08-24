@@ -37,5 +37,9 @@ data class ProjectEntity(
     val deletionState: ProjectDeletionState = ProjectDeletionState.ACTIVE,
     val deletionRequestId: String? = null,
     val deletionErrorCode: String? = null,
-    val cloudDeletionCompletedAtEpochMs: Long? = null
+    val cloudDeletionCompletedAtEpochMs: Long? = null,
+    @ColumnInfo(defaultValue = "0")
+    val cloudDataConfirmed: Boolean = false,
+    val cloudDecisionRequestId: String? = null,
+    val localDeletionErrorCode: String? = null
 )

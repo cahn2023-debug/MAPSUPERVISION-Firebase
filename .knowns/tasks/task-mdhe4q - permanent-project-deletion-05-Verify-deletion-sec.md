@@ -8,10 +8,9 @@ labels:
   - spec:permanent-project-deletion
   - spec-date:2026-08-23
 createdAt: '2026-08-23T14:33:40.057Z'
-updatedAt: '2026-08-23T17:13:24.585Z'
+updatedAt: '2026-08-24T09:52:01.170Z'
 completedAt: '2026-08-23T17:13:24.585Z'
 timeSpent: 259
-spec: specs/2026-08-23/permanent-project-deletion
 fulfills:
   - AC-1
   - AC-2
@@ -70,5 +69,6 @@ Final verification completed:
 - SDD validation passes with no errors; only informational pre-existing missing decision reference remains
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
 System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed)
+Reconciled with the approved local-first spec revision: detached from the current spec execution set and retained as completed cloud-first baseline history. No implementation files changed.
 <!-- SECTION:NOTES:END -->
 

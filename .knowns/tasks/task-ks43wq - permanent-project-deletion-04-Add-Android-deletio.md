@@ -8,10 +8,9 @@ labels:
   - spec:permanent-project-deletion
   - spec-date:2026-08-23
 createdAt: '2026-08-23T14:33:39.990Z'
-updatedAt: '2026-08-23T17:12:56.785Z'
+updatedAt: '2026-08-24T09:52:01.118Z'
 completedAt: '2026-08-23T17:08:43.217Z'
 timeSpent: 2627
-spec: specs/2026-08-23/permanent-project-deletion
 fulfills:
   - AC-1
   - AC-2
@@ -57,5 +56,6 @@ Plan saved; ownership taken for Android deletion safeguards and status UI.
 Implemented Android deletion safeguards and status UI. Re-review: PASS after fixes; remaining compile warnings are pre-existing deprecations only. Verification: :data:testDebugUnitTest; :project:testDebugUnitTest; :data:compileDebugKotlin; :project:compileDebugKotlin; :app:compileDebugKotlin all passed. Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass. System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed) — Android UI/local read-only lifecycle now follows the deletion state machine, creator capability, retry fencing, and tombstone handling.
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
 System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed) — verification confirms the approved deletion lifecycle invariants
+Reconciled with the approved local-first spec revision: detached from the current spec execution set and retained as completed cloud-first baseline history. No implementation files changed.
 <!-- SECTION:NOTES:END -->
 

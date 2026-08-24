@@ -404,6 +404,7 @@ fun WorkspaceAppShell(
                         projectViewModel.requestPermanentDeletion(projectId, identity, password, confirmPending)
                     },
                     onAcknowledgeRemoteDeletion = projectViewModel::acknowledgeRemoteDeletion,
+                    onDecideCloudDeletion = projectViewModel::decideCloudDeletion,
                     onExportProject = { project -> projectViewModel.exportProject(context, project) },
                     onImportProject = { uri -> projectViewModel.importProject(context, uri) },
                     onResolveDuplicateProject = { uri, overwrite, createCopy ->

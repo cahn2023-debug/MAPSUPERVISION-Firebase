@@ -29,7 +29,10 @@ data class Project(
     val deletionState: ProjectDeletionState = ProjectDeletionState.ACTIVE,
     val deletionRequestId: String? = null,
     val deletionErrorCode: String? = null,
-    val cloudDeletionCompletedAtEpochMs: Long? = null
+    val cloudDeletionCompletedAtEpochMs: Long? = null,
+    val cloudDataConfirmed: Boolean = false,
+    val cloudDecisionRequestId: String? = null,
+    val localDeletionErrorCode: String? = null
 )
 
 const val CURRENT_METADATA_VERSION: Int = 3

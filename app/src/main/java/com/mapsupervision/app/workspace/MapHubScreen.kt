@@ -159,6 +159,7 @@ fun MapHubScreen(
     onCloneProject: (String, String) -> Unit,
     onDeleteProject: (String, String, String, Boolean) -> Unit,
     onAcknowledgeRemoteDeletion: (String, Boolean) -> Unit = { _, _ -> },
+    onDecideCloudDeletion: (String, Boolean) -> Unit = { _, _ -> },
     onSelectNode: (GisNode) -> Unit,
     onSelectRoute: (GisRoute) -> Unit,
     onSetCenterNode: (GisNode?) -> Unit,
@@ -266,6 +267,14 @@ fun MapHubScreen(
     val surfaceColor = colors.surface
     val onSurfaceColor = colors.onSurface
     val onPrimaryColor = colors.onPrimary
+    val pendingCloudDecisionProject = projectState.projects.firstOrNull {
+        it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING ||
+            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED ||
+            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED ||
+            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING
+    }?.takeIf { project ->
+        session.isAdmin || projectState.catalogItems.firstOrNull { it.projectId == project.id }?.let { it.isProjectAdmin || it.createdByUid == session.uid } == true
+    }
     LaunchedEffect(context) {
         if (GisMapBridgeRegistry.bridge == null) {
             MapBridgeInstaller.install(context.applicationContext)
@@ -417,21 +426,27 @@ fun MapHubScreen(
                                         if (p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
                                             Text(
                                                 when (p.deletionState) {
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING -> "ĐÃ XÓA LOCAL — CHỜ QUYẾT ĐỊNH CLOUD"
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED -> "CLOUD ĐƯỢC GIỮ — ĐANG KHÔI PHỤC LOCAL"
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING -> "KHÔI PHỤC LOCAL ĐANG CHỜ RETRY"
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED -> "XÓA LOCAL THẤT BẠI — CÓ THỂ RETRY"
                                                     com.mapsupervision.domain.model.ProjectDeletionState.DELETING -> "ĐANG XÓA — project bị khóa"
                                                     com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED -> "XÓA THẤT BẠI — có thể thử lại"
                                                     com.mapsupervision.domain.model.ProjectDeletionState.DELETED -> "ĐÃ XÓA TRÊN CLOUD — chỉ đọc"
                                                     else -> ""
                                                 },
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED) dangerColor else secondaryTextColor
+                                                color = if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED ||
+                                                    p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED
+                                                ) dangerColor else secondaryTextColor
                                             )
                                         }
                                     }
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         val isCreator = projectState.catalogItems.firstOrNull { it.projectId == p.id }?.createdByUid == session.uid
-                                        val canDelete = session.isAdmin || isCreator
-                                        val deletionLocked = p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
-                                            p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+                                        val isProjectAdmin = projectState.catalogItems.firstOrNull { it.projectId == p.id }?.isProjectAdmin == true
+                                        val canDelete = session.isAdmin || isCreator || isProjectAdmin
+                                        val deletionLocked = p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE
                                         if (isActive) {
                                             Box(
                                                 modifier = Modifier
@@ -491,7 +506,7 @@ fun MapHubScreen(
                                                 }
                                             }
                                             if (!isActive) {
-                                                if (!isRevoked && canDelete && p.deletionState != com.mapsupervision.domain.model.ProjectDeletionState.DELETED) {
+                                                if (!isRevoked && canDelete && p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
                                                     IconButton(onClick = {
                                                         deletionProject = p
                                                         deletionIdentity = ""
@@ -1597,6 +1612,29 @@ fun MapHubScreen(
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { deletionProject = null }) { Text("Hủy") }
+                }
+            )
+        }
+
+        pendingCloudDecisionProject?.let { project ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { },
+                title = { Text("Quyết định dữ liệu Cloud", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "Project ${project.name} đã bị xóa local. Bạn có muốn giữ dữ liệu Cloud và khôi phục bản local, hay bắt đầu xóa dữ liệu Cloud? Media Google Drive vẫn được giữ nguyên.",
+                        color = secondaryTextColor
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { onDecideCloudDeletion(project.id, true) }) {
+                        Text("Giữ Cloud")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { onDecideCloudDeletion(project.id, false) }) {
+                        Text("Xóa Cloud", color = dangerColor)
+                    }
                 }
             )
         }

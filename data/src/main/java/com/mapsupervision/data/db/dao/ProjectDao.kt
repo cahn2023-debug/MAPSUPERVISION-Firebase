@@ -36,7 +36,7 @@ interface ProjectDao {
     @Query("UPDATE projects SET isArchived = 1 WHERE id = :projectId")
     suspend fun archive(projectId: String)
 
-    @Query("UPDATE projects SET deletionState = 'DELETING', deletionRequestId = :requestId, deletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionState IN ('ACTIVE', 'DELETE_FAILED')")
+    @Query("UPDATE projects SET deletionState = 'DELETING', deletionRequestId = :requestId, deletionErrorCode = NULL, localDeletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionState IN ('ACTIVE', 'DELETE_FAILED', 'LOCAL_DELETE_FAILED')")
     suspend fun requestDeletion(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
 
     @Query("UPDATE projects SET deletionState = 'DELETE_FAILED', deletionErrorCode = :errorCode, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND deletionRequestId = :requestId AND isDeleted = 0")
@@ -44,6 +44,30 @@ interface ProjectDao {
 
     @Query("UPDATE projects SET cloudDeletionCompletedAtEpochMs = :completedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND deletionRequestId = :requestId AND deletionState = 'DELETING' AND isDeleted = 0")
     suspend fun markCloudDeletionCompleted(projectId: String, requestId: String, completedAtEpochMs: Long, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET cloudDataConfirmed = 1, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId")
+    suspend fun markCloudDataConfirmed(projectId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'CLOUD_DECISION_PENDING', cloudDecisionRequestId = :requestId, deletionRequestId = :requestId, deletionErrorCode = NULL, localDeletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0")
+    suspend fun markCloudDecisionPending(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'LOCAL_DELETE_FAILED', deletionRequestId = :requestId, localDeletionErrorCode = :errorCode, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0")
+    suspend fun markLocalDeletionFailed(projectId: String, requestId: String, errorCode: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'CLOUD_RETAINED', cloudDecisionRequestId = :requestId, localDeletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionRequestId = :requestId")
+    suspend fun markCloudRetained(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'DELETING', cloudDecisionRequestId = :requestId, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionRequestId = :requestId")
+    suspend fun markCloudDeletionStarted(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'RESTORE_PENDING', cloudDecisionRequestId = :requestId, localDeletionErrorCode = :errorCode, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionRequestId = :requestId")
+    suspend fun markRestorePending(projectId: String, requestId: String, errorCode: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET deletionState = 'ACTIVE', localDeletionErrorCode = NULL, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionRequestId = :requestId AND deletionState IN ('CLOUD_RETAINED', 'RESTORE_PENDING')")
+    suspend fun markRestoreCompleted(projectId: String, requestId: String, updatedAtEpochMs: Long): Int
+
+    @Query("UPDATE projects SET isDeleted = 1, deletionState = 'DELETED', deletionRequestId = :requestId, deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionRequestId = :requestId")
+    suspend fun completeLocalOnlyDeletion(projectId: String, requestId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long): Int
 
     @Query("UPDATE projects SET deletionState = 'DELETED', deletionRequestId = :requestId, cloudDeletionCompletedAtEpochMs = :completedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0")
     suspend fun markRemoteDeletion(projectId: String, requestId: String, completedAtEpochMs: Long, updatedAtEpochMs: Long): Int

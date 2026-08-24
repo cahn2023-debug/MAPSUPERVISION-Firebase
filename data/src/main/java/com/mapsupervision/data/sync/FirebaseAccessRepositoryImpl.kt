@@ -550,6 +550,7 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
                     document.id to ProjectAccess(
                         projectId = document.id,
                         isActive = true,
+                        isProjectAdmin = true,
                         contractorScope = ContractorScope.ALL,
                         allowedContractors = emptySet()
                     )
@@ -580,6 +581,8 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
             permissions[projectId] = ProjectAccess(
                 projectId = projectId,
                 isActive = true,
+                isProjectAdmin = memberSnapshot.getBoolean("isAdmin") == true ||
+                    listOf("admin", "owner", "creator", "super-admin").contains(memberSnapshot.getString("role")?.lowercase()),
                 contractorScope = scope,
                 allowedContractors = allowedContractors
             )

@@ -469,7 +469,8 @@ class FirebaseAccessViewModel @Inject constructor(
                             mediaStorageFolderUrl = "",
                             mediaStorageUpdatedAtEpochMs = 0L,
                             isDeleted = false,
-                            deletedAtEpochMs = null
+                            deletedAtEpochMs = null,
+                            cloudDataConfirmed = true
                         )
                         when (val importRes = projectRepository.importProject(project)) {
                             is AppResult.Success -> Unit

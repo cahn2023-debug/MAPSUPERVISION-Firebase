@@ -56,8 +56,12 @@ class ProjectScopedDatabaseProvider @Inject constructor(
         if (project.storageMode != ProjectStorageMode.PROJECT_DB || project.projectDbPath.isBlank()) {
             return null
         }
-        if (project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
-            project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+        if (project.deletionState in setOf(
+                com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING,
+                com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED,
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETING,
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+            )
         ) {
             return null
         }
@@ -85,8 +89,12 @@ class ProjectScopedDatabaseProvider @Inject constructor(
 
     private suspend fun openProjectDb(project: ProjectEntity): MapSupervisionDatabase? = mutex.withLock {
         val currentProject = sharedDatabase.projectDao().get(project.id) ?: return@withLock null
-        if (currentProject.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETING ||
-            currentProject.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+        if (currentProject.deletionState in setOf(
+                com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING,
+                com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED,
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETING,
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED
+            )
         ) {
             return@withLock null
         }

@@ -66,6 +66,9 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                 metadataStore.setLastError(projectId, table.tableName, null)
                 pushed += written
             }
+            if (pushed > 0 || mediaResult.uploadedMedia > 0) {
+                sharedDatabase.projectDao().markCloudDataConfirmed(projectId, System.currentTimeMillis())
+            }
             SyncBatchResult(
                 pushed = pushed,
                 uploadedMedia = mediaResult.uploadedMedia,
@@ -81,7 +84,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         runCatching {
             ensureFirebaseConfigured()
             if (applyRemoteTombstone(projectId)) return@runCatching SyncBatchResult()
-            ensureLocalProjectActive(projectId)
+            ensureLocalProjectActive(projectId, allowRestore = true)
             ensureApprovedAccess(projectId)
             var pulled = 0
             FirebaseSyncTableCatalog.tables.forEach { table ->
@@ -89,10 +92,13 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                 val remoteDocs = readRowsFromFirestore(projectId, table, cursorEpochMs)
                 if (remoteDocs.isEmpty()) return@forEach
                 val maxUpdatedAt = remoteDocs.maxOf { it.updatedAtEpochMs }
-                val applied = applyRemoteRows(projectId, table, remoteDocs)
+                val applied = applyRemoteRows(projectId, table, remoteDocs, allowRestore = true)
                 metadataStore.setLastPulledAt(projectId, table.tableName, maxUpdatedAt)
                 metadataStore.setLastError(projectId, table.tableName, null)
                 pulled += applied
+            }
+            if (pulled > 0) {
+                sharedDatabase.projectDao().markCloudDataConfirmed(projectId, System.currentTimeMillis())
             }
             SyncBatchResult(pulled = pulled)
         }.fold(
@@ -158,6 +164,50 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         }.fold(
             onSuccess = { AppResult.Success(it) },
             onFailure = { AppResult.Error(DatabaseException("Failed to request cloud project deletion", it)) }
+        )
+    }
+
+    override suspend fun decideProjectCloudDeletion(
+        projectId: String,
+        requestId: String,
+        decision: String,
+        typedIdentity: String
+    ): AppResult<com.mapsupervision.domain.model.ProjectDeletionState> = withContext(Dispatchers.IO) {
+        runCatching {
+            ensureFirebaseConfigured()
+            val baseUrl = BuildConfig.MEDIA_UPLOAD_BASE_URL.trim().trimEnd('/').ifBlank {
+                error("MEDIA_UPLOAD_BASE_URL is not configured")
+            }
+            val token = firebaseRuntime.getFirebaseToken()
+            val body = JSONObject().apply {
+                put("requestId", requestId)
+                put("decision", decision)
+                put("typedIdentity", typedIdentity)
+            }.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$baseUrl/api/projects/${java.net.URLEncoder.encode(projectId, "UTF-8")}/deletion/decision")
+                .header("Authorization", "Bearer $token")
+                .post(body)
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                val payload = JSONObject(response.body?.string().orEmpty())
+                if (!response.isSuccessful || !payload.optBoolean("success", false)) {
+                    val error = payload.optJSONObject("error")
+                    throw ProjectDeletionHttpException(
+                        errorCode = error?.optString("code")?.takeIf { it.isNotBlank() },
+                        responseCode = response.code,
+                        message = error?.optString("message") ?: "Cloud decision failed"
+                    )
+                }
+                when (payload.optJSONObject("data")?.optString("deletionState")) {
+                    "CLOUD_RETAINED" -> com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED
+                    "DELETING" -> com.mapsupervision.domain.model.ProjectDeletionState.DELETING
+                    else -> com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING
+                }
+            }
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to submit Cloud project decision", it)) }
         )
     }
 
@@ -361,11 +411,12 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     private suspend fun applyRemoteRows(
         projectId: String,
         table: FirebaseSyncTable,
-        envelopes: List<SyncEnvelope<Map<String, Any?>>>
+        envelopes: List<SyncEnvelope<Map<String, Any?>>>,
+        allowRestore: Boolean = false
     ): Int {
-        ensureLocalProjectActive(projectId)
+        ensureLocalProjectActive(projectId, allowRestore)
         val deviceId = metadataStore.deviceId()
-        val rowsToApply = envelopes.filter { it.sourceDeviceId != deviceId }
+        val rowsToApply = if (allowRestore) envelopes else envelopes.filter { it.sourceDeviceId != deviceId }
         if (rowsToApply.isEmpty()) return 0
         val targetDatabases = databasesForWrite(projectId, table)
         rowsToApply.forEach { envelope ->
@@ -433,10 +484,14 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     private suspend fun scopedDatabase(projectId: String): MapSupervisionDatabase? =
         projectScopedDatabaseProvider.databaseFor(projectId)
 
-    private suspend fun ensureLocalProjectActive(projectId: String) {
+    private suspend fun ensureLocalProjectActive(projectId: String, allowRestore: Boolean = false) {
         val project = sharedDatabase.projectDao().get(projectId)
-        check(project != null && !project.isDeleted &&
-            project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
+        val allowedState = project?.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE ||
+            (allowRestore && project?.deletionState in setOf(
+                com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED,
+                com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING
+            ))
+        check(project != null && !project.isDeleted && allowedState) {
             "Project is locked for deletion: $projectId"
         }
     }

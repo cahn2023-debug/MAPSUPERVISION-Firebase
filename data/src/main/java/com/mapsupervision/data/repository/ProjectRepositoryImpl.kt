@@ -104,7 +104,10 @@ class ProjectRepositoryImpl @Inject constructor(
             deletionState = resolved.deletionState,
             deletionRequestId = resolved.deletionRequestId,
             deletionErrorCode = resolved.deletionErrorCode,
-            cloudDeletionCompletedAtEpochMs = resolved.cloudDeletionCompletedAtEpochMs
+            cloudDeletionCompletedAtEpochMs = resolved.cloudDeletionCompletedAtEpochMs,
+            cloudDataConfirmed = resolved.cloudDataConfirmed,
+            cloudDecisionRequestId = resolved.cloudDecisionRequestId,
+            localDeletionErrorCode = resolved.localDeletionErrorCode
         )
         projectDao.upsert(entity)
     }.fold(
@@ -143,23 +146,63 @@ class ProjectRepositoryImpl @Inject constructor(
         check(activeProjectId != projectId) { "Active project must be switched before deletion" }
         val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
         check(!project.isDeleted) { "Project is already deleted" }
-        if (project.deletionState == ProjectDeletionState.DELETING) {
+        if (project.deletionState in setOf(
+                ProjectDeletionState.CLOUD_DECISION_PENDING,
+                ProjectDeletionState.CLOUD_RETAINED,
+                ProjectDeletionState.RESTORE_PENDING,
+                ProjectDeletionState.DELETING
+            )) {
             check(project.deletionRequestId == requestId) { "Project deletion is already owned by another request" }
-            return@runCatching ProjectDeletionState.DELETING
+            return@runCatching project.deletionState
         }
-        if (project.deletionState == ProjectDeletionState.DELETE_FAILED) {
+        if (project.deletionState in setOf(ProjectDeletionState.DELETE_FAILED, ProjectDeletionState.LOCAL_DELETE_FAILED)) {
             check(project.deletionRequestId == requestId) { "Retry must reuse the existing deletion request" }
         }
-        projectDao.requestDeletion(projectId, requestId, System.currentTimeMillis())
-        val current = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
-        if (current.deletionState == ProjectDeletionState.DELETING) {
-            check(current.deletionRequestId == requestId) { "Project deletion is already owned by another request" }
+        if (project.deletionState == ProjectDeletionState.ACTIVE || project.deletionState == ProjectDeletionState.LOCAL_DELETE_FAILED) {
+            check(projectDao.requestDeletion(projectId, requestId, System.currentTimeMillis()) > 0) {
+                "Project deletion request could not be claimed"
+            }
         }
-        current.deletionState
+        try {
+            deleteLocalProjectData(project)
+            val now = System.currentTimeMillis()
+            if (project.cloudDataConfirmed) {
+                check(projectDao.markCloudDecisionPending(projectId, requestId, now) > 0) {
+                    "Project local deletion completed but decision state could not be persisted"
+                }
+                ProjectDeletionState.CLOUD_DECISION_PENDING
+            } else {
+                check(projectDao.completeLocalOnlyDeletion(projectId, requestId, now, now) > 0) {
+                    "Local-only deletion could not be completed"
+                }
+                ProjectDeletionState.DELETED
+            }
+        } catch (error: Throwable) {
+            projectDao.markLocalDeletionFailed(
+                projectId,
+                requestId,
+                error::class.simpleName ?: "LOCAL_DELETE_FAILED",
+                System.currentTimeMillis()
+            )
+            throw error
+        }
     }.fold(
         onSuccess = { AppResult.Success(it) },
         onFailure = { AppResult.Error(DatabaseException("Failed to request project deletion", it)) }
     )
+
+    private suspend fun deleteLocalProjectData(project: ProjectEntity) {
+        check(projectDao.countActiveBySlug(project.slug) == 1) {
+            "Project storage root is shared by another active project"
+        }
+        projectDao.purgeProjectRows(project.id)
+        check(projectScopedDatabaseProvider.closeProjectDatabase(project.id)) {
+            "Project database was not found"
+        }
+        check(storageManager.deleteProjectStorage(project.slug, project.id, project.projectDbPath)) {
+            "Project storage could not be removed"
+        }
+    }
 
     override suspend fun markDeletionFailed(projectId: String, requestId: String, errorCode: String): AppResult<Unit> = runCatching {
         check(projectDao.markDeletionFailed(projectId, requestId, errorCode, System.currentTimeMillis()) > 0) {
@@ -168,6 +211,33 @@ class ProjectRepositoryImpl @Inject constructor(
     }.fold(
         onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(DatabaseException("Failed to mark project deletion failure", it)) }
+    )
+
+    override suspend fun markCloudRetained(projectId: String, requestId: String): AppResult<Unit> = runCatching {
+        check(projectDao.markCloudRetained(projectId, requestId, System.currentTimeMillis()) > 0) {
+            "Cloud retention decision is stale"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to mark Cloud project as retained", it)) }
+    )
+
+    override suspend fun markRestorePending(projectId: String, requestId: String, errorCode: String): AppResult<Unit> = runCatching {
+        check(projectDao.markRestorePending(projectId, requestId, errorCode, System.currentTimeMillis()) > 0) {
+            "Project restore decision is stale"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to mark project restore pending", it)) }
+    )
+
+    override suspend fun markRestoreCompleted(projectId: String, requestId: String): AppResult<Unit> = runCatching {
+        check(projectDao.markRestoreCompleted(projectId, requestId, System.currentTimeMillis()) > 0) {
+            "Project restore completion is stale"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to complete project restore", it)) }
     )
 
     override suspend fun markCloudDeletionCompleted(projectId: String, requestId: String): AppResult<Unit> = runCatching {
@@ -256,6 +326,15 @@ class ProjectRepositoryImpl @Inject constructor(
             deletedAtEpochMs = null
         )
     }
+
+    override suspend fun markCloudDeletionStarted(projectId: String, requestId: String): AppResult<Unit> = runCatching {
+        check(projectDao.markCloudDeletionStarted(projectId, requestId, System.currentTimeMillis()) > 0) {
+            "Cloud deletion decision is stale"
+        }
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to mark Cloud deletion started", it)) }
+    )
 
     override suspend fun updateStoragePath(projectId: String, newPath: String): AppResult<Unit> = runCatching {
         val project = projectDao.get(projectId) ?: throw IllegalArgumentException("Project not found")
@@ -370,6 +449,9 @@ class ProjectRepositoryImpl @Inject constructor(
         deletionState = deletionState,
         deletionRequestId = deletionRequestId,
         deletionErrorCode = deletionErrorCode,
-        cloudDeletionCompletedAtEpochMs = cloudDeletionCompletedAtEpochMs
+        cloudDeletionCompletedAtEpochMs = cloudDeletionCompletedAtEpochMs,
+        cloudDataConfirmed = cloudDataConfirmed,
+        cloudDecisionRequestId = cloudDecisionRequestId,
+        localDeletionErrorCode = localDeletionErrorCode
     )
 }

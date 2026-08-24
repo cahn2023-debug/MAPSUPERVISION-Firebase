@@ -20,6 +20,7 @@ type ErrorCode =
   | "BAD_REQUEST"
   | "ACTIVE_PROJECT"
   | "REAUTH_REQUIRED"
+  | "DECISION_REQUIRED"
   | "DELETION_IN_PROGRESS"
   | "DELETE_FAILED";
 
@@ -39,7 +40,10 @@ function projectData(source: Record<string, unknown> | undefined): Record<string
 }
 
 function deletionState(value: unknown): ProjectDeletionState {
-  return value === "DELETING" || value === "DELETE_FAILED" || value === "DELETED" ? value : "ACTIVE";
+  return value === "CLOUD_DECISION_PENDING" || value === "CLOUD_RETAINED" || value === "RESTORE_PENDING" ||
+    value === "LOCAL_DELETE_FAILED" || value === "DELETING" || value === "DELETE_FAILED" || value === "DELETED"
+    ? value
+    : "ACTIVE";
 }
 
 async function deleteCollection(
@@ -130,6 +134,7 @@ export async function POST(
   const firestore = getAdminDb();
   const projectRef = firestore.collection("projects").doc(projectId);
   const userRef = firestore.collection("users").doc(decoded.uid);
+  const memberRef = projectRef.collection("projectMembers").doc(decoded.uid);
   const now = Date.now();
   let checkpoint: string[] = [];
   let workerToken = "";
@@ -143,9 +148,11 @@ export async function POST(
     await firestore.runTransaction(async (transaction: FirebaseFirestore.Transaction) => {
       const snapshot = await transaction.get(projectRef as any) as unknown as FirebaseFirestore.DocumentSnapshot;
       const userSnapshot = await transaction.get(userRef as any) as unknown as FirebaseFirestore.DocumentSnapshot;
+      const memberSnapshot = await transaction.get(memberRef as any) as unknown as FirebaseFirestore.DocumentSnapshot;
       if (!snapshot.exists) throw new Error("NOT_FOUND");
       const data = projectData(snapshot.data());
       const userData = userSnapshot.exists ? projectData(userSnapshot.data()) : {};
+      const memberData = memberSnapshot.exists ? projectData(memberSnapshot.data()) : {};
       memberUids = Array.isArray(data.deletionMemberUids)
         ? data.deletionMemberUids.filter((uid): uid is string => typeof uid === "string" && uid.length > 0)
         : [];
@@ -158,6 +165,7 @@ export async function POST(
       validateDeletionAuthorization({
         actorUid: decoded.uid,
         isAdmin: decoded.admin === true,
+        isProjectAdmin: memberData.isAdmin === true || ["admin", "owner", "creator", "super-admin"].includes(String(memberData.role ?? "").toLowerCase()),
         ownerUid: typeof data.createdByUid === "string" ? data.createdByUid : typeof data.ownerUid === "string" ? data.ownerUid : null,
         currentState: state,
         // The active project is persisted server-side; client body flags are ignored.
@@ -199,7 +207,8 @@ export async function POST(
     if (code === "DELETION_IN_PROGRESS") return apiError(409, "DELETION_IN_PROGRESS", "Another deletion request is already running.");
     if (code === "ACTIVE_PROJECT") return apiError(409, "ACTIVE_PROJECT", "Switch away from the active project before deleting it.");
     if (code === "REAUTH_REQUIRED") return apiError(401, "REAUTH_REQUIRED", "Recent reauthentication is required.");
-    if (code === "FORBIDDEN") return apiError(403, "FORBIDDEN", "Only the project creator or a super-admin can delete this project.");
+    if (code === "DECISION_REQUIRED") return apiError(409, "DECISION_REQUIRED", "An administrator must record the Cloud decision before deletion can run.");
+    if (code === "FORBIDDEN") return apiError(403, "FORBIDDEN", "Only an authorized project administrator can delete this project.");
     if (code === "NOT_FOUND") return apiError(404, "BAD_REQUEST", "Project not found.");
     if (code === "IDENTITY_MISMATCH") return apiError(400, "BAD_REQUEST", "Typed project identity does not match.");
     if (code === "ALREADY_DELETED") return apiError(409, "DELETION_IN_PROGRESS", "Project has already been deleted.");

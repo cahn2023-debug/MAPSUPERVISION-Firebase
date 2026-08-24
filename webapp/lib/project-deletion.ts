@@ -1,4 +1,14 @@
-export type ProjectDeletionState = "ACTIVE" | "DELETING" | "DELETE_FAILED" | "DELETED";
+export type ProjectDeletionState =
+  | "ACTIVE"
+  | "CLOUD_DECISION_PENDING"
+  | "CLOUD_RETAINED"
+  | "RESTORE_PENDING"
+  | "LOCAL_DELETE_FAILED"
+  | "DELETING"
+  | "DELETE_FAILED"
+  | "DELETED";
+
+export type ProjectCloudDecision = "RETAIN" | "DELETE";
 
 export const PROJECT_DELETION_COLLECTIONS = [
   "projectMembers",
@@ -34,6 +44,7 @@ export const PROJECT_DELETION_COLLECTIONS = [
 export type DeletionAuthorizationInput = {
   actorUid: string;
   isAdmin: boolean;
+  isProjectAdmin?: boolean;
   ownerUid: string | null;
   currentState: ProjectDeletionState;
   isActiveOnDevice: boolean;
@@ -47,8 +58,11 @@ export type DeletionAuthorizationInput = {
 
 export function validateDeletionAuthorization(input: DeletionAuthorizationInput): void {
   if (!input.actorUid) throw new Error("UNAUTHORIZED");
-  if (!input.isAdmin && input.ownerUid !== input.actorUid) throw new Error("FORBIDDEN");
+  if (!input.isAdmin && !input.isProjectAdmin && input.ownerUid !== input.actorUid) throw new Error("FORBIDDEN");
   if (input.isActiveOnDevice) throw new Error("ACTIVE_PROJECT");
+  if (["CLOUD_DECISION_PENDING", "CLOUD_RETAINED", "RESTORE_PENDING", "LOCAL_DELETE_FAILED"].includes(input.currentState)) {
+    throw new Error("DECISION_REQUIRED");
+  }
   if (input.currentState === "DELETED") throw new Error("ALREADY_DELETED");
   if (input.currentState === "DELETING" && !input.requestIdMatches) throw new Error("DELETION_IN_PROGRESS");
   if (input.typedIdentity !== input.projectName && input.typedIdentity !== (input.projectCode ?? "")) {
@@ -71,6 +85,11 @@ export function normalizeDeletionRequestId(value: unknown): string {
   const requestId = typeof value === "string" ? value.trim() : "";
   if (!/^[A-Za-z0-9._:-]{8,120}$/.test(requestId)) throw new Error("INVALID_REQUEST_ID");
   return requestId;
+}
+
+export function normalizeCloudDecision(value: unknown): ProjectCloudDecision {
+  if (value === "RETAIN" || value === "DELETE") return value;
+  throw new Error("INVALID_CLOUD_DECISION");
 }
 
 export function nextDeletionCheckpoint(completed: string[], collection: string): string[] {

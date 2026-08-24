@@ -194,6 +194,19 @@ class ProjectViewModel @Inject constructor(
                                 refresh()
                                 return@launch
                             }
+                            if (localRequest is AppResult.Success &&
+                                localRequest.data in setOf(ProjectDeletionState.DELETED, ProjectDeletionState.CLOUD_DECISION_PENDING)
+                            ) {
+                                _uiState.value = _uiState.value.copy(
+                                    message = if (localRequest.data == ProjectDeletionState.DELETED) {
+                                        "ÄÃ£ xÃ³a project local; khÃ´ng cÃ³ dá»¯ liá»‡u Cloud Ä‘á»ƒ xÃ³a"
+                                    } else {
+                                        "ÄÃ£ xÃ³a project local; chá» quáº£n trá»‹ viÃªn quyáº¿t Ä‘á»‹nh dá»¯ liá»‡u Cloud"
+                                    }
+                                )
+                                refresh()
+                                return@launch
+                            }
                             when (val result = firebaseSyncRepository.requestProjectDeletion(projectId, requestId, typedIdentity.trim(), pending, confirmPendingOutbox)) {
                                 is AppResult.Success -> {
                                     if (result.data == ProjectDeletionState.DELETED) {
@@ -221,6 +234,87 @@ class ProjectViewModel @Inject constructor(
 
     fun retryPermanentDeletion(projectId: String, typedIdentity: String, reauthPassword: String) =
         requestPermanentDeletion(projectId, typedIdentity, reauthPassword, confirmPendingOutbox = true)
+
+    fun decideCloudDeletion(projectId: String, retainCloud: Boolean) {
+        viewModelScope.launch {
+            val project = _uiState.value.projects.firstOrNull { it.id == projectId }
+            if (project == null) {
+                _uiState.value = _uiState.value.copy(message = "Không tìm thấy project local")
+                return@launch
+            }
+            val requestId = project.cloudDecisionRequestId ?: project.deletionRequestId
+            if (requestId.isNullOrBlank()) {
+                _uiState.value = _uiState.value.copy(message = "Thiếu mã yêu cầu quyết định Cloud")
+                return@launch
+            }
+            if (retainCloud && project.deletionState in setOf(
+                    ProjectDeletionState.CLOUD_RETAINED,
+                    ProjectDeletionState.RESTORE_PENDING
+                )) {
+                when (val restore = firebaseSyncRepository.pullChanges(projectId, sinceEpochMs = 0L)) {
+                    is AppResult.Success -> {
+                        projectRepository.markRestoreCompleted(projectId, requestId)
+                        _uiState.value = _uiState.value.copy(message = "Đã retry và khôi phục project local")
+                    }
+                    is AppResult.Error -> {
+                        projectRepository.markRestorePending(projectId, requestId, "RESTORE_FAILED")
+                        _uiState.value = _uiState.value.copy(message = "Khôi phục local vẫn thất bại; hãy retry lại")
+                    }
+                }
+                refresh()
+                return@launch
+            }
+            when (val result = firebaseSyncRepository.decideProjectCloudDeletion(
+                projectId = projectId,
+                requestId = requestId,
+                decision = if (retainCloud) "RETAIN" else "DELETE",
+                typedIdentity = project.name
+            )) {
+                is AppResult.Error -> _uiState.value = _uiState.value.copy(
+                    message = "Không thể ghi quyết định Cloud: ${result.throwable.message}"
+                )
+                is AppResult.Success -> {
+                    if (retainCloud && result.data == ProjectDeletionState.CLOUD_RETAINED) {
+                        projectRepository.markCloudRetained(projectId, requestId)
+                        when (val restore = firebaseSyncRepository.pullChanges(projectId, sinceEpochMs = 0L)) {
+                            is AppResult.Success -> {
+                                projectRepository.markRestoreCompleted(projectId, requestId)
+                                _uiState.value = _uiState.value.copy(message = "Đã giữ Cloud và khôi phục project local")
+                            }
+                            is AppResult.Error -> {
+                                projectRepository.markRestorePending(projectId, requestId, "RESTORE_FAILED")
+                                _uiState.value = _uiState.value.copy(message = "Đã giữ Cloud; khôi phục local đang chờ retry")
+                            }
+                        }
+                    } else if (!retainCloud && result.data == ProjectDeletionState.DELETING) {
+                        projectRepository.markCloudDeletionStarted(projectId, requestId)
+                        when (val deletion = firebaseSyncRepository.requestProjectDeletion(
+                            projectId,
+                            requestId,
+                            project.name,
+                            pendingOutboxCount = 0,
+                            confirmPendingOutbox = true
+                        )) {
+                            is AppResult.Success -> {
+                                if (deletion.data == ProjectDeletionState.DELETED) {
+                                    projectRepository.markCloudDeletionCompleted(projectId, requestId)
+                                    projectRepository.completeLocalDeletion(projectId, requestId)
+                                    _uiState.value = _uiState.value.copy(message = "Đã xóa dữ liệu Cloud và local")
+                                } else {
+                                    _uiState.value = _uiState.value.copy(message = "Đang xóa dữ liệu Cloud (${deletion.data})")
+                                }
+                            }
+                            is AppResult.Error -> {
+                                projectRepository.markDeletionFailed(projectId, requestId, "CLOUD_DELETE_REQUEST_FAILED")
+                                _uiState.value = _uiState.value.copy(message = "Xóa Cloud thất bại; có thể retry")
+                            }
+                        }
+                    }
+                }
+            }
+            refresh()
+        }
+    }
 
     fun acknowledgeRemoteDeletion(projectId: String, deleteLocal: Boolean) {
         viewModelScope.launch {
@@ -327,6 +421,9 @@ class ProjectViewModel @Inject constructor(
                     put("mediaStorageFolderId", project.mediaStorageFolderId)
                     put("mediaStorageFolderUrl", project.mediaStorageFolderUrl)
                     put("mediaStorageUpdatedAtEpochMs", project.mediaStorageUpdatedAtEpochMs)
+                    put("cloudDataConfirmed", project.cloudDataConfirmed)
+                    put("cloudDecisionRequestId", project.cloudDecisionRequestId)
+                    put("localDeletionErrorCode", project.localDeletionErrorCode)
                 })
                 put("nodes", JSONArray().apply {
                     nodes.forEach { n ->
@@ -638,7 +735,10 @@ class ProjectViewModel @Inject constructor(
                     mediaStorageProvider = projJson.optString("mediaStorageProvider", "GOOGLE_DRIVE"),
                     mediaStorageFolderId = projJson.optString("mediaStorageFolderId", ""),
                     mediaStorageFolderUrl = projJson.optString("mediaStorageFolderUrl", ""),
-                    mediaStorageUpdatedAtEpochMs = projJson.optLong("mediaStorageUpdatedAtEpochMs", 0L)
+                    mediaStorageUpdatedAtEpochMs = projJson.optLong("mediaStorageUpdatedAtEpochMs", 0L),
+                    cloudDataConfirmed = projJson.optBoolean("cloudDataConfirmed", false),
+                    cloudDecisionRequestId = projJson.optString("cloudDecisionRequestId", "").ifBlank { null },
+                    localDeletionErrorCode = projJson.optString("localDeletionErrorCode", "").ifBlank { null }
                 )
                 projectRepository.importProject(projObj)
 
@@ -990,6 +1090,7 @@ data class FirebaseCatalogItemUiState(
     val createdByUid: String? = null,
     val accessStatus: FirebaseAccessRequestStatus = FirebaseAccessRequestStatus.NOT_REQUESTED,
     val isLocalAvailable: Boolean = false,
+    val isProjectAdmin: Boolean = false,
     val isRevokedReadOnly: Boolean = false,
     val isActionBusy: Boolean = false
 )
@@ -1037,6 +1138,7 @@ internal fun resolveCatalogItems(
             createdByUid = entry.createdByUid,
             accessStatus = status,
             isLocalAvailable = isLocal,
+            isProjectAdmin = accessState.permissionsByProject[entry.projectId]?.isProjectAdmin == true,
             isRevokedReadOnly = isRevokedReadOnly
         )
     }

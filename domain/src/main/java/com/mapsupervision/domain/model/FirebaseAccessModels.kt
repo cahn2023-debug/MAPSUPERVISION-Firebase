@@ -39,6 +39,7 @@ data class FirebaseUserSession(
 data class ProjectAccess(
     val projectId: String,
     val isActive: Boolean = true,
+    val isProjectAdmin: Boolean = false,
     val contractorScope: ContractorScope = ContractorScope.ALL,
     val allowedContractors: Set<String> = emptySet()
 )

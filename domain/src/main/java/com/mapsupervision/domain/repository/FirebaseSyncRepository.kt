@@ -33,4 +33,12 @@ interface FirebaseSyncRepository {
         confirmPendingOutbox: Boolean
     ): AppResult<ProjectDeletionState> =
         AppResult.Error(UnsupportedOperationException("Project deletion is not supported"))
+
+    suspend fun decideProjectCloudDeletion(
+        projectId: String,
+        requestId: String,
+        decision: String,
+        typedIdentity: String
+    ): AppResult<ProjectDeletionState> =
+        AppResult.Error(UnsupportedOperationException("Cloud deletion decision is not supported"))
 }

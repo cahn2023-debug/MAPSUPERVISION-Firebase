@@ -103,6 +103,120 @@ class ProjectRepositoryDeletionTest {
         }
     }
 
+    @Test
+    fun requestDeletion_neverUploadedPurgesLocallyWithoutCloudDecision() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, MapSupervisionDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val storage = ProjectStorageManager(context)
+        val repository = ProjectRepositoryImpl(
+            projectDao = database.projectDao(),
+            storageManager = storage,
+            eventOutboxDao = database.eventOutboxDao(),
+            sitePhotoDao = database.sitePhotoDao(),
+            projectScopedDatabaseProvider = ProjectScopedDatabaseProvider(context, database, storage),
+            activeProjectRepository = FakeActiveProjectRepository(null)
+        )
+        try {
+            database.projectDao().upsert(
+                ProjectEntity(
+                    id = "local-only",
+                    name = "Local only",
+                    slug = "local-only",
+                    isArchived = false,
+                    createdAtEpochMs = 1L
+                )
+            )
+
+            assertEquals(
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETED,
+                (repository.requestDeletion("local-only", "local-request") as AppResult.Success).data
+            )
+            assertTrue(database.projectDao().get("local-only")?.isDeleted == true)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun requestDeletion_uploadedProjectLeavesCloudDecisionPendingAfterLocalPurge() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, MapSupervisionDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val storage = ProjectStorageManager(context)
+        val repository = ProjectRepositoryImpl(
+            projectDao = database.projectDao(),
+            storageManager = storage,
+            eventOutboxDao = database.eventOutboxDao(),
+            sitePhotoDao = database.sitePhotoDao(),
+            projectScopedDatabaseProvider = ProjectScopedDatabaseProvider(context, database, storage),
+            activeProjectRepository = FakeActiveProjectRepository(null)
+        )
+        try {
+            database.projectDao().upsert(
+                ProjectEntity(
+                    id = "uploaded",
+                    name = "Uploaded",
+                    slug = "uploaded",
+                    isArchived = false,
+                    createdAtEpochMs = 1L,
+                    cloudDataConfirmed = true
+                )
+            )
+
+            assertEquals(
+                com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING,
+                (repository.requestDeletion("uploaded", "cloud-request") as AppResult.Success).data
+            )
+            val project = database.projectDao().get("uploaded")
+            assertTrue(project != null && !project.isDeleted)
+            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING, project?.deletionState)
+            assertEquals("cloud-request", project?.cloudDecisionRequestId)
+
+            assertTrue(repository.markCloudRetained("uploaded", "cloud-request") is AppResult.Success)
+            assertTrue(repository.markRestoreCompleted("uploaded", "cloud-request") is AppResult.Success)
+            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE, database.projectDao().get("uploaded")?.deletionState)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun requestDeletion_localFailureIsRetryableAndDoesNotTouchOtherProject() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, MapSupervisionDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val storage = ProjectStorageManager(context)
+        val repository = ProjectRepositoryImpl(
+            projectDao = database.projectDao(),
+            storageManager = storage,
+            eventOutboxDao = database.eventOutboxDao(),
+            sitePhotoDao = database.sitePhotoDao(),
+            projectScopedDatabaseProvider = ProjectScopedDatabaseProvider(context, database, storage),
+            activeProjectRepository = FakeActiveProjectRepository(null)
+        )
+        try {
+            database.projectDao().upsert(
+                ProjectEntity("failed", "Failed", "shared", false, 1L)
+            )
+            database.projectDao().upsert(
+                ProjectEntity("other", "Other", "shared", false, 2L)
+            )
+
+            assertTrue(repository.requestDeletion("failed", "failed-request") is AppResult.Error)
+            assertEquals(
+                com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED,
+                database.projectDao().get("failed")?.deletionState
+            )
+            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE, database.projectDao().get("other")?.deletionState)
+        } finally {
+            database.close()
+        }
+    }
+
     private class FakeActiveProjectRepository(initial: String?) : ActiveProjectRepository {
         private val state = MutableStateFlow(initial)
 

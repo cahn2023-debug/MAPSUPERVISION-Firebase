@@ -23,6 +23,14 @@ interface ProjectRepository {
         AppResult.Error(UnsupportedOperationException("Local project deletion is not supported"))
     suspend fun acknowledgeRemoteDeletion(projectId: String, deleteLocal: Boolean): AppResult<Unit> =
         AppResult.Error(UnsupportedOperationException("Remote project deletion acknowledgement is not supported"))
+    suspend fun markCloudRetained(projectId: String, requestId: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Cloud retention state is not supported"))
+    suspend fun markCloudDeletionStarted(projectId: String, requestId: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Cloud deletion decision state is not supported"))
+    suspend fun markRestorePending(projectId: String, requestId: String, errorCode: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Project restore state is not supported"))
+    suspend fun markRestoreCompleted(projectId: String, requestId: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Project restore completion is not supported"))
     suspend fun touch(projectId: String): AppResult<Unit>
     suspend fun updateStoragePath(projectId: String, newPath: String): AppResult<Unit>
     suspend fun updateMediaStorage(projectId: String, folderId: String, folderUrl: String): AppResult<Unit> =

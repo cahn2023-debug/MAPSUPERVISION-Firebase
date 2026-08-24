@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert";
 import {
   mergeProjectData,
+  normalizeCloudDecision,
   nextDeletionCheckpoint,
   normalizeDeletionRequestId,
   validateDeletionAuthorization
@@ -59,6 +60,21 @@ test("deletion authorization requires creator/admin, recent auth, identity and i
     authTimeEpochSeconds: 1_000,
     nowEpochSeconds: 1_400
   }), /REAUTH_REQUIRED/);
+
+  assert.doesNotThrow(() => validateDeletionAuthorization({
+    actorUid: "project-admin",
+    isAdmin: false,
+    isProjectAdmin: true,
+    ownerUid: "creator",
+    currentState: "DELETING",
+    requestIdMatches: true,
+    isActiveOnDevice: false,
+    projectName: "Alpha",
+    projectCode: "ALPHA-1",
+    typedIdentity: "Alpha",
+    authTimeEpochSeconds: 1_390,
+    nowEpochSeconds: 1_400
+  }));
 });
 
 test("admin authorization and retry states are accepted, while checkpoint is idempotent", () => {
@@ -101,6 +117,18 @@ test("admin authorization and retry states are accepted, while checkpoint is ide
     authTimeEpochSeconds: 1_390,
     nowEpochSeconds: 1_400
   }));
+  assert.throws(() => validateDeletionAuthorization({
+    actorUid: "super-admin",
+    isAdmin: true,
+    ownerUid: "creator",
+    currentState: "CLOUD_DECISION_PENDING",
+    isActiveOnDevice: false,
+    projectName: "Alpha",
+    projectCode: "ALPHA-1",
+    typedIdentity: "Alpha",
+    authTimeEpochSeconds: 1_390,
+    nowEpochSeconds: 1_400
+  }), /DECISION_REQUIRED/);
 });
 
 test("request IDs are bounded and envelope data is readable", () => {
@@ -111,4 +139,10 @@ test("request IDs are bounded and envelope data is readable", () => {
     projectCode: "A1",
     data: { name: "Alpha", projectCode: "A1" }
   });
+});
+
+test("Cloud decisions accept only RETAIN or DELETE", () => {
+  assert.strictEqual(normalizeCloudDecision("RETAIN"), "RETAIN");
+  assert.strictEqual(normalizeCloudDecision("DELETE"), "DELETE");
+  assert.throws(() => normalizeCloudDecision("ARCHIVE"), /INVALID_CLOUD_DECISION/);
 });
