@@ -194,7 +194,11 @@ service cloud.firestore {
     }
 
     match /accessRequests/{requestId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // A catalog client probes its own request document before creating one.
+      // Missing documents contain no data to expose and must not be denied.
+      allow read: if isAdmin() || (isSignedIn() &&
+        (!exists(/databases/$(database)/documents/accessRequests/$(requestId)) ||
+          resource.data.userId == request.auth.uid));
       allow create: if isSignedIn() && !isAdmin() &&
         validAccessRequestShape(request.resource.data) &&
         requestId == request.resource.data.projectId + "__" + request.resource.data.userId &&
