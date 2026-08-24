@@ -1,7 +1,7 @@
 ---
 id: 20260824-1520-local-first-project-deletion-with-administrator-cloud-decision
 title: Local-first project deletion with administrator Cloud decision
-status: draft
+status: accepted
 supersedes: []
 supersededBy: []
 tags:
@@ -25,16 +25,19 @@ relatedTasks:
   - 930kkg
   - t9fie1
   - avrsg3
-verification: []
-reviewState: ready_for_review
-reviewBlockers: []
-reviewMatches: []
-reviewAllowedResolutions:
-  - accept_new
-  - reject_new
-reviewEvaluatedAt: '2026-08-24T09:53:05.485Z'
+verification:
+  - 'source:specs/2026-08-23/permanent-project-deletion'
+  - 'source:specs/2026-08-23/firebase-project-sync-approval-approved'
+  - 'source:patterns/project-scoped-database'
+  - 'task:@task-vy4got:done'
+  - 'task:@task-iixn7n:done'
+  - 'task:@task-y5uqki:done'
+  - 'task:@task-930kkg:done'
+  - 'task:@task-t9fie1:done'
+  - 'task:@task-avrsg3:done'
+verifiedAt: '2026-08-24T10:08:01.921Z'
 createdAt: '2026-08-24T08:20:40.359Z'
-updatedAt: '2026-08-24T09:53:05.485Z'
+updatedAt: '2026-08-24T10:08:01.921Z'
 ---
 
 ## Context
