@@ -66,9 +66,26 @@ fun calculateAspectCropRect(
 }
 
 object PhotoStampRenderer {
-    const val MINIMAP_MIN_ZOOM = 18
+    const val MINIMAP_MIN_ZOOM = 14
     const val MINIMAP_MAX_ZOOM = 18
     internal const val MINIMAP_TILE_ALPHA = 204
+
+    fun resolveMinimapZoom(
+        latitude: Double,
+        longitude: Double,
+        bearingDeg: Float,
+        mapScene: com.mapsupervision.domain.model.CaptureStampMapScene?
+    ): Int {
+        return resolveMinimapViewport(
+            rect = RectF(0f, 0f, 512f, 512f),
+            latitude = latitude,
+            longitude = longitude,
+            bearingDeg = bearingDeg,
+            borderWidth = 0f,
+            outerDotRadius = 0f,
+            mapScene = mapScene
+        ).zoom
+    }
 
     fun cropBitmapToAspectRatio(bitmap: Bitmap, ratio: CameraAspectRatio): Bitmap {
         val crop = calculateAspectCropRect(bitmap.width, bitmap.height, ratio)
@@ -482,9 +499,7 @@ object PhotoStampRenderer {
         viewport: MinimapViewport?
     ): Bitmap? {
         if (viewport == null) return null
-        if (tileBitmap != null && viewport.zoom == MINIMAP_MAX_ZOOM) {
-            return tileBitmap
-        }
+        if (tileBitmap != null) return tileBitmap
         return fetchOsmTile(viewport.centerLat, viewport.centerLng, zoom = viewport.zoom)
     }
 
@@ -601,7 +616,8 @@ object PhotoStampRenderer {
         val cameraLng = mapScene?.cameraLongitude ?: longitude
         val scopedNodes = mapScene?.nodes.orEmpty()
         val scopedRoutes = mapScene?.routes.orEmpty()
-        val hasScopedMap = scopedNodes.isNotEmpty() || scopedRoutes.isNotEmpty()
+        val movementPath = mapScene?.movementPath.orEmpty()
+        val hasScopedMap = scopedNodes.isNotEmpty() || scopedRoutes.isNotEmpty() || movementPath.isNotEmpty()
         if (!hasScopedMap) {
             return MinimapViewport(
                 centerLat = cameraLat,
@@ -621,6 +637,7 @@ object PhotoStampRenderer {
         mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg + 22.5f, coneMeters)
         scopedNodes.forEach { mapPoints += it.latitude to it.longitude }
         scopedRoutes.forEach { route -> mapPoints += route.points }
+        mapPoints += movementPath
 
         val latitudes = mapPoints.map { it.first }
         val longitudes = mapPoints.map { it.second }
@@ -668,7 +685,9 @@ object PhotoStampRenderer {
         val clipPath = Path().apply {
             addRoundRect(rect, cornerR, cornerR, Path.Direction.CW)
         }
-        val hasScopedMap = !mapScene?.nodes.isNullOrEmpty() || !mapScene?.routes.isNullOrEmpty()
+        val hasScopedMap = !mapScene?.nodes.isNullOrEmpty() ||
+            !mapScene?.routes.isNullOrEmpty() ||
+            !mapScene?.movementPath.isNullOrEmpty()
         canvas.save()
         canvas.clipPath(clipPath)
 
@@ -723,6 +742,31 @@ object PhotoStampRenderer {
                     greenPaint
                 )
             }
+        }
+
+        // Draw the user's movement separately from configured GIS routes.
+        val movementPath = mapScene?.movementPath.orEmpty()
+        if (movementPath.size > 1) {
+            val path = Path()
+            movementPath.forEachIndexed { index, point ->
+                val (pathX, pathY) = getCanvasCoords(
+                    point.first,
+                    point.second,
+                    frame,
+                    rect,
+                    tileBitmap?.width ?: 512,
+                    viewport.zoom
+                )
+                if (index == 0) path.moveTo(pathX, pathY) else path.lineTo(pathX, pathY)
+            }
+            val movementPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(235, 224, 42, 88)
+                style = Paint.Style.STROKE
+                strokeWidth = 5f * scale
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            canvas.drawPath(path, movementPaint)
         }
 
         // Draw GIS routes

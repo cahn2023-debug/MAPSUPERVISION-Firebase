@@ -158,6 +158,36 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `camera movement path keeps valid points and ignores invalid snapshots`() {
+        val path = CameraMovementPath()
+        val first = PhotoLocationSnapshot(
+            latitude = 10.0,
+            longitude = 106.0,
+            accuracyM = 3f,
+            isMock = false,
+            status = PhotoLocationStatus.OK
+        )
+        val second = first.copy(latitude = 10.1, longitude = 106.1)
+
+        assertEquals(listOf(10.0 to 106.0), path.append(first))
+        assertEquals(listOf(10.0 to 106.0), path.append(first.copy(accuracyM = 9f)))
+        assertEquals(listOf(10.0 to 106.0, 10.1 to 106.1), path.append(second))
+        assertEquals(listOf(10.0 to 106.0, 10.1 to 106.1), path.append(PhotoLocationSnapshot()))
+        assertEquals(listOf(10.0 to 106.0, 10.1 to 106.1, 10.2 to 106.2), path.append(second.copy(latitude = 10.2, longitude = 106.2)))
+    }
+
+    @Test
+    fun `camera movement path resets with a new session`() {
+        val firstSession = CameraMovementPath()
+        firstSession.append(PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0))
+
+        val secondSession = CameraMovementPath()
+
+        assertEquals(listOf(10.0 to 106.0), firstSession.snapshot())
+        assertTrue(secondSession.snapshot().isEmpty())
+    }
+
+    @Test
     fun `preview stamp render key stays stable for same input`() {
         val location = PhotoLocationSnapshot(
             latitude = 10.123456,
@@ -241,6 +271,7 @@ class CameraOverlayHelpersTest {
             note = "Video note",
             bearingDeg = 87.6f,
             nodes = listOf(node),
+            movementPath = listOf(10.12345 to 106.98765, 10.12355 to 106.98775),
             tileBitmap = "tile"
         )
 
@@ -253,6 +284,28 @@ class CameraOverlayHelpersTest {
         assertEquals(87.6f, sample.stamp.bearingDeg)
         assertEquals(10.12345, sample.stamp.mapScene!!.cameraLatitude)
         assertEquals(106.98765, sample.stamp.mapScene!!.cameraLongitude)
+        assertEquals(
+            listOf(10.12345 to 106.98765, 10.12355 to 106.98775),
+            sample.stamp.mapScene!!.movementPath
+        )
+    }
+
+    @Test
+    fun `build capture stamp keeps movement path separate from design routes`() {
+        val location = PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0)
+        val movementPath = listOf(10.0 to 106.0, 10.1 to 106.1)
+
+        val stamp = buildCaptureStamp(
+            timestampMs = 1234L,
+            location = location,
+            bearingDeg = 0f,
+            movementPath = movementPath
+        )
+        val mapScene = requireNotNull(stamp.mapScene)
+
+        assertEquals(movementPath, mapScene.movementPath)
+        assertTrue(mapScene.nodes.isEmpty())
+        assertTrue(mapScene.routes.isEmpty())
     }
 
     @Test

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.model.CaptureStamp
+import com.mapsupervision.domain.model.CaptureStampMapScene
 import com.mapsupervision.domain.service.PhotoDailyLogDataResult
 import com.mapsupervision.domain.service.PhotoMaterialDataResult
 import com.mapsupervision.domain.service.PhotoOcrService
@@ -248,15 +249,43 @@ class PhotoPipelineServiceTest {
     fun `selectVideoStampTimelineSample uses nearest earlier sample`() {
         val first = VideoStampTimelineSample(
             elapsedMs = 0L,
-            stamp = CaptureStamp(1000L, 10.0, 106.0, "", "", 0f)
+            stamp = CaptureStamp(
+                1000L,
+                10.0,
+                106.0,
+                "",
+                "",
+                0f,
+                mapScene = CaptureStampMapScene(movementPath = listOf(10.0 to 106.0))
+            )
         )
         val second = VideoStampTimelineSample(
             elapsedMs = 250L,
-            stamp = CaptureStamp(1250L, 10.1, 106.1, "", "", 25f)
+            stamp = CaptureStamp(
+                1250L,
+                10.1,
+                106.1,
+                "",
+                "",
+                25f,
+                mapScene = CaptureStampMapScene(
+                    movementPath = listOf(10.0 to 106.0, 10.1 to 106.1)
+                )
+            )
         )
         val third = VideoStampTimelineSample(
             elapsedMs = 500L,
-            stamp = CaptureStamp(1500L, 10.2, 106.2, "", "", 50f)
+            stamp = CaptureStamp(
+                1500L,
+                10.2,
+                106.2,
+                "",
+                "",
+                50f,
+                mapScene = CaptureStampMapScene(
+                    movementPath = listOf(10.0 to 106.0, 10.1 to 106.1, 10.2 to 106.2)
+                )
+            )
         )
         val samples = listOf(first, second, third)
 
@@ -264,6 +293,10 @@ class PhotoPipelineServiceTest {
         assertEquals(first, selectVideoStampTimelineSample(samples, presentationTimeUs = 125_000L))
         assertEquals(second, selectVideoStampTimelineSample(samples, presentationTimeUs = 375_000L))
         assertEquals(third, selectVideoStampTimelineSample(samples, presentationTimeUs = 999_000L))
+        assertEquals(
+            listOf(10.0 to 106.0, 10.1 to 106.1),
+            requireNotNull(selectVideoStampTimelineSample(samples, presentationTimeUs = 375_000L).stamp.mapScene).movementPath
+        )
     }
 }
 

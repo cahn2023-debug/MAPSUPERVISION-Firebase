@@ -22,5 +22,6 @@ data class CaptureStampMapScene(
     val cameraLongitude: Double? = null,
     val bearingDeg: Float = 0f,
     val nodes: List<CaptureStampMapNode> = emptyList(),
-    val routes: List<CaptureStampMapRoute> = emptyList()
+    val routes: List<CaptureStampMapRoute> = emptyList(),
+    val movementPath: List<Pair<Double, Double>> = emptyList()
 )

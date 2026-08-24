@@ -52,7 +52,7 @@ class PhotoStampRendererTest {
     }
 
     @Test
-    fun `fixed zoom keeps camera centered even with scoped map data`() {
+    fun `adaptive zoom keeps camera centered even with scoped map data`() {
         val rect = RectF(0f, 0f, 270f, 270f)
         val scene = CaptureStampMapScene(
             cameraLatitude = 21.0280,
@@ -92,9 +92,35 @@ class PhotoStampRendererTest {
             viewport.zoom
         )
 
-        assertEquals(PhotoStampRenderer.MINIMAP_MAX_ZOOM, viewport.zoom)
+        assertTrue(viewport.zoom in PhotoStampRenderer.MINIMAP_MIN_ZOOM..PhotoStampRenderer.MINIMAP_MAX_ZOOM)
         assertEquals(rect.centerX(), cameraX, 0.5f)
         assertEquals(rect.centerY(), cameraY, 0.5f)
+    }
+
+    @Test
+    fun `movement path participates in adaptive viewport fitting`() {
+        val rect = RectF(0f, 0f, 270f, 270f)
+        val scene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            movementPath = listOf(
+                21.0280 to 105.8340,
+                21.0500 to 105.8700
+            )
+        )
+
+        val viewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 25f,
+            borderWidth = 6f,
+            outerDotRadius = 20f,
+            mapScene = scene
+        )
+
+        assertTrue(viewport.zoom < PhotoStampRenderer.MINIMAP_MAX_ZOOM)
+        assertTrue(viewport.zoom >= PhotoStampRenderer.MINIMAP_MIN_ZOOM)
     }
 
     @Test
