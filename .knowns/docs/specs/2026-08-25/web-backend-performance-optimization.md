@@ -3,10 +3,10 @@ id: doc-285a8394715267e447de652655327134
 title: Web Backend Performance Optimization
 description: Specification for preserving web features while reducing backend P95 latency across Firestore, Next.js API, Firebase Admin, and Google Drive.
 createdAt: '2026-08-25T06:39:00.909Z'
-updatedAt: '2026-08-25T06:39:00.909Z'
+updatedAt: '2026-08-25T06:51:00.017Z'
 tags:
   - spec
-  - draft
+  - approved
 ---
 
 ## Overview
@@ -131,7 +131,10 @@ Tối ưu backend của web app MapSupervision mà không thay đổi tính năn
 
 ## Task Links
 
-Sẽ được bổ sung sau khi chạy /kn-plan --from @doc/specs/2026-08-25/web-backend-performance-optimization.
+- 6zebli — [web-backend-performance-optimization-01] Establish reproducible performance baseline — todo
+- j15llb — [web-backend-performance-optimization-02] Scope Firestore data loading to active work — todo
+- lrhtrp — [web-backend-performance-optimization-03] Optimize media and protect privileged APIs — todo
+- tvtytn — [web-backend-performance-optimization-04] Prove performance and release compatibility — todo
 
 ## Open Questions
 

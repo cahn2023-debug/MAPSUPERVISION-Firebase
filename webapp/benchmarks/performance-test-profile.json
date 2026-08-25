@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "profileId": "web-backend-performance-v2",
+  "frozenAt": "2026-08-25T08:00:00.000Z",
+  "appVersion": "0.1.0",
+  "host": {
+    "operatingSystem": "win32",
+    "architecture": "x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i9-11950H @ 2.60GHz",
+    "nodeVersion": "24"
+  },
+  "network": {
+    "probeTarget": "firestore-api",
+    "sampleCount": 10,
+    "maximumFailureRate": 0.1,
+    "latencyEnvelopeMs": {
+      "p50Min": 20,
+      "p50Max": 100,
+      "p95Min": 20,
+      "p95Max": 200
+    }
+  },
+  "build": {
+    "revisionMethod": "git-head-plus-files-sha256",
+    "requiredFiles": [
+      "webapp/lib/performance-benchmark.ts",
+      "webapp/scripts/benchmark-web-backend.ts",
+      "webapp/benchmarks/performance-test-profile.json",
+      "webapp/app/api/projects/[projectId]/media/route.ts",
+      "webapp/lib/google-drive-media.ts",
+      "webapp/lib/firebase-admin.ts",
+      "webapp/package.json",
+      "webapp/tsconfig.json",
+      "firebase.json"
+    ]
+  },
+  "emulator": {
+    "projectId": "mapsupervision-benchmark",
+    "firestoreHost": "127.0.0.1:8080",
+    "authHost": "127.0.0.1:9099"
+  },
+  "runPolicy": {
+    "warmupRuns": 1,
+    "measuredRuns": 20,
+    "minimumSuccessfulRuns": 20,
+    "maximumEnvironmentErrorRate": 0,
+    "concurrency": 1
+  },
+  "datasets": {
+    "largeSynthetic": {
+      "reference": "large-synthetic-v2",
+      "fixtureVersion": 1,
+      "seed": 20260825,
+      "cardinality": {
+        "projects": 20,
+        "mapNodes": 3000,
+        "mapRoutes": 1000,
+        "tasks": 5000,
+        "diaries": 2000,
+        "mediaItems": 3000,
+        "adminRows": 500
+      }
+    },
+    "anonymizedReal": {
+      "reference": "anonymized-real-v2",
+      "sourceAlias": "selected-active-largest-v1",
+      "expectedDocumentCount": 616,
+      "persistedInRepository": false
+    }
+  },
+  "journeys": ["open-or-switch-project", "business-operation", "media-upload-preview"],
+  "validityRules": [
+    "Read source data with a named production Admin app before enabling Emulator hosts.",
+    "Replace document IDs and all scalar payload values in memory before seeding Emulator documents.",
+    "Measure every stage around the awaited backend operation with a monotonic wall clock.",
+    "Capture network probe latency and failure rate during every baseline run.",
+    "Require all measured runs to succeed and keep environment failures separate.",
+    "Create a dedicated Drive folder under the configured root and delete it in finally.",
+    "Never persist source identifiers, payloads, credentials, media URLs, or Drive identifiers."
+  ]
+}
