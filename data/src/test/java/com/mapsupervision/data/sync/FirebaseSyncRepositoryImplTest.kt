@@ -467,6 +467,135 @@ class FirebaseSyncRepositoryImplTest {
         assertTrue(shouldApplyRemoteRow(localUpdatedAtEpochMs = null, remoteUpdatedAtEpochMs = 1L))
     }
 
+    @Test
+    fun applyRemoteRows_withExistingProjectAndChildRows_doesNotViolateForeignKeyConstraint() = runBlocking {
+        val projectId = "proj-1"
+        sharedDatabase.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+        insertProject(projectId)
+
+        // Insert a child node and a child photo and a photo tag referencing them
+        val node = com.mapsupervision.data.db.entity.GisNodeEntity(
+            id = "node-1",
+            projectId = projectId,
+            code = "N-1",
+            contractor = "Contractor 1",
+            latitude = 21.0,
+            longitude = 105.0,
+            mapNumberLabel = "",
+            workVolumeSummary = "",
+            updatedAtEpochMs = 1000L
+        )
+        sharedDatabase.gisNodeDao().upsert(node)
+
+        val photo = SitePhotoEntity(
+            id = "photo-1",
+            projectId = projectId,
+            objectCode = "N-1",
+            tagCodesCsv = "",
+            filePath = "photo.jpg",
+            thumbnailPath = "",
+            latitude = null,
+            longitude = null,
+            locationAccuracyM = null,
+            isGpsMocked = false,
+            locationStatus = com.mapsupervision.domain.model.PhotoLocationStatus.MISSING,
+            engineer = "Engineer 1",
+            capturedAtEpochMs = 1000L,
+            matchedAtEpochMs = 0L,
+            matchingTimeOffsetMs = 0L,
+            mediaType = MediaType.IMAGE,
+            mimeType = "image/jpeg",
+            durationMs = 0,
+            address = null,
+            captureNote = null,
+            matchedNodeId = "node-1",
+            matchedRouteId = null,
+            updatedAtEpochMs = 1000L,
+            syncStatus = SitePhotoSyncStatus.DONE,
+            remoteUrl = "https://photo.url",
+            lastSyncAttemptEpochMs = null,
+            isDeleted = false,
+            deletedAtEpochMs = null
+        )
+        sharedDatabase.sitePhotoDao().upsert(photo)
+
+        val photoTag = com.mapsupervision.data.db.entity.PhotoTagEntity(
+            id = "tag-1",
+            projectId = projectId,
+            photoId = "photo-1",
+            tagCode = "TAG_OK",
+            createdAtEpochMs = 1000L
+        )
+        sharedDatabase.photoTagDao().upsertAll(listOf(photoTag))
+
+        // Remote project update envelope
+        val projectEnvelope: com.mapsupervision.domain.repository.SyncEnvelope<Map<String, Any?>> = com.mapsupervision.domain.repository.SyncEnvelope(
+            id = projectId,
+            projectId = projectId,
+            tableName = "projects",
+            data = mapOf<String, Any?>(
+                "name" to "Updated Project Name",
+                "slug" to "test-project",
+                "isArchived" to false,
+                "createdAtEpochMs" to 1000L,
+                "updatedAtEpochMs" to 5000L,
+                "storageMode" to "LEGACY_SHARED",
+                "projectDbPath" to ""
+            ),
+            updatedAtEpochMs = 5000L,
+            isDeleted = false,
+            sourceDeviceId = "remote-device",
+            lastSyncedAtEpochMs = 5000L
+        )
+
+        val projectTable = FirebaseSyncTableCatalog.byTableName("projects")
+        val appliedProjects = repository.applyRemoteRowsForTest(projectId, projectTable, listOf(projectEnvelope))
+        assertEquals(1, appliedProjects)
+
+        val updatedProject = sharedDatabase.projectDao().get(projectId)
+        assertNotNull(updatedProject)
+        assertEquals("Updated Project Name", updatedProject!!.name)
+
+        // Remote site_photo update envelope (parent of photoTag with NO_ACTION onDelete)
+        val photoEnvelope: com.mapsupervision.domain.repository.SyncEnvelope<Map<String, Any?>> = com.mapsupervision.domain.repository.SyncEnvelope(
+            id = "photo-1",
+            projectId = projectId,
+            tableName = "site_photos",
+            data = mapOf<String, Any?>(
+                "objectCode" to "N-1",
+                "tagCodesCsv" to "TAG_OK",
+                "filePath" to "photo.jpg",
+                "thumbnailPath" to "",
+                "isGpsMocked" to false,
+                "locationStatus" to "MISSING",
+                "engineer" to "Engineer 1",
+                "capturedAtEpochMs" to 1000L,
+                "matchedAtEpochMs" to 0L,
+                "matchingTimeOffsetMs" to 0L,
+                "mediaType" to "IMAGE",
+                "mimeType" to "image/jpeg",
+                "durationMs" to 0L,
+                "matchedNodeId" to "node-1",
+                "updatedAtEpochMs" to 6000L,
+                "syncStatus" to "DONE",
+                "remoteUrl" to "https://photo-updated.url",
+                "isDeleted" to false
+            ),
+            updatedAtEpochMs = 6000L,
+            isDeleted = false,
+            sourceDeviceId = "remote-device",
+            lastSyncedAtEpochMs = 6000L
+        )
+
+        val photoTable = FirebaseSyncTableCatalog.byTableName("site_photos")
+        val appliedPhotos = repository.applyRemoteRowsForTest(projectId, photoTable, listOf(photoEnvelope))
+        assertEquals(1, appliedPhotos)
+
+        val updatedPhoto = sharedDatabase.sitePhotoDao().byProjectIncludingDeleted(projectId).find { it.id == "photo-1" }
+        assertNotNull(updatedPhoto)
+        assertEquals("https://photo-updated.url", updatedPhoto!!.remoteUrl)
+    }
+
     private class TestFirebaseRuntime(context: Context) : FirebaseRuntime(context) {
         override fun authConfigured(): Boolean = true
         override suspend fun getFirebaseToken(): String = "test-token"

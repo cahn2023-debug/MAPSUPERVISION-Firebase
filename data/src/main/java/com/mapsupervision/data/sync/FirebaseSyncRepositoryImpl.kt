@@ -433,14 +433,21 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                         if (cursor.moveToFirst()) cursor.getLong(0) else null
                     }
                 if (shouldApplyRemoteRow(localUpdatedAt, envelope.updatedAtEpochMs)) {
-                    upsertRow(database.openHelper.writableDatabase, table.tableName, row)
+                    upsertRow(database.openHelper.writableDatabase, table, row)
                 }
             }
         }
         return rowsToApply.size
     }
 
-    private fun upsertRow(database: SupportSQLiteDatabase, tableName: String, row: Map<String, Any?>) {
+    internal suspend fun applyRemoteRowsForTest(
+        projectId: String,
+        table: FirebaseSyncTable,
+        envelopes: List<SyncEnvelope<Map<String, Any?>>>,
+        allowRestore: Boolean = true
+    ): Int = applyRemoteRows(projectId, table, envelopes, allowRestore)
+
+    private fun upsertRow(database: SupportSQLiteDatabase, table: FirebaseSyncTable, row: Map<String, Any?>) {
         val values = ContentValues()
         row.forEach { (key, value) ->
             when (value) {
@@ -456,7 +463,18 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                 else -> values.put(key, value.toString())
             }
         }
-        database.insert(tableName, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE, values)
+        val id = row[table.idColumn]
+        if (id != null) {
+            val updated = database.update(
+                table.tableName,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_NONE,
+                values,
+                "${table.idColumn} = ?",
+                arrayOf(id.toString())
+            )
+            if (updated > 0) return
+        }
+        database.insert(table.tableName, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE, values)
     }
 
     private suspend fun upsertSitePhoto(projectId: String, photo: SitePhotoEntity) {
