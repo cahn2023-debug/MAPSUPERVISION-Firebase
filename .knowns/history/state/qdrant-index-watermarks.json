@@ -10,6 +10,17 @@
     "indexedPath": "docs/learnings/monotonic-session-viewport-zoom-for-temporal-map-overlays.md",
     "indexedAt": "2026-08-24T08:30:40.1126018Z"
   },
+  "doc:doc-285a8394715267e447de652655327134": {
+    "entityType": "doc",
+    "entityId": "doc-285a8394715267e447de652655327134",
+    "canonicalHash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882",
+    "indexedHash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882",
+    "revision": 1,
+    "path": "docs/specs/2026-08-25/web-backend-performance-optimization.md",
+    "indexedRevision": 1,
+    "indexedPath": "docs/specs/2026-08-25/web-backend-performance-optimization.md",
+    "indexedAt": "2026-08-25T06:39:22.2659683Z"
+  },
   "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
     "entityType": "doc",
     "entityId": "doc-5552a2952ff80ae71093bbd4647e5d1f",
