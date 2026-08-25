@@ -486,15 +486,15 @@ private class FakePhotoLocationProvider : IPhotoLocationProvider {
 private class FakePhotoPipelineService(
     private val root: File
 ) : IPhotoPipelineService {
-    override fun createCaptureOutputFile(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String): File {
+    override fun createCaptureOutputFile(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String, statusTag: String?): File {
         return File(root, "capture.jpg")
     }
 
-    override fun createCaptureVideoOutputFile(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String): File {
+    override fun createCaptureVideoOutputFile(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String, statusTag: String?): File {
         return File(root, "capture.mp4")
     }
 
-    override fun importFromGallery(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String, sourceUri: String): File {
+    override fun importFromGallery(storageRef: ProjectStorageRef, capturedAt: Long, locationLabel: String?, note: String?, folderType: CaptureFolderType, objectCode: String, sourceUri: String, statusTag: String?): File {
         return File(root, "gallery.jpg")
     }
 

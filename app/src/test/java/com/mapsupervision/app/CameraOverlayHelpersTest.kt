@@ -38,11 +38,41 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
-    fun `minimap zoom starts close and only moves outward`() {
+    fun `minimap zoom stays within bounds`() {
         assertEquals(19, resolveLatchedMinimapZoom(19, 19))
         assertEquals(17, resolveLatchedMinimapZoom(17, 19))
-        assertEquals(17, resolveLatchedMinimapZoom(18, 17))
+        assertEquals(18, resolveLatchedMinimapZoom(18, 17))
         assertEquals(15, resolveLatchedMinimapZoom(15, 17))
+        assertEquals(14, resolveLatchedMinimapZoom(14, 17))
+        assertEquals(14, resolveLatchedMinimapZoom(13, 17))
+        assertEquals(19, resolveLatchedMinimapZoom(20, 17))
+    }
+
+    @Test
+    fun `build capture stamp carries statusTag into stamp`() {
+        val location = PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0)
+        val stamp = buildCaptureStamp(
+            timestampMs = 1234L,
+            location = location,
+            bearingDeg = 0f,
+            statusTag = "Thi công"
+        )
+        assertEquals("Thi công", stamp.statusTag)
+    }
+
+    @Test
+    fun `build video stamp timeline sample carries statusTag`() {
+        val location = PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0)
+        val sample = buildVideoStampTimelineSample(
+            recordingStartElapsedMs = 100L,
+            nowElapsedMs = 350L,
+            location = location,
+            address = "",
+            note = "",
+            bearingDeg = 0f,
+            statusTag = "Hoàn trả"
+        )
+        assertEquals("Hoàn trả", sample.stamp.statusTag)
     }
 
     @Test
@@ -362,7 +392,8 @@ class CameraOverlayHelpersTest {
                 locationLabel: String?,
                 note: String?,
                 folderType: CaptureFolderType,
-                objectCode: String
+                objectCode: String,
+                statusTag: String?
             ) = error("unused")
 
             override fun createCaptureVideoOutputFile(
@@ -371,7 +402,8 @@ class CameraOverlayHelpersTest {
                 locationLabel: String?,
                 note: String?,
                 folderType: CaptureFolderType,
-                objectCode: String
+                objectCode: String,
+                statusTag: String?
             ) = error("unused")
 
             override fun importFromGallery(
@@ -381,7 +413,8 @@ class CameraOverlayHelpersTest {
                 note: String?,
                 folderType: CaptureFolderType,
                 objectCode: String,
-                sourceUri: String
+                sourceUri: String,
+                statusTag: String?
             ) = error("unused")
             override fun createThumbnail(storageRef: com.mapsupervision.domain.model.ProjectStorageRef, sourceFile: File) = error("unused")
             override fun applyStamp(file: File, stamp: com.mapsupervision.domain.model.CaptureStamp, ratio: com.mapsupervision.domain.model.CameraAspectRatio, tileBitmap: Any?) = error("unused")
@@ -427,7 +460,8 @@ class CameraOverlayHelpersTest {
                 locationLabel: String?,
                 note: String?,
                 folderType: CaptureFolderType,
-                objectCode: String
+                objectCode: String,
+                statusTag: String?
             ) = error("unused")
 
             override fun createCaptureVideoOutputFile(
@@ -436,7 +470,8 @@ class CameraOverlayHelpersTest {
                 locationLabel: String?,
                 note: String?,
                 folderType: CaptureFolderType,
-                objectCode: String
+                objectCode: String,
+                statusTag: String?
             ) = error("unused")
 
             override fun importFromGallery(
@@ -446,7 +481,8 @@ class CameraOverlayHelpersTest {
                 note: String?,
                 folderType: CaptureFolderType,
                 objectCode: String,
-                sourceUri: String
+                sourceUri: String,
+                statusTag: String?
             ) = error("unused")
             override fun createThumbnail(storageRef: com.mapsupervision.domain.model.ProjectStorageRef, sourceFile: File) = error("unused")
             override fun applyStamp(file: File, stamp: com.mapsupervision.domain.model.CaptureStamp, ratio: com.mapsupervision.domain.model.CameraAspectRatio, tileBitmap: Any?) = error("unused")

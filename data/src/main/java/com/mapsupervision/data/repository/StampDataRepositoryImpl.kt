@@ -188,6 +188,6 @@ class StampDataRepositoryImpl @Inject constructor(
     }
 
     companion object {
-        private const val MINIMAP_TILE_ZOOM = 18
+        private const val MINIMAP_TILE_ZOOM = 19
     }
 }

@@ -53,6 +53,7 @@ internal data class PhotoStampLayout(
 internal object PhotoStampLayoutCalculator {
     const val timeIcon = "\u23F1"
     const val locationIcon = "\uD83D\uDCCD"
+    const val tagIcon = "\uD83C\uDFF7\uFE0F"
     const val noteIcon = "\uD83D\uDCDD"
 
     private const val addressMaxChars = 42
@@ -67,7 +68,7 @@ internal object PhotoStampLayoutCalculator {
         longitude: Double?,
         missingLocationText: String
     ): PhotoStampContent {
-        return buildContent(timestampMs, latitude, longitude, missingLocationText, null, null)
+        return buildContent(timestampMs, latitude, longitude, missingLocationText, null, null, null)
     }
 
     fun buildContent(
@@ -76,7 +77,8 @@ internal object PhotoStampLayoutCalculator {
         longitude: Double?,
         missingLocationText: String,
         address: String?,
-        note: String? = null
+        note: String? = null,
+        statusTag: String? = null
     ): PhotoStampContent {
         val resolvedLocationText = if (!address.isNullOrBlank()) address else {
             coordinateText(latitude, longitude) ?: missingLocationText
@@ -84,6 +86,9 @@ internal object PhotoStampLayoutCalculator {
         val rows = buildList {
             add(PhotoStampRow(timeIcon, listOf(formatTime(timestampMs))))
             add(PhotoStampRow(locationIcon, wrapText(resolvedLocationText, addressMaxChars)))
+            if (!statusTag.isNullOrBlank()) {
+                add(PhotoStampRow(tagIcon, listOf(statusTag.trim())))
+            }
             if (!note.isNullOrBlank()) {
                 add(PhotoStampRow(noteIcon, wrapText(note, addressMaxChars)))
             }
@@ -105,6 +110,10 @@ internal object PhotoStampLayoutCalculator {
         val rows = buildList {
             add(PhotoStampRow(timeIcon, listOf(stamp.formattedTime())))
             add(PhotoStampRow(locationIcon, wrapText(stamp.resolvedLocationText(missingLocationText = missingLocationText), addressMaxChars)))
+            val tag = stamp.statusTag
+            if (!tag.isNullOrBlank()) {
+                add(PhotoStampRow(tagIcon, listOf(tag.trim())))
+            }
             if (stamp.note.isNotBlank()) {
                 add(PhotoStampRow(noteIcon, wrapText(stamp.note, addressMaxChars)))
             }

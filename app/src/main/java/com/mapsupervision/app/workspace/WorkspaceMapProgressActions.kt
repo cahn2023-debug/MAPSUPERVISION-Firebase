@@ -1264,11 +1264,17 @@ fun WorkspaceViewModel.clearCaptureRequest() {
     _state.value = _state.value.copy(pendingCaptureNodeCode = null)
 }
 
-suspend fun WorkspaceViewModel.savePhoto(file: java.io.File, nodeCode: String): Boolean {
+suspend fun WorkspaceViewModel.savePhoto(
+    file: java.io.File,
+    nodeCode: String,
+    statusTag: String? = null,
+    note: String? = null,
+    address: String? = null
+): Boolean {
     val projectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return false
     val targetCode = nodeCode.trim()
     AppLogger.d(
-        "capture.save.start projectId=$projectId nodeCode=$targetCode file=${file.absolutePath}"
+        "capture.save.start projectId=$projectId nodeCode=$targetCode statusTag=$statusTag file=${file.absolutePath}"
     )
     if (targetCode.isBlank()) {
         AppLogger.d("capture.save.blocked reason=blank_node_code file=${file.absolutePath}")
@@ -1313,7 +1319,10 @@ suspend fun WorkspaceViewModel.savePhoto(file: java.io.File, nodeCode: String): 
                 matchedRouteCode = matchedRoute,
                 mediaType = if (isVideo) com.mapsupervision.domain.model.MediaType.VIDEO else com.mapsupervision.domain.model.MediaType.IMAGE,
                 mimeType = if (isVideo) "video/mp4" else "image/jpeg",
-                durationMs = durationMs
+                durationMs = durationMs,
+                statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() },
+                captureNote = note?.trim()?.takeIf { it.isNotEmpty() },
+                address = address?.trim()?.takeIf { it.isNotEmpty() }
             )
             val result = photoRepository.add(photo)
             if (result is AppResult.Error) {

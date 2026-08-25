@@ -843,7 +843,7 @@ object PhotoStampRenderer {
             }
         }
 
-        val cameraLat = mapScene?.cameraLatitude ?: lat
+            val cameraLat = mapScene?.cameraLatitude ?: lat
         val cameraLng = mapScene?.cameraLongitude ?: lng
         val (cx, cy) = getCanvasCoords(cameraLat, cameraLng, frame, rect, tileBitmap?.width ?: 512, viewport.zoom)
         val bearingRad = Math.toRadians(bearingDeg.toDouble()).toFloat()
@@ -889,10 +889,10 @@ object PhotoStampRenderer {
 
         if (coordinateText != null) {
             val coordinateTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(210, 25, 110, 190)
+                color = Color.WHITE
                 textSize = coordinateTextSize
                 typeface = Typeface.DEFAULT_BOLD
-                setShadowLayer(6f * scale, 0f, 3f * scale, Color.WHITE)
+                setShadowLayer(6f * scale, 0f, 2f * scale, Color.argb(220, 0, 0, 0))
             }
             val lines = coordinateText.split("\n")
             lines.forEachIndexed { idx, line ->

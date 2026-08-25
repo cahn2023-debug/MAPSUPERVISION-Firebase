@@ -20,12 +20,16 @@ fun createStoredSitePhoto(
     matchingTimeOffsetMs: Long = 0L,
     mediaType: MediaType = MediaType.IMAGE,
     mimeType: String = "image/jpeg",
-    durationMs: Long = 0L
+    durationMs: Long = 0L,
+    statusTag: String? = null,
+    captureNote: String? = null,
+    address: String? = null
 ): SitePhoto = SitePhoto(
     id = UUID.randomUUID().toString(),
     projectId = projectId,
     objectCode = objectCode,
     tagCodesCsv = tagCodesCsv,
+    statusTag = statusTag,
     matchedNodeCode = matchedNodeCode,
     matchedRouteCode = matchedRouteCode,
     matchedNodeId = matchedNodeId,
@@ -43,5 +47,7 @@ fun createStoredSitePhoto(
     matchingTimeOffsetMs = matchingTimeOffsetMs,
     mediaType = mediaType,
     mimeType = mimeType,
-    durationMs = durationMs
+    durationMs = durationMs,
+    address = address,
+    captureNote = captureNote
 )

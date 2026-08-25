@@ -575,6 +575,13 @@ fun WorkspaceAppShell(
         val activeId = workspaceState.activeProjectId ?: ""
         val activeProject = projectState.projects.firstOrNull { it.id == activeId }
         val activeSlug = activeProject?.slug ?: activeId
+        val minimapScope = remember(pendingCapture, workspaceState.designNodes, workspaceState.designRoutes) {
+            com.mapsupervision.app.workspace.buildCaptureMinimapScope(
+                targetCode = pendingCapture,
+                nodes = workspaceState.designNodes,
+                routes = workspaceState.designRoutes
+            )
+        }
         CameraOverlay(
             nodeCode = pendingCapture,
             projectId = activeId,
@@ -582,10 +589,12 @@ fun WorkspaceAppShell(
             photoPipelineService = photoPipelineService,
             locationProvider = locationProvider,
             onPhotoCaptured = workspaceViewModel::refresh,
-            onSavePhoto = { file -> workspaceViewModel.savePhoto(file, pendingCapture) },
+            onSavePhoto = { file, statusTag, note, address ->
+                workspaceViewModel.savePhoto(file, pendingCapture, statusTag, note, address)
+            },
             onDismiss = workspaceViewModel::clearCaptureRequest,
-            nodes = workspaceState.designNodes,
-            routes = workspaceState.designRoutes
+            nodes = minimapScope.nodes,
+            routes = minimapScope.routes
         )
     }
 

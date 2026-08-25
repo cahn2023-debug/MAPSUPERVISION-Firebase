@@ -3,6 +3,7 @@ package com.mapsupervision.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -10,6 +11,7 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import android.view.OrientationEventListener
 import android.view.Surface
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,16 +21,6 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
-import com.mapsupervision.photo.worker.PhotoStampRenderer
-import com.mapsupervision.photo.worker.calculateAspectCropRect
-import com.mapsupervision.domain.model.CameraAspectRatio
-import com.mapsupervision.domain.model.GisNode
-import com.mapsupervision.domain.model.GisRoute
-import com.mapsupervision.domain.model.ProjectStorageRef
-
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import android.graphics.Bitmap
 import androidx.camera.extensions.ExtensionMode
 import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -41,51 +33,61 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cached
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.Photo
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.FlashOn
-import androidx.compose.material.icons.outlined.FlashOff
 import androidx.compose.material.icons.outlined.FlashAuto
-import androidx.compose.material3.SliderDefaults
+import androidx.compose.material.icons.outlined.FlashOff
+import androidx.compose.material.icons.outlined.FlashOn
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -93,8 +95,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -108,47 +109,50 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapsupervision.core.logging.AppLogger
+import com.mapsupervision.domain.model.CameraAspectRatio
 import com.mapsupervision.domain.model.CaptureStamp
+import com.mapsupervision.domain.model.CaptureStampMapNode
+import com.mapsupervision.domain.model.CaptureStampMapRoute
+import com.mapsupervision.domain.model.CaptureStampMapScene
+import com.mapsupervision.domain.model.GisNode
+import com.mapsupervision.domain.model.GisRoute
+import com.mapsupervision.domain.model.MediaStatusTags
 import com.mapsupervision.domain.model.PhotoLocationSnapshot
+import com.mapsupervision.domain.model.ProjectStorageRef
 import com.mapsupervision.domain.model.RoundedLocationKey
 import com.mapsupervision.domain.model.VideoStampTimelineSample
-import com.mapsupervision.domain.service.IPhotoLocationProvider
 import com.mapsupervision.domain.service.CaptureFolderType
+import com.mapsupervision.domain.service.IPhotoLocationProvider
 import com.mapsupervision.domain.service.IPhotoPipelineService
+import com.mapsupervision.photo.worker.AspectCropRect
+import com.mapsupervision.photo.worker.PhotoStampRenderer
+import com.mapsupervision.photo.worker.calculateAspectCropRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 internal enum class CaptureLensFacing { BACK, FRONT }
 
@@ -171,10 +175,7 @@ internal fun clampZoomRatio(requestedZoomRatio: Float, minZoomRatio: Float, maxZ
 internal fun resolveLatchedMinimapZoom(candidateZoom: Int, currentZoom: Int): Int {
     val minZoom = PhotoStampRenderer.MINIMAP_MIN_ZOOM
     val maxZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
-    return minOf(
-        candidateZoom.coerceIn(minZoom, maxZoom),
-        currentZoom.coerceIn(minZoom, maxZoom)
-    )
+    return candidateZoom.coerceIn(minZoom, maxZoom)
 }
 
 internal fun buildCaptureStamp(
@@ -186,17 +187,18 @@ internal fun buildCaptureStamp(
     nodes: List<GisNode> = emptyList(),
     routes: List<GisRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
-    minimapZoom: Int? = null
+    minimapZoom: Int? = null,
+    statusTag: String? = null
 ): CaptureStamp {
     val mapScene = if (nodes.isNotEmpty() || routes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null) {
-        com.mapsupervision.domain.model.CaptureStampMapScene(
+        CaptureStampMapScene(
             centerLatitude = location?.latitude,
             centerLongitude = location?.longitude,
             cameraLatitude = location?.latitude,
             cameraLongitude = location?.longitude,
             bearingDeg = bearingDeg,
             nodes = nodes.map {
-                com.mapsupervision.domain.model.CaptureStampMapNode(
+                CaptureStampMapNode(
                     code = it.code,
                     latitude = it.latitude,
                     longitude = it.longitude,
@@ -205,7 +207,7 @@ internal fun buildCaptureStamp(
                 )
             },
             routes = routes.map {
-                com.mapsupervision.domain.model.CaptureStampMapRoute(
+                CaptureStampMapRoute(
                     code = it.code,
                     points = it.points,
                     highlighted = false
@@ -223,7 +225,8 @@ internal fun buildCaptureStamp(
         address = address.trim(),
         note = note.trim(),
         bearingDeg = bearingDeg,
-        mapScene = mapScene
+        mapScene = mapScene,
+        statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }
     )
 }
 
@@ -290,22 +293,25 @@ internal suspend fun postProcessRecordedVideo(
     }
 }
 
+internal fun snapshotBitmap(bitmap: Bitmap?): Bitmap? = bitmap?.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, true)
+
 internal fun buildPreviewStampOverlayBitmap(
     frameWidthPx: Int,
     frameHeightPx: Int,
     stamp: CaptureStamp,
+    aspectRatio: CameraAspectRatio = CameraAspectRatio.RATIO_FULL,
     tileBitmap: Bitmap?
 ): Bitmap {
-    return PhotoStampRenderer.createStampOverlayBitmap(
-        frameWidthPx = frameWidthPx,
-        frameHeightPx = frameHeightPx,
+    val bitmap = Bitmap.createBitmap(frameWidthPx, frameHeightPx, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    PhotoStampRenderer.drawStamp(
+        canvas = canvas,
+        frameWidth = frameWidthPx.toFloat(),
+        frameHeight = frameHeightPx.toFloat(),
         stamp = stamp,
         tileBitmap = tileBitmap
     )
-}
-
-internal fun snapshotBitmap(bitmap: Bitmap?): Bitmap? {
-    return bitmap?.copy(Bitmap.Config.ARGB_8888, false)
+    return bitmap
 }
 
 internal data class PreviewStampRenderKey(
@@ -318,7 +324,8 @@ internal data class PreviewStampRenderKey(
     val address: String,
     val note: String,
     val tileKey: RoundedLocationKey?,
-    val bearing: Float
+    val bearing: Float,
+    val statusTag: String? = null
 )
 
 private const val LOCATION_POLL_INTERVAL_MS = 8_000L
@@ -349,12 +356,13 @@ internal fun buildPreviewStampRenderKey(
     stampEnabled: Boolean,
     isVideoMode: Boolean,
     aspectRatio: CameraAspectRatio,
-    viewport: com.mapsupervision.photo.worker.AspectCropRect?,
+    viewport: AspectCropRect?,
     location: PhotoLocationSnapshot?,
     address: String = "",
     note: String = "",
     tileKey: RoundedLocationKey?,
-    bearing: Float
+    bearing: Float,
+    statusTag: String? = null
 ): PreviewStampRenderKey {
     return PreviewStampRenderKey(
         stampEnabled = stampEnabled,
@@ -366,7 +374,8 @@ internal fun buildPreviewStampRenderKey(
         address = address.trim(),
         note = note.trim(),
         tileKey = tileKey,
-        bearing = bearing
+        bearing = bearing,
+        statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }
     )
 }
 
@@ -381,7 +390,8 @@ internal fun buildVideoStampTimelineSample(
     routes: List<GisRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
-    tileBitmap: Any? = null
+    tileBitmap: Any? = null,
+    statusTag: String? = null
 ): VideoStampTimelineSample {
     return VideoStampTimelineSample(
         elapsedMs = (nowElapsedMs - recordingStartElapsedMs).coerceAtLeast(0L),
@@ -394,7 +404,8 @@ internal fun buildVideoStampTimelineSample(
             nodes = nodes,
             routes = routes,
             movementPath = movementPath,
-            minimapZoom = minimapZoom
+            minimapZoom = minimapZoom,
+            statusTag = statusTag
         ),
         tileBitmap = tileBitmap
     )
@@ -422,8 +433,6 @@ private fun remapBearingForTargetRotation(
     return ((adjustedBearing % 360f) + 360f) % 360f
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Suppress("DEPRECATION")
 @Composable
 fun CameraOverlay(
     nodeCode: String,
@@ -436,6 +445,36 @@ fun CameraOverlay(
     onDismiss: () -> Unit,
     nodes: List<GisNode> = emptyList(),
     routes: List<GisRoute> = emptyList()
+) {
+    CameraOverlay(
+        nodeCode = nodeCode,
+        projectId = projectId,
+        projectSlug = projectSlug,
+        photoPipelineService = photoPipelineService,
+        locationProvider = locationProvider,
+        onPhotoCaptured = onPhotoCaptured,
+        onSavePhoto = { file, _, _, _ -> onSavePhoto(file) },
+        onDismiss = onDismiss,
+        nodes = nodes,
+        routes = routes
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Suppress("DEPRECATION")
+@Composable
+fun CameraOverlay(
+    nodeCode: String,
+    projectId: String,
+    projectSlug: String,
+    photoPipelineService: IPhotoPipelineService,
+    locationProvider: IPhotoLocationProvider,
+    onPhotoCaptured: () -> Unit,
+    onSavePhoto: suspend (file: java.io.File, statusTag: String?, note: String?, address: String?) -> Boolean,
+    onDismiss: () -> Unit,
+    nodes: List<GisNode> = emptyList(),
+    routes: List<GisRoute> = emptyList(),
+    statusTags: List<String> = MediaStatusTags.systemNames
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -460,6 +499,16 @@ fun CameraOverlay(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasAudioPermission = granted }
 
+    var selectedStatusTag by remember { mutableStateOf<String?>("Hiện trạng") }
+    var noteText by remember { mutableStateOf("") }
+    var bearing by remember { mutableStateOf(0f) }
+    var liveLocation by remember { mutableStateOf<PhotoLocationSnapshot?>(null) }
+    var liveAddress by remember { mutableStateOf("") }
+    val cameraMovementPath = remember { CameraMovementPath() }
+    var liveMovementPath by remember { mutableStateOf(emptyList<Pair<Double, Double>>()) }
+    var liveMinimapZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
+    val photoCaptureSession = remember { PhotoCaptureSession() }
+
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia()
     ) { uris ->
@@ -477,10 +526,11 @@ fun CameraOverlay(
                             note = "Imported",
                             folderType = resolveCaptureFolderType(nodeCode, routes),
                             objectCode = nodeCode,
-                            sourceUri = uri.toString()
+                            sourceUri = uri.toString(),
+                            statusTag = selectedStatusTag
                         )
                     }
-                    if (onSavePhoto(file)) {
+                    if (onSavePhoto(file, selectedStatusTag, "Imported", liveAddress)) {
                         savedAny = true
                     }
                 }.onFailure {
@@ -536,14 +586,6 @@ fun CameraOverlay(
     var maxZoomRatio by remember { mutableStateOf(1f) }
 
     var stampEnabled by remember { mutableStateOf(true) }
-    var noteText by remember { mutableStateOf("") }
-    var bearing by remember { mutableStateOf(0f) }
-    var liveLocation by remember { mutableStateOf<PhotoLocationSnapshot?>(null) }
-    var liveAddress by remember { mutableStateOf("") }
-    val cameraMovementPath = remember { CameraMovementPath() }
-    var liveMovementPath by remember { mutableStateOf(emptyList<Pair<Double, Double>>()) }
-    var liveMinimapZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
-    val photoCaptureSession = remember { PhotoCaptureSession() }
 
     var selectedAspectRatio by remember { mutableStateOf(CameraAspectRatio.RATIO_4_3) }
     val isKeyboardVisible = WindowInsets.isImeVisible
@@ -614,6 +656,7 @@ fun CameraOverlay(
         liveMinimapZoom,
         liveAddress,
         noteText,
+        selectedStatusTag,
         bearing,
         nodes,
         routes,
@@ -637,7 +680,8 @@ fun CameraOverlay(
                     routes = routes,
                     movementPath = liveMovementPath,
                     minimapZoom = liveMinimapZoom,
-                    tileBitmap = tileBitmap
+                    tileBitmap = tileBitmap,
+                    statusTag = selectedStatusTag
                 )
             )
             delay(VIDEO_STAMP_SAMPLE_INTERVAL_MS)
@@ -656,9 +700,10 @@ fun CameraOverlay(
             cachedTileKey = null
             cachedTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
             addressCache.clear()
-            return@LaunchedEffect
         }
+    }
 
+    LaunchedEffect(Unit) {
         while (true) {
             runCatching {
                 val loc = locationProvider.lastKnownLocation()
@@ -950,7 +995,7 @@ fun CameraOverlay(
             )
             val viewport = previewViewport
             if (stampEnabled && viewport != null) {
-                val previewStamp = remember(liveLocation, liveMovementPath, liveMinimapZoom, liveAddress, noteText, bearing) {
+                val previewStamp = remember(liveLocation, liveMovementPath, liveMinimapZoom, liveAddress, noteText, bearing, selectedStatusTag) {
                     buildCaptureStamp(
                         timestampMs = System.currentTimeMillis(),
                         location = liveLocation,
@@ -960,7 +1005,8 @@ fun CameraOverlay(
                         nodes = nodes,
                         routes = routes,
                         movementPath = liveMovementPath,
-                        minimapZoom = liveMinimapZoom
+                        minimapZoom = liveMinimapZoom,
+                        statusTag = selectedStatusTag
                     )
                 }
                 Canvas(
@@ -993,71 +1039,96 @@ fun CameraOverlay(
                 val vpW = viewport.width.toFloat()
                 val vpH = viewport.height.toFloat()
 
-                val paintColor = Color.Black.copy(alpha = 0.85f)
-                if (vpX > 0f) {
-                    drawRect(color = paintColor, topLeft = androidx.compose.ui.geometry.Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(vpX, outH))
-                    drawRect(color = paintColor, topLeft = androidx.compose.ui.geometry.Offset(vpX + vpW, 0f), size = androidx.compose.ui.geometry.Size(vpX, outH))
+                // Top mask
+                if (vpY > 0) {
+                    drawRect(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        size = androidx.compose.ui.geometry.Size(outW, vpY)
+                    )
                 }
-                if (vpY > 0f) {
-                    drawRect(color = paintColor, topLeft = androidx.compose.ui.geometry.Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(outW, vpY))
-                    drawRect(color = paintColor, topLeft = androidx.compose.ui.geometry.Offset(0f, vpY + vpH), size = androidx.compose.ui.geometry.Size(outW, vpY))
+                // Bottom mask
+                if (vpY + vpH < outH) {
+                    drawRect(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, vpY + vpH),
+                        size = androidx.compose.ui.geometry.Size(outW, outH - (vpY + vpH))
+                    )
+                }
+                // Left mask
+                if (vpX > 0) {
+                    drawRect(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, vpY),
+                        size = androidx.compose.ui.geometry.Size(vpX, vpH)
+                    )
+                }
+                // Right mask
+                if (vpX + vpW < outW) {
+                    drawRect(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        topLeft = androidx.compose.ui.geometry.Offset(vpX + vpW, vpY),
+                        size = androidx.compose.ui.geometry.Size(outW - (vpX + vpW), vpH)
+                    )
                 }
             }
         }
 
-
-
+        // Thanh điều khiển trên cùng (Top Bar)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Transparent)
                 .windowInsetsPadding(
                     WindowInsets.safeDrawing.only(
-                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+                        WindowInsetsSides.Horizontal + WindowInsetsSides.Top
                     )
                 )
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .align(Alignment.TopCenter),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0x66000000))
+                    .border(1.dp, Color(0x3300E5FF), RoundedCornerShape(20.dp))
+                    .clickable(enabled = controlsEnabled) {
+                        if (controlsEnabled) {
+                            selectedAspectRatio = when (selectedAspectRatio) {
+                                CameraAspectRatio.RATIO_4_3 -> CameraAspectRatio.RATIO_16_9
+                                CameraAspectRatio.RATIO_16_9 -> CameraAspectRatio.RATIO_1_1
+                                CameraAspectRatio.RATIO_1_1 -> CameraAspectRatio.RATIO_FULL
+                                CameraAspectRatio.RATIO_FULL -> CameraAspectRatio.RATIO_4_3
+                            }
+                        }
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = when {
-                        isProcessingVideoStamp -> "ĐANG ĐÓNG STAMP VIDEO..."
-                        isRecording -> "ĐANG GHI HÌNH..."
-                        nodeCode.isBlank() -> "Chụp ảnh / Quay video"
-                        else -> "Đối tượng: $nodeCode"
-                    },
-                    color = if (isRecording || isProcessingVideoStamp) Color(0xFFFF5252) else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = selectedAspectRatio.displayName,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x66000000))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Layers,
-                        contentDescription = null,
-                        tint = if (stampEnabled) Color(0xFF00E5FF) else Color(0x88FFFFFF),
-                        modifier = Modifier.size(18.dp)
-                    )
                     Text(
-                        "Stamp",
-                        color = if (stampEnabled) Color(0xFF00E5FF) else Color(0x88FFFFFF),
-                        fontSize = 12.sp
+                        text = "Stamp",
+                        color = if (stampEnabled) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.6f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
                     )
                     Switch(
                         checked = stampEnabled,
@@ -1120,7 +1191,6 @@ fun CameraOverlay(
             }
         }
 
-        // Popup chọn Flash mờ nổi trên màn hình
         if (showFlashMenu && controlsEnabled) {
             Box(
                 modifier = Modifier
@@ -1166,10 +1236,8 @@ fun CameraOverlay(
         }
 
         // Cụm các nút điều khiển phía dưới màn hình hoàn toàn trong suốt
-        // Bố cục thích ứng: đo chiều cao khả dụng để bật chế độ compact và giới hạn max width cho tablet.
         BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             val controlsLayout = computeCameraControlsLayout(maxHeight.value.roundToInt())
             val compactSpacing = controlsLayout.useCompactSpacing
@@ -1189,141 +1257,150 @@ fun CameraOverlay(
                 verticalArrangement = Arrangement.spacedBy(if (compactSpacing) 6.dp else 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-            // Trường nhập ghi chú bán trong suốt (ẩn ở màn rất thấp, trừ khi đang gõ)
-            if (showNoteField) {
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { if (controlsEnabled) noteText = it },
-                    enabled = controlsEnabled,
-                    placeholder = { Text("Ghi chú (tùy chọn)...", color = Color(0xAAFFFFFF), fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .onFocusChanged { isNoteFocused = it.isFocused },
-                    shape = RoundedCornerShape(24.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        focusManager.clearFocus()
-                        isNoteFocused = false
-                    }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0x33FFFFFF),
-                        unfocusedContainerColor = Color(0x15FFFFFF),
-                        focusedBorderColor = Color(0xFF00E5FF),
-                        unfocusedBorderColor = Color(0x33FFFFFF),
-                        cursorColor = Color(0xFF00E5FF)
+                if (!isKeyboardActive) {
+                    CameraStatusTagChips(
+                        selectedTag = selectedStatusTag,
+                        onTagSelected = { if (controlsEnabled) selectedStatusTag = it },
+                        enabled = controlsEnabled,
+                        tags = statusTags
                     )
-                )
-            }
+                }
 
-            if (!isKeyboardActive && controlsLayout.showZoomBar) {
-                // Thanh Zoom và Cài đặt
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    Column(
+                // Trường nhập ghi chú bán trong suốt
+                if (showNoteField) {
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { if (controlsEnabled) noteText = it },
+                        enabled = controlsEnabled,
+                        placeholder = { Text("Ghi chú (tùy chọn)...", color = Color(0xAAFFFFFF), fontSize = 13.sp) },
+                        singleLine = true,
                         modifier = Modifier
-                            .width(180.dp)
-                            .align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .onFocusChanged { isNoteFocused = it.isFocused },
+                        shape = RoundedCornerShape(24.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            focusManager.clearFocus()
+                            isNoteFocused = false
+                        }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0x33FFFFFF),
+                            unfocusedContainerColor = Color(0x15FFFFFF),
+                            focusedBorderColor = Color(0xFF00E5FF),
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            cursorColor = Color(0xFF00E5FF)
+                        )
+                    )
+                }
+
+                if (!isKeyboardActive && controlsLayout.showZoomBar) {
+                    // Thanh Zoom và Cài đặt
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                     ) {
-                        // Floating Zoom Indicator
-                        Box(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(22.dp),
-                            contentAlignment = Alignment.BottomStart
+                                .width(180.dp)
+                                .align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            if (showZoomIndicator) {
-                                val percentage = if (maxZoomRatio > minZoomRatio) {
-                                    (zoomRatio - minZoomRatio) / (maxZoomRatio - minZoomRatio)
-                                } else {
-                                    0f
+                            // Floating Zoom Indicator
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(22.dp),
+                                contentAlignment = Alignment.BottomStart
+                            ) {
+                                if (showZoomIndicator) {
+                                    val percentage = if (maxZoomRatio > minZoomRatio) {
+                                        (zoomRatio - minZoomRatio) / (maxZoomRatio - minZoomRatio)
+                                    } else {
+                                        0f
+                                    }
+                                    val xOffset = (170.dp * percentage) - 10.dp
+                                    Text(
+                                        text = "${"%.1f".format(zoomRatio)}x",
+                                        color = Color(0xFF00E5FF),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .offset(x = xOffset)
+                                            .background(Color(0xCC0A0D1A), RoundedCornerShape(6.dp))
+                                            .border(0.5.dp, Color(0x3300E5FF), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
                                 }
-                                val xOffset = (170.dp * percentage) - 10.dp
-                                Text(
-                                    text = "${"%.1f".format(zoomRatio)}x",
-                                    color = Color(0xFF00E5FF),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .offset(x = xOffset)
-                                        .background(Color(0xCC0A0D1A), RoundedCornerShape(6.dp))
-                                        .border(0.5.dp, Color(0x3300E5FF), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
                             }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Slider Line
+                            @OptIn(ExperimentalMaterial3Api::class)
+                            Slider(
+                                value = zoomRatio,
+                                onValueChange = { requestedZoom ->
+                                    val clampedZoom = clampZoomRatio(requestedZoom, minZoomRatio, maxZoomRatio)
+                                    zoomRatio = clampedZoom
+                                    boundCamera?.cameraControl?.setZoomRatio(clampedZoom)
+                                },
+                                valueRange = minZoomRatio..maxZoomRatio.coerceAtLeast(minZoomRatio),
+                                enabled = controlsEnabled && maxZoomRatio > minZoomRatio,
+                                modifier = Modifier.fillMaxWidth().height(20.dp),
+                                thumb = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(Color.White, CircleShape)
+                                            .border(0.5.dp, Color(0x33FFFFFF), CircleShape)
+                                    )
+                                },
+                                track = { sliderState ->
+                                    SliderDefaults.Track(
+                                        sliderState = sliderState,
+                                        colors = SliderDefaults.colors(
+                                            activeTrackColor = Color(0x44FFFFFF),
+                                            inactiveTrackColor = Color(0x11FFFFFF)
+                                        ),
+                                        enabled = controlsEnabled,
+                                        modifier = Modifier.height(2.dp)
+                                    )
+                                }
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Slider Line
-                        @OptIn(ExperimentalMaterial3Api::class)
-                        Slider(
-                            value = zoomRatio,
-                            onValueChange = { requestedZoom ->
-                                val clampedZoom = clampZoomRatio(requestedZoom, minZoomRatio, maxZoomRatio)
-                                zoomRatio = clampedZoom
-                                boundCamera?.cameraControl?.setZoomRatio(clampedZoom)
-                            },
-                            valueRange = minZoomRatio..maxZoomRatio.coerceAtLeast(minZoomRatio),
-                            enabled = controlsEnabled && maxZoomRatio > minZoomRatio,
-                            modifier = Modifier.fillMaxWidth().height(20.dp),
-                            thumb = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(Color.White, CircleShape)
-                                        .border(0.5.dp, Color(0x33FFFFFF), CircleShape)
-                                )
-                            },
-                            track = { sliderState ->
-                                SliderDefaults.Track(
-                                    sliderState = sliderState,
-                                    colors = SliderDefaults.colors(
-                                        activeTrackColor = Color(0x44FFFFFF),
-                                        inactiveTrackColor = Color(0x11FFFFFF)
-                                    ),
-                                    enabled = controlsEnabled,
-                                    modifier = Modifier.height(2.dp)
-                                )
-                            }
-                        )
+                        IconButton(
+                            onClick = { if (controlsEnabled) showSettingsSheet = true },
+                            enabled = controlsEnabled,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .align(Alignment.CenterEnd)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Cài đặt",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
+                }
 
-                    IconButton(
-                        onClick = { if (controlsEnabled) showSettingsSheet = true },
-                        enabled = controlsEnabled,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .align(Alignment.CenterEnd)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = "Cài đặt",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                if (!isKeyboardActive) {
+                    if (isRecording) {
+                        CameraRecordingTimerBadge(durationSeconds = recordingDurationSeconds)
+                    } else {
+                        CameraModeSelector(
+                            isVideoMode = isVideoMode,
+                            onModeSelected = { isVideoMode = it },
+                            enabled = controlsEnabled
                         )
                     }
                 }
-            }
-
-            if (!isKeyboardActive) {
-                if (isRecording) {
-                    CameraRecordingTimerBadge(durationSeconds = recordingDurationSeconds)
-                } else {
-                    CameraModeSelector(
-                        isVideoMode = isVideoMode,
-                        onModeSelected = { isVideoMode = it },
-                        enabled = controlsEnabled
-                    )
-                }
-            }
 
                 // Dải nút chính dưới cùng: [Thêm media] [Nút chụp/quay] [Xoay camera]
                 Row(
@@ -1420,7 +1497,8 @@ fun CameraOverlay(
                                             nodes = nodes,
                                             routes = routes,
                                             movementPath = liveMovementPath,
-                                            minimapZoom = liveMinimapZoom
+                                            minimapZoom = liveMinimapZoom,
+                                            statusTag = selectedStatusTag
                                         )
                                         val recordingTileBitmap = snapshotBitmap(currentTileBitmap)
                                         recordingTimelineTileBitmaps.forEach { it.recycle() }
@@ -1445,6 +1523,7 @@ fun CameraOverlay(
                                                     routes = routes,
                                                     movementPath = liveMovementPath,
                                                     minimapZoom = liveMinimapZoom,
+                                                    statusTag = selectedStatusTag,
                                                     tileBitmap = recordingTileBitmap
                                                 )
                                             )
@@ -1459,8 +1538,9 @@ fun CameraOverlay(
                                             capturedAt = System.currentTimeMillis(),
                                             locationLabel = locationLabel,
                                             note = noteText.takeIf { it.isNotBlank() },
-                                            folderType = CaptureFolderType.NODE,
-                                            objectCode = nodeCode
+                                            folderType = resolveCaptureFolderType(nodeCode, routes),
+                                            objectCode = nodeCode,
+                                            statusTag = selectedStatusTag
                                         )
                                         val outputOptions = FileOutputOptions.Builder(videoFile).build()
                                         var pending = videoCapture.output.prepareRecording(context, outputOptions)
@@ -1487,7 +1567,14 @@ fun CameraOverlay(
                                                                     timelineSamples = timelineSnapshot,
                                                                     photoPipelineService = photoPipelineService,
                                                                     setProcessingVideoStamp = { isProcessingVideoStamp = it },
-                                                                    onSavePhoto = onSavePhoto,
+                                                                    onSavePhoto = { file ->
+                                                                        onSavePhoto(
+                                                                            file,
+                                                                            stampAtRecordStart?.statusTag ?: selectedStatusTag,
+                                                                            stampAtRecordStart?.note ?: noteText,
+                                                                            stampAtRecordStart?.address ?: liveAddress
+                                                                        )
+                                                                    },
                                                                     onPhotoCaptured = onPhotoCaptured
                                                                 )
                                                                 onDismiss()
@@ -1521,6 +1608,9 @@ fun CameraOverlay(
                                         }
                                     }
                                 } else {
+                                    val capturedStatusTag = selectedStatusTag
+                                    val capturedNote = noteText
+                                    val capturedAddress = liveAddress
                                     val capturedStamp = buildCaptureStamp(
                                         timestampMs = System.currentTimeMillis(),
                                         location = liveLocation,
@@ -1530,7 +1620,8 @@ fun CameraOverlay(
                                         nodes = nodes,
                                         routes = routes,
                                         movementPath = liveMovementPath,
-                                        minimapZoom = liveMinimapZoom
+                                        minimapZoom = liveMinimapZoom,
+                                        statusTag = capturedStatusTag
                                     )
                                     val capturedStampEnabled = stampEnabled
                                     val capturedTileBitmap = snapshotBitmap(currentTileBitmap)
@@ -1545,8 +1636,9 @@ fun CameraOverlay(
                                             capturedAt = System.currentTimeMillis(),
                                             locationLabel = locationLabel,
                                             note = noteText.takeIf { it.isNotBlank() },
-                                            folderType = CaptureFolderType.NODE,
-                                            objectCode = nodeCode
+                                            folderType = resolveCaptureFolderType(nodeCode, routes),
+                                            objectCode = nodeCode,
+                                            statusTag = capturedStatusTag
                                         )
                                         val output = ImageCapture.OutputFileOptions.Builder(file).build()
                                         imageCapture.targetRotation = targetRotation
@@ -1568,7 +1660,7 @@ fun CameraOverlay(
                                                                         )
                                                                     }
                                                                 }
-                                                                if (onSavePhoto(file)) {
+                                                                if (onSavePhoto(file, capturedStatusTag, capturedNote, capturedAddress)) {
                                                                     onPhotoCaptured()
                                                                 }
                                                             } finally {
@@ -1978,4 +2070,67 @@ internal fun CameraRecordingTimerBadge(
     }
 }
 
+@Composable
+internal fun CameraStatusTagChips(
+    selectedTag: String?,
+    onTagSelected: (String?) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    tags: List<String> = MediaStatusTags.systemNames
+) {
+    val scrollState = rememberScrollState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        tags.forEach { tag ->
+            val isSelected = selectedTag == tag
+            val activeBorderColor = Color(0xFF00E5FF)
+            val inactiveBorderColor = Color(0x33FFFFFF)
+            val activeBackgroundColor = Color(0xFF00E5FF)
+            val inactiveBackgroundColor = Color(0x660A0D1A)
 
+            Box(
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(if (isSelected) activeBackgroundColor else inactiveBackgroundColor)
+                    .border(
+                        width = if (isSelected) 1.5.dp else 1.dp,
+                        color = if (isSelected) activeBorderColor else inactiveBorderColor,
+                        shape = RoundedCornerShape(22.dp)
+                    )
+                    .clickable(
+                        enabled = enabled,
+                        onClick = { onTagSelected(tag) }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) Color(0xFF060814) else Color(0xFF00E5FF)
+                            )
+                    )
+                    Text(
+                        text = tag,
+                        color = if (isSelected) Color(0xFF060814) else Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}

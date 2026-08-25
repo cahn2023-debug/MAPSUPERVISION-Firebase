@@ -287,4 +287,24 @@ class PhotoStampRendererTest {
         assertTrue(resolvedTile === tile)
         tile.recycle()
     }
+
+    @Test
+    fun `build content includes status tag row when present`() {
+        val stamp = CaptureStamp(
+            timestampMs = 1000L,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            address = "Ha Noi",
+            note = "",
+            bearingDeg = 0f,
+            statusTag = "Hiện trạng"
+        )
+        val content = PhotoStampLayoutCalculator.buildContent(
+            stamp = stamp,
+            missingLocationText = "Không có vị trí"
+        )
+        val tagRow = content.rows.find { it.icon == PhotoStampLayoutCalculator.tagIcon }
+        assertNotNull(tagRow)
+        assertEquals("Hiện trạng", tagRow!!.lines.first())
+    }
 }
