@@ -36,13 +36,13 @@
   "doc:doc-40cf3c5cb473d6ca07849423c76192b4": {
     "entityType": "doc",
     "entityId": "doc-40cf3c5cb473d6ca07849423c76192b4",
-    "canonicalHash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5",
-    "indexedHash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5",
-    "revision": 3,
+    "canonicalHash": "48c59304ce858cf7aed4eeb2fbc8fd28273f020138df6ba180baa78b86d46644",
+    "indexedHash": "48c59304ce858cf7aed4eeb2fbc8fd28273f020138df6ba180baa78b86d46644",
+    "revision": 4,
     "path": "docs/specs/2026-08-25/google-drive-image-url-display.md",
-    "indexedRevision": 3,
+    "indexedRevision": 4,
     "indexedPath": "docs/specs/2026-08-25/google-drive-image-url-display.md",
-    "indexedAt": "2026-08-25T15:13:32.8222216Z"
+    "indexedAt": "2026-08-25T15:20:55.4005925Z"
   },
   "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
     "entityType": "doc",
@@ -725,13 +725,13 @@
   "task:x85rvu": {
     "entityType": "task",
     "entityId": "x85rvu",
-    "canonicalHash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3",
-    "indexedHash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3",
-    "revision": 3,
+    "canonicalHash": "07784fcb39a9381a815f7644ea01d1e76849c1f5e14fc03a0b80a37d92a90302",
+    "indexedHash": "07784fcb39a9381a815f7644ea01d1e76849c1f5e14fc03a0b80a37d92a90302",
+    "revision": 9,
     "path": "tasks/x85rvu.md",
-    "indexedRevision": 3,
+    "indexedRevision": 9,
     "indexedPath": "tasks/x85rvu.md",
-    "indexedAt": "2026-08-25T15:14:08.4337548Z"
+    "indexedAt": "2026-08-25T15:21:54.0722787Z"
   },
   "task:xo64so": {
     "entityType": "task",

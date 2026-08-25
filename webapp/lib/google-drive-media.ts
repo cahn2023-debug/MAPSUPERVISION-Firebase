@@ -2,6 +2,8 @@ import { Readable } from "node:stream";
 import fs from "node:fs";
 import { google, type drive_v3 } from "googleapis";
 
+export { driveFileIdFromUrl } from "./google-drive-image";
+
 export type DriveMediaObjectType = "NODE" | "ROUTE";
 export type DriveMediaType = "IMAGE" | "VIDEO";
 
@@ -441,20 +443,6 @@ export function buildProjectMediaPreviewUrl(projectId: string, photoId: string):
 
 function publicDriveUrl(fileId: string): string {
   return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
-}
-
-export function driveFileIdFromUrl(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  try {
-    const parsed = new URL(trimmed);
-    const id = parsed.searchParams.get("id");
-    if (id) return id.trim();
-    const pathMatch = parsed.pathname.match(/\/d\/([^/]+)/);
-    return pathMatch?.[1]?.trim() || "";
-  } catch {
-    return "";
-  }
 }
 
 export async function downloadDriveFile(fileId: string): Promise<{ stream: Readable; contentType: string }> {

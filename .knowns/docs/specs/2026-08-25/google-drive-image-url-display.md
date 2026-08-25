@@ -3,7 +3,7 @@ id: doc-40cf3c5cb473d6ca07849423c76192b4
 title: Google Drive Image URL Display
 description: Specification for rendering Google Drive images in the web app with standardized lh3.googleusercontent.com URLs.
 createdAt: '2026-08-25T15:07:11.712Z'
-updatedAt: '2026-08-25T15:12:09.676Z'
+updatedAt: '2026-08-25T15:20:48.226Z'
 tags:
   - spec
   - approved
@@ -51,15 +51,13 @@ Chuẩn hóa cách web app hiển thị ảnh được lưu trên Google Drive b
 - NFR-2: Hành vi placeholder phải nhất quán giữa các component áp dụng quy tắc.
 - NFR-3: Việc chuẩn hóa URL không được làm thay đổi hoặc làm hỏng các nguồn ảnh không phải Google Drive.
 
-## Acceptance Criteria
-
-- [ ] AC-1: Với file ID `1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB` và không truyền width, output là `https://lh3.googleusercontent.com/d/1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB=w1000?authuser=0`.
-- [ ] AC-2: Với cùng file ID và `width=600`, output chứa đúng `=w600?authuser=0`.
-- [ ] AC-3: Với raw file ID hợp lệ, component render ảnh bằng URL Google Drive đã dựng.
-- [ ] AC-4: Với file ID rỗng hoặc không hợp lệ, component render placeholder và không request URL Google.
-- [ ] AC-5: Với ảnh có ID hợp lệ nhưng request ảnh thất bại, component render placeholder sau lỗi tải.
-- [ ] AC-6: Với URL ảnh không phải Google Drive, component giữ nguyên URL đầu vào.
-- [ ] AC-7: Ít nhất một component hiện có và một component mới (nếu có trong phạm vi triển khai) dùng chung hành vi chuẩn hóa và placeholder.
+- [x] AC-1: Với file ID `1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB` và không truyền width, output là `https://lh3.googleusercontent.com/d/1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB=w1000?authuser=0`.
+- [x] AC-2: Với cùng file ID và `width=600`, output chứa đúng `=w600?authuser=0`.
+- [x] AC-3: Với raw file ID hợp lệ, component render ảnh bằng URL Google Drive đã dựng.
+- [x] AC-4: Với file ID rỗng hoặc không hợp lệ, component render placeholder và không request URL Google.
+- [x] AC-5: Với ảnh có ID hợp lệ nhưng request ảnh thất bại, component render placeholder sau lỗi tải.
+- [x] AC-6: Với URL ảnh không phải Google Drive, component giữ nguyên URL đầu vào.
+- [x] AC-7: Ít nhất một component hiện có và một component mới (nếu có trong phạm vi triển khai) dùng chung hành vi chuẩn hóa và placeholder.
 
 ## Scenarios
 

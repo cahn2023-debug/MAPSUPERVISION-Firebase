@@ -37,9 +37,9 @@
       "entityType": "doc",
       "entityId": "doc-40cf3c5cb473d6ca07849423c76192b4",
       "path": "docs/specs/2026-08-25/google-drive-image-url-display.md",
-      "hash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5",
-      "revision": 3,
-      "headHash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5"
+      "hash": "48c59304ce858cf7aed4eeb2fbc8fd28273f020138df6ba180baa78b86d46644",
+      "revision": 4,
+      "headHash": "48c59304ce858cf7aed4eeb2fbc8fd28273f020138df6ba180baa78b86d46644"
     },
     "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
       "entityType": "doc",
@@ -605,9 +605,9 @@
       "entityType": "task",
       "entityId": "x85rvu",
       "path": "tasks/task-x85rvu - google-drive-image-url-display-01-Standardize-Goo.md",
-      "hash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3",
-      "revision": 3,
-      "headHash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3"
+      "hash": "07784fcb39a9381a815f7644ea01d1e76849c1f5e14fc03a0b80a37d92a90302",
+      "revision": 9,
+      "headHash": "07784fcb39a9381a815f7644ea01d1e76849c1f5e14fc03a0b80a37d92a90302"
     },
     "task:xo64so": {
       "entityType": "task",

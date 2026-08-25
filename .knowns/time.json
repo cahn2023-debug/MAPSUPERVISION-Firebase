@@ -1,11 +1,3 @@
 {
-  "active": [
-    {
-      "taskId": "x85rvu",
-      "taskTitle": "[google-drive-image-url-display-01] Standardize Google Drive image URLs across web app",
-      "startedAt": "2026-08-25T15:12:09.392Z",
-      "pausedAt": null,
-      "totalPausedMs": 0
-    }
-  ]
+  "active": []
 }
