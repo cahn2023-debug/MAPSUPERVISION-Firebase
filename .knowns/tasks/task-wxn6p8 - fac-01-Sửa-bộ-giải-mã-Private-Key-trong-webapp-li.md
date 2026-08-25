@@ -5,7 +5,7 @@ status: done
 priority: high
 labels: []
 createdAt: '2026-08-25T12:37:57.986Z'
-updatedAt: '2026-08-25T12:39:27.004Z'
+updatedAt: '2026-08-25T13:24:26.999Z'
 completedAt: '2026-08-25T12:39:27.004Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -23,6 +23,7 @@ Chuẩn hóa và sanitize chuỗi private_key trong webapp/lib/firebase-admin.ts
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Khởi động Webapp Next.js không còn xuất hiện lỗi [FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON, cert(parsed) khởi tạo thành công.
 <!-- AC:END -->
 
 ## Implementation Notes

@@ -217,6 +217,36 @@ class ProjectRepositoryDeletionTest {
         }
     }
 
+    @Test
+    fun forcePurgeLocalProject_marks_project_deleted_and_cleans_rows() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, MapSupervisionDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val storage = ProjectStorageManager(context)
+        val repository = ProjectRepositoryImpl(
+            projectDao = database.projectDao(),
+            storageManager = storage,
+            eventOutboxDao = database.eventOutboxDao(),
+            sitePhotoDao = database.sitePhotoDao(),
+            projectScopedDatabaseProvider = ProjectScopedDatabaseProvider(context, database, storage),
+            activeProjectRepository = FakeActiveProjectRepository(null)
+        )
+        try {
+            database.projectDao().upsert(
+                ProjectEntity("stuck-proj", "Stuck Project", "stuck-slug", false, 1L, deletionState = com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING)
+            )
+
+            assertTrue(repository.forcePurgeLocalProject("stuck-proj") is AppResult.Success)
+            val proj = database.projectDao().get("stuck-proj")
+            assertTrue(proj != null)
+            assertTrue(proj?.isDeleted == true)
+            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.DELETED, proj?.deletionState)
+        } finally {
+            database.close()
+        }
+    }
+
     private class FakeActiveProjectRepository(initial: String?) : ActiveProjectRepository {
         private val state = MutableStateFlow(initial)
 

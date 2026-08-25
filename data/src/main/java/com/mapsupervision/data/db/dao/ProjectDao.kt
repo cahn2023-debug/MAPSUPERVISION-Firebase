@@ -78,6 +78,9 @@ interface ProjectDao {
     @Query("UPDATE projects SET isDeleted = 1, deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId AND isDeleted = 0 AND deletionState = 'DELETED'")
     suspend fun completeRemoteLocalDeletion(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long): Int
 
+    @Query("UPDATE projects SET isDeleted = 1, deletionState = 'DELETED', deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE id = :projectId")
+    suspend fun markProjectDeletedForce(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long): Int
+
     @Query("UPDATE gis_node SET isDeleted = 1, deletedAtEpochMs = :deletedAtEpochMs, updatedAtEpochMs = :updatedAtEpochMs WHERE projectId = :projectId AND isDeleted = 0")
     suspend fun markGisNodesDeleted(projectId: String, updatedAtEpochMs: Long, deletedAtEpochMs: Long)
 

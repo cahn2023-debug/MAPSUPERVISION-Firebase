@@ -5,7 +5,7 @@ status: done
 priority: high
 labels: []
 createdAt: '2026-08-25T12:38:04.001Z'
-updatedAt: '2026-08-25T12:40:33.084Z'
+updatedAt: '2026-08-25T13:24:29.014Z'
 completedAt: '2026-08-25T12:40:33.084Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -23,6 +23,7 @@ Cập nhật parseFirebaseProjectCatalog và extractCatalogEntryFromProjectDoc t
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Android Catalog Parser áp dụng fallback an toàn cho createdByUid, projectCode, status để hiển thị đầy đủ dự án Firestore mà không bị crash hay loại bỏ.
 <!-- AC:END -->
 
 ## Implementation Notes

@@ -35,4 +35,6 @@ interface ProjectRepository {
     suspend fun updateStoragePath(projectId: String, newPath: String): AppResult<Unit>
     suspend fun updateMediaStorage(projectId: String, folderId: String, folderUrl: String): AppResult<Unit> =
         AppResult.Error(UnsupportedOperationException("Project media storage update is not supported"))
+    suspend fun forcePurgeLocalProject(projectId: String): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Force project purge is not supported"))
 }

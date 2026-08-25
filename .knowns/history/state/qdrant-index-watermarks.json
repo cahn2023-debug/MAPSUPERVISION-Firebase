@@ -104,13 +104,13 @@
   "doc:doc-eb51714d7804cc9e2dd1e2a5d29ef4a4": {
     "entityType": "doc",
     "entityId": "doc-eb51714d7804cc9e2dd1e2a5d29ef4a4",
-    "canonicalHash": "268032ac3a9d56cd557899d661670d69674497b2cb064559e76711d0b25311bd",
-    "indexedHash": "268032ac3a9d56cd557899d661670d69674497b2cb064559e76711d0b25311bd",
-    "revision": 3,
+    "canonicalHash": "f54bfb52cd05d5fbd64ea5d2c508708855d0993dc583c29c512fbd4adecc8167",
+    "indexedHash": "f54bfb52cd05d5fbd64ea5d2c508708855d0993dc583c29c512fbd4adecc8167",
+    "revision": 5,
     "path": "docs/specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix.md",
-    "indexedRevision": 3,
+    "indexedRevision": 5,
     "indexedPath": "docs/specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix.md",
-    "indexedAt": "2026-08-25T12:49:26.0394911Z"
+    "indexedAt": "2026-08-25T13:24:54.0988248Z"
   },
   "doc:doc-ed69bd064dc60a78c68a15077a90884c": {
     "entityType": "doc",
@@ -209,13 +209,13 @@
   "task:7i32xc": {
     "entityType": "task",
     "entityId": "7i32xc",
-    "canonicalHash": "e8bda1ca8430b6a08bcefc673967c7b2508ae865e4ba425e91b8c46921490d8f",
-    "indexedHash": "e8bda1ca8430b6a08bcefc673967c7b2508ae865e4ba425e91b8c46921490d8f",
-    "revision": 3,
+    "canonicalHash": "a4f7b9dfb94977785b550a65af0bc76031a09ea222b67739b9802f8692fc84ec",
+    "indexedHash": "a4f7b9dfb94977785b550a65af0bc76031a09ea222b67739b9802f8692fc84ec",
+    "revision": 5,
     "path": "tasks/7i32xc.md",
-    "indexedRevision": 3,
+    "indexedRevision": 5,
     "indexedPath": "tasks/7i32xc.md",
-    "indexedAt": "2026-08-25T12:49:11.6715409Z"
+    "indexedAt": "2026-08-25T13:24:41.8737501Z"
   },
   "task:7qsrje": {
     "entityType": "task",
@@ -492,13 +492,13 @@
   "task:pykp6v": {
     "entityType": "task",
     "entityId": "pykp6v",
-    "canonicalHash": "941cf0468c7a0c07ffffe0a5316cd3786feecb24ebafee7cfbbdd8d11f5e04b1",
-    "indexedHash": "941cf0468c7a0c07ffffe0a5316cd3786feecb24ebafee7cfbbdd8d11f5e04b1",
-    "revision": 3,
+    "canonicalHash": "c020f2e5c8770be63c24f66166913081f4a79f124c3c7ded9b7d07e5ba5b6c99",
+    "indexedHash": "c020f2e5c8770be63c24f66166913081f4a79f124c3c7ded9b7d07e5ba5b6c99",
+    "revision": 5,
     "path": "tasks/pykp6v.md",
-    "indexedRevision": 3,
+    "indexedRevision": 5,
     "indexedPath": "tasks/pykp6v.md",
-    "indexedAt": "2026-08-25T12:42:05.6717177Z"
+    "indexedAt": "2026-08-25T13:24:37.8082901Z"
   },
   "task:q74bwe": {
     "entityType": "task",
@@ -644,13 +644,13 @@
   "task:wxn6p8": {
     "entityType": "task",
     "entityId": "wxn6p8",
-    "canonicalHash": "8c32edd32cc5e0b8677d1e094b81bca5cb44869a819f51ac1e9fca263062024a",
-    "indexedHash": "8c32edd32cc5e0b8677d1e094b81bca5cb44869a819f51ac1e9fca263062024a",
-    "revision": 3,
+    "canonicalHash": "8a598e5cb72464c277d5170049d82f734dc0ae7c23f3c204877d3c555b28de2d",
+    "indexedHash": "8a598e5cb72464c277d5170049d82f734dc0ae7c23f3c204877d3c555b28de2d",
+    "revision": 5,
     "path": "tasks/wxn6p8.md",
-    "indexedRevision": 3,
+    "indexedRevision": 5,
     "indexedPath": "tasks/wxn6p8.md",
-    "indexedAt": "2026-08-25T12:39:34.0405819Z"
+    "indexedAt": "2026-08-25T13:24:32.650332Z"
   },
   "task:xo64so": {
     "entityType": "task",
@@ -701,13 +701,13 @@
   "task:yums9t": {
     "entityType": "task",
     "entityId": "yums9t",
-    "canonicalHash": "7fc0085ec63cec886d8f1f655d1835dd75fb41cb64bc312883ee024eb693162a",
-    "indexedHash": "7fc0085ec63cec886d8f1f655d1835dd75fb41cb64bc312883ee024eb693162a",
-    "revision": 3,
+    "canonicalHash": "2bb061c0c1733be01fe5c05d0c46337d38c8215aca3a212b35a734429f8f049b",
+    "indexedHash": "2bb061c0c1733be01fe5c05d0c46337d38c8215aca3a212b35a734429f8f049b",
+    "revision": 5,
     "path": "tasks/yums9t.md",
-    "indexedRevision": 3,
+    "indexedRevision": 5,
     "indexedPath": "tasks/yums9t.md",
-    "indexedAt": "2026-08-25T12:40:40.0395812Z"
+    "indexedAt": "2026-08-25T13:24:34.7329064Z"
   },
   "task:zfv69f": {
     "entityType": "task",

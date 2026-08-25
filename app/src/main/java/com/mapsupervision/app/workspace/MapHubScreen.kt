@@ -78,12 +78,14 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -160,6 +162,7 @@ fun MapHubScreen(
     onDeleteProject: (String, String, String, Boolean) -> Unit,
     onAcknowledgeRemoteDeletion: (String, Boolean) -> Unit = { _, _ -> },
     onDecideCloudDeletion: (String, Boolean) -> Unit = { _, _ -> },
+    onForceDeleteLocalProject: (String) -> Unit = {},
     onSelectNode: (GisNode) -> Unit,
     onSelectRoute: (GisRoute) -> Unit,
     onSetCenterNode: (GisNode?) -> Unit,
@@ -267,13 +270,16 @@ fun MapHubScreen(
     val surfaceColor = colors.surface
     val onSurfaceColor = colors.onSurface
     val onPrimaryColor = colors.onPrimary
+    var dismissedCloudDecisionProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var isProcessingCloudDecision by remember { mutableStateOf(false) }
     val pendingCloudDecisionProject = projectState.projects.firstOrNull {
-        it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING ||
-            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED ||
-            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED ||
-            it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING
+        it.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING &&
+            it.id != dismissedCloudDecisionProjectId
     }?.takeIf { project ->
         session.isAdmin || projectState.catalogItems.firstOrNull { it.projectId == project.id }?.let { it.isProjectAdmin || it.createdByUid == session.uid } == true
+    }
+    LaunchedEffect(pendingCloudDecisionProject?.id) {
+        isProcessingCloudDecision = false
     }
     LaunchedEffect(context) {
         if (GisMapBridgeRegistry.bridge == null) {
@@ -474,6 +480,31 @@ fun MapHubScreen(
                                                     onClick = { onAcknowledgeRemoteDeletion(p.id, true) },
                                                     colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
                                                 ) { Text("Xóa bản local") }
+                                            } else if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING) {
+                                                OutlinedButton(onClick = {
+                                                    dismissedCloudDecisionProjectId = null
+                                                }) { Text("Quyết định Cloud", style = MaterialTheme.typography.labelSmall) }
+                                                Button(
+                                                    onClick = { onForceDeleteLocalProject(p.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
+                                                ) { Text("Xóa local", style = MaterialTheme.typography.labelSmall) }
+                                            } else if (p.deletionState in setOf(
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED,
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING
+                                                )) {
+                                                OutlinedButton(onClick = { onDecideCloudDeletion(p.id, true) }) { Text("Khôi phục", style = MaterialTheme.typography.labelSmall) }
+                                                Button(
+                                                    onClick = { onForceDeleteLocalProject(p.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
+                                                ) { Text("Xóa local", style = MaterialTheme.typography.labelSmall) }
+                                            } else if (p.deletionState in setOf(
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED,
+                                                    com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED
+                                                )) {
+                                                Button(
+                                                    onClick = { onForceDeleteLocalProject(p.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
+                                                ) { Text("Dọn dẹp local", style = MaterialTheme.typography.labelSmall) }
                                             }
                                             if (!isRevoked) {
                                                 IconButton(
@@ -1738,24 +1769,90 @@ fun MapHubScreen(
 
         pendingCloudDecisionProject?.let { project ->
             androidx.compose.material3.AlertDialog(
-                onDismissRequest = { },
-                title = { Text("Quyết định dữ liệu Cloud", fontWeight = FontWeight.Bold) },
-                text = {
-                    Text(
-                        "Project ${project.name} đã bị xóa local. Bạn có muốn giữ dữ liệu Cloud và khôi phục bản local, hay bắt đầu xóa dữ liệu Cloud? Media Google Drive vẫn được giữ nguyên.",
-                        color = secondaryTextColor
+                onDismissRequest = {
+                    if (!isProcessingCloudDecision) {
+                        dismissedCloudDecisionProjectId = project.id
+                    }
+                },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudSync,
+                        contentDescription = "Cloud Sync",
+                        tint = orangeColor,
+                        modifier = Modifier.size(32.dp)
                     )
                 },
+                title = {
+                    Text(
+                        "Quyết định dữ liệu Cloud",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Dự án \"${project.name}\" đã được xóa khỏi bộ nhớ thiết bị này.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "Bạn có muốn giữ dữ liệu trên Cloud và khôi phục lại bản local, hay bắt đầu xóa vĩnh viễn dữ liệu Cloud? Media Google Drive vẫn được giữ nguyên an toàn.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = secondaryTextColor
+                        )
+                    }
+                },
                 confirmButton = {
-                    Button(onClick = { onDecideCloudDeletion(project.id, true) }) {
-                        Text("Giữ Cloud")
+                    Button(
+                        onClick = {
+                            isProcessingCloudDecision = true
+                            onDecideCloudDeletion(project.id, true)
+                        },
+                        enabled = !isProcessingCloudDecision,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = orangeColor,
+                            contentColor = onPrimaryColor
+                        )
+                    ) {
+                        Text("Giữ Cloud & Khôi phục", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { onDecideCloudDeletion(project.id, false) }) {
-                        Text("Xóa Cloud", color = dangerColor)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                dismissedCloudDecisionProjectId = project.id
+                            },
+                            enabled = !isProcessingCloudDecision,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Để sau", color = secondaryTextColor)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                isProcessingCloudDecision = true
+                                onDecideCloudDeletion(project.id, false)
+                            },
+                            enabled = !isProcessingCloudDecision,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, dangerColor),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor)
+                        ) {
+                            Text("Xóa Cloud", color = dangerColor, fontWeight = FontWeight.SemiBold)
+                        }
                     }
-                }
+                },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.surface
             )
         }
 

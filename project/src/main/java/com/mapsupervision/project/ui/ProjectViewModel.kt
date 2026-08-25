@@ -268,9 +268,22 @@ class ProjectViewModel @Inject constructor(
                 decision = if (retainCloud) "RETAIN" else "DELETE",
                 typedIdentity = typedIdentity
             )) {
-                is AppResult.Error -> _uiState.value = _uiState.value.copy(
-                    message = "Không thể ghi quyết định Cloud: ${result.throwable.message}"
-                )
+                is AppResult.Error -> {
+                    val errorMsg = result.throwable.message.orEmpty()
+                    val isNotFound = errorMsg.contains("404") ||
+                        errorMsg.contains("NOT_FOUND", ignoreCase = true) ||
+                        errorMsg.contains("Project not found", ignoreCase = true)
+                    if (!retainCloud && isNotFound) {
+                        projectRepository.forcePurgeLocalProject(projectId)
+                        _uiState.value = _uiState.value.copy(
+                            message = "Dự án không tồn tại trên Cloud. Đã dọn dẹp xong bản local."
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            message = "Không thể ghi quyết định Cloud: $errorMsg"
+                        )
+                    }
+                }
                 is AppResult.Success -> {
                     if (retainCloud && result.data == ProjectDeletionState.CLOUD_RETAINED) {
                         projectRepository.markCloudRetained(projectId, requestId)
@@ -303,11 +316,37 @@ class ProjectViewModel @Inject constructor(
                                 }
                             }
                             is AppResult.Error -> {
-                                projectRepository.markDeletionFailed(projectId, requestId, "CLOUD_DELETE_REQUEST_FAILED")
-                                _uiState.value = _uiState.value.copy(message = "Xóa Cloud thất bại; có thể retry")
+                                val delMsg = deletion.throwable.message.orEmpty()
+                                val isNotFound = delMsg.contains("404") || delMsg.contains("NOT_FOUND", ignoreCase = true)
+                                if (isNotFound) {
+                                    projectRepository.forcePurgeLocalProject(projectId)
+                                    _uiState.value = _uiState.value.copy(message = "Đã xóa dữ liệu local")
+                                } else {
+                                    projectRepository.markDeletionFailed(projectId, requestId, "CLOUD_DELETE_REQUEST_FAILED")
+                                    _uiState.value = _uiState.value.copy(message = "Xóa Cloud thất bại; có thể retry hoặc chọn xóa cục bộ")
+                                }
                             }
                         }
                     }
+                }
+            }
+            refresh()
+        }
+    }
+
+    fun forceDeleteLocalProject(projectId: String) {
+        viewModelScope.launch {
+            val project = _uiState.value.projects.firstOrNull { it.id == projectId }
+            if (project == null) {
+                _uiState.value = _uiState.value.copy(message = "Không tìm thấy project local")
+                return@launch
+            }
+            when (val result = projectRepository.forcePurgeLocalProject(projectId)) {
+                is AppResult.Success -> {
+                    _uiState.value = _uiState.value.copy(message = "Đã xóa hoàn toàn dự án khỏi thiết bị")
+                }
+                is AppResult.Error -> {
+                    _uiState.value = _uiState.value.copy(message = "Không thể dọn dẹp local: ${result.throwable.message}")
                 }
             }
             refresh()

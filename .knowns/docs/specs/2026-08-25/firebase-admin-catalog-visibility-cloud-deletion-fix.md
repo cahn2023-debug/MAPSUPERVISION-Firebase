@@ -3,12 +3,13 @@ id: doc-eb51714d7804cc9e2dd1e2a5d29ef4a4
 title: 'Firebase Admin, Catalog Visibility & Cloud Deletion Fix'
 description: Specification for fixing Firebase Admin key parsing, Android catalog project list visibility, and Cloud deletion flow.
 createdAt: '2026-08-25T12:34:26.007Z'
-updatedAt: '2026-08-25T12:49:19.980Z'
+updatedAt: '2026-08-25T13:24:46.086Z'
 tags:
   - spec
-  - approved
   - firebase
   - android
+  - draft
+  - review-required
 ---
 
 ## Overview
@@ -20,11 +21,9 @@ Khắc phục triệt để 3 sự cố liên quan đến đồng bộ và quả
 2. **Lỗi không hiển thị đầy đủ dự án trên Android Catalog (`FirebaseAccessRepositoryImpl.kt`)**: Bộ phân tích Firestore `projectCatalog` / `projects` trên Android quá nghiêm ngặt, loại bỏ hoàn toàn các dự án legacy hoặc tạo từ webapp thiếu `createdByUid`, `projectCode` hoặc `status`.
 3. **Lỗi không xóa được dự án Cloud từ Android App (`MapHubScreen.kt`, `ProjectViewModel.kt`, API routes)**: Popup "Quyết định dữ liệu Cloud" gửi request xóa Cloud nhưng Backend chặn bởi điều kiện `REAUTH_REQUIRED` (`auth_time < 300s`) và thiếu phân quyền linh hoạt khi user đã xác thực qua Firebase Auth.
 
-## Locked Decisions
-
-- **D1**: Đồng bộ giải pháp cho cả 3 điểm: (1) Sửa bộ giải mã Private Key trong `firebase-admin.ts`, (2) Bổ sung fallback an toàn cho Android Catalog Parser để hiển thị toàn bộ dự án legacy/webapp, và (3) Xử lý xóa Cloud trơn tru từ Android.
-- **D2**: Catalog parser trên Android tự động dùng fallback an toàn (mã dự án từ slug/id, status mặc định ACTIVE, creator fallback từ admin session hoặc project data) để hiển thị ngay lập tức toàn bộ dự án mà không bị crash hay ẩn mất.
-- **D3**: Nới lỏng ràng buộc ở Backend (`webapp/app/api/projects/[projectId]/deletion/decision/route.ts` & `deletion/route.ts`): Chỉ cần Firebase ID Token còn hạn và caller là Admin/Creator là cho phép xóa Cloud mà không bắt buộc `auth_time < 300s`. Android "Xóa Cloud" gửi request trực tiếp bằng Firebase ID Token hiện tại.
+- D1: Đồng bộ giải pháp cho cả 3 điểm: (1) Sửa bộ giải mã Private Key trong firebase-admin.ts, (2) Bổ sung fallback an toàn cho Android Catalog Parser để hiển thị toàn bộ dự án legacy/webapp, và (3) Xử lý xóa Cloud trơn tru từ Android.
+- D2: Catalog parser trên Android tự động dùng fallback an toàn (mã dự án từ slug/id, status mặc định ACTIVE, creator fallback từ admin session hoặc project data) để hiển thị ngay lập tức toàn bộ dự án mà không bị crash hay ẩn mất.
+- D3: Nới lỏng ràng buộc ở Backend (webapp/app/api/projects/[projectId]/deletion/decision/route.ts & deletion/route.ts): Chỉ cần Firebase ID Token còn hạn và caller là Admin/Creator là cho phép xóa Cloud mà không bắt buộc auth_time < 300s. Android "Xóa Cloud" gửi request trực tiếp bằng Firebase ID Token hiện tại.
 
 ## System Decision Impact
 
@@ -44,12 +43,10 @@ Khắc phục triệt để 3 sự cố liên quan đến đồng bộ và quả
 - **NFR-1 (Bảo mật)**: Giữ nguyên kiểm tra phân quyền caller (Admin hoặc Creator của project) trước khi thực hiện xóa Cloud.
 - **NFR-2 (Tương thích ngược)**: Các dự án cũ (legacy projects) trên Firestore tiếp tục hoạt động và hiển thị đầy đủ trên cả Android lẫn Webapp.
 
-## Acceptance Criteria
-
-- [ ] **AC-1**: Khởi động Webapp Next.js không còn xuất hiện lỗi `[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON: Error: Failed to parse private key`. Firebase Admin Auth và Firestore kết nối thành công.
-- [ ] **AC-2**: Trên Android App, màn hình "Dự án trên Cloud" hiển thị đầy đủ tất cả các dự án có trên Firestore (bao gồm "nha thau", "Dự án 269 - 2026", "123", "165-2026").
-- [ ] **AC-3**: Bấm "Xóa Cloud" trên popup "Quyết định dữ liệu Cloud" ở Android App gửi request thành công, backend xử lý transaction xóa document trên Firestore và cập nhật local project sang DELETED mà không gặp lỗi `REAUTH_REQUIRED`.
-- [ ] **AC-4**: Tất cả unit test / integration test liên quan đến Catalog Parser, Project Deletion và Firebase Admin đều pass.
+- [x] **AC-1**: Khởi động Webapp Next.js không còn xuất hiện lỗi `[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON: Error: Failed to parse private key`. Firebase Admin Auth và Firestore kết nối thành công.
+- [x] **AC-2**: Trên Android App, màn hình "Dự án trên Cloud" hiển thị đầy đủ tất cả các dự án có trên Firestore (bao gồm "nha thau", "Dự án 269 - 2026", "123", "165-2026").
+- [x] **AC-3**: Bấm "Xóa Cloud" trên popup "Quyết định dữ liệu Cloud" ở Android App gửi request thành công, backend xử lý transaction xóa document trên Firestore và cập nhật local project sang DELETED mà không gặp lỗi `REAUTH_REQUIRED`.
+- [x] **AC-4**: Tất cả unit test / integration test liên quan đến Catalog Parser, Project Deletion và Firebase Admin đều pass.
 
 ## Scenarios
 

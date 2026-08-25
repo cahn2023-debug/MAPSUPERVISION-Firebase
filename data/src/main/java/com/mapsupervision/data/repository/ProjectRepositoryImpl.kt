@@ -297,6 +297,21 @@ class ProjectRepositoryImpl @Inject constructor(
         onFailure = { AppResult.Error(DatabaseException("Failed to acknowledge remote project deletion", it)) }
     )
 
+    override suspend fun forcePurgeLocalProject(projectId: String): AppResult<Unit> = runCatching {
+        val project = projectDao.get(projectId) ?: return@runCatching Unit
+        projectDao.purgeProjectRows(projectId)
+        runCatching { projectScopedDatabaseProvider.closeProjectDatabase(projectId) }
+        runCatching { storageManager.deleteProjectStorage(project.slug, project.id, project.projectDbPath) }
+        val now = System.currentTimeMillis()
+        val requestId = project.deletionRequestId ?: project.cloudDecisionRequestId ?: java.util.UUID.randomUUID().toString()
+        projectDao.completeLocalOnlyDeletion(projectId, requestId, now, now)
+        projectDao.completeRemoteLocalDeletion(projectId, now, now)
+        projectDao.markProjectDeletedForce(projectId, now, now)
+    }.fold(
+        onSuccess = { AppResult.Success(Unit) },
+        onFailure = { AppResult.Error(DatabaseException("Failed to force purge local project", it)) }
+    )
+
     override suspend fun touch(projectId: String): AppResult<Unit> = runCatching {
         projectDao.touch(
             projectId = projectId,

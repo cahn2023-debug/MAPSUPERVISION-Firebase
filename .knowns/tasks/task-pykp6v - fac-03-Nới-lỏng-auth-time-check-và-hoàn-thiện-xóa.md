@@ -5,7 +5,7 @@ status: done
 priority: high
 labels: []
 createdAt: '2026-08-25T12:38:10.068Z'
-updatedAt: '2026-08-25T12:41:58.989Z'
+updatedAt: '2026-08-25T13:24:32.020Z'
 completedAt: '2026-08-25T12:41:58.989Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -23,6 +23,7 @@ Nới lỏng điều kiện auth_time trong webapp/app/api/projects/[projectId]/
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Nới lỏng ràng buộc auth_time trong route deletion decision và hoàn tất gửi request xóa Cloud từ Android ProjectViewModel.
 <!-- AC:END -->
 
 ## Implementation Notes

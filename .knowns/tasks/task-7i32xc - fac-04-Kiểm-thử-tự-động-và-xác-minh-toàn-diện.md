@@ -5,7 +5,7 @@ status: done
 priority: medium
 labels: []
 createdAt: '2026-08-25T12:38:13.994Z'
-updatedAt: '2026-08-25T12:49:04.987Z'
+updatedAt: '2026-08-25T13:24:36.033Z'
 completedAt: '2026-08-25T12:49:04.987Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -23,6 +23,7 @@ Chạy kiểm thử unit tests cho Android parser, tests cho API routes và buil
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Toàn bộ unit test suite trên Webapp và Android modules (:data, :project, :app) đều pass 100%.
 <!-- AC:END -->
 
 ## Implementation Notes

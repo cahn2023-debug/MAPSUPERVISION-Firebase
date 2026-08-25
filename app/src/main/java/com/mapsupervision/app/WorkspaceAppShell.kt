@@ -405,6 +405,7 @@ fun WorkspaceAppShell(
                     },
                     onAcknowledgeRemoteDeletion = projectViewModel::acknowledgeRemoteDeletion,
                     onDecideCloudDeletion = projectViewModel::decideCloudDeletion,
+                    onForceDeleteLocalProject = projectViewModel::forceDeleteLocalProject,
                     onExportProject = { project -> projectViewModel.exportProject(context, project) },
                     onImportProject = { uri -> projectViewModel.importProject(context, uri) },
                     onResolveDuplicateProject = { uri, overwrite, createCopy ->
