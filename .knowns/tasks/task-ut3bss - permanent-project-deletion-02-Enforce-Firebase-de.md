@@ -8,17 +8,9 @@ labels:
   - spec:permanent-project-deletion
   - spec-date:2026-08-23
 createdAt: '2026-08-23T14:33:39.869Z'
-updatedAt: '2026-08-24T09:52:01.007Z'
+updatedAt: '2026-08-25T01:33:44.952Z'
 completedAt: '2026-08-23T15:56:24.555Z'
 timeSpent: 2023
-fulfills:
-  - AC-1
-  - AC-4
-  - AC-5
-  - AC-6
-  - AC-7
-  - AC-9
-  - AC-11
 order: 20
 ---
 # [permanent-project-deletion-02] Enforce Firebase deletion authorization and resumable cloud cleanup
@@ -65,5 +57,7 @@ Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass. System Decision Im
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
 System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed) — verification confirms the approved deletion lifecycle invariants
 Reconciled with the approved local-first spec revision: detached from the current spec execution set and retained as completed cloud-first baseline history. No implementation files changed.
+SDD metadata cleanup: removed stale fulfills links because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
+SDD metadata cleanup completed: stale fulfills links cleared because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
 <!-- SECTION:NOTES:END -->
 

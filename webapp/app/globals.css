@@ -1861,3 +1861,145 @@ select:focus {
   flex-direction: column;
   gap: 16px;
 }
+
+/* UI/UX Pro Max - Danger Zone & Glassmorphic Danger Modal */
+.danger-zone-container {
+  margin-top: 32px;
+  border-radius: 16px;
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  background: linear-gradient(180deg, rgba(225, 29, 72, 0.04) 0%, rgba(12, 13, 20, 0.85) 100%);
+  backdrop-filter: blur(12px);
+  padding: 24px;
+  box-shadow: 0 8px 32px -4px rgba(225, 29, 72, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.danger-zone-container:hover {
+  border-color: rgba(244, 63, 94, 0.45);
+  box-shadow: 0 12px 36px -4px rgba(225, 29, 72, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.danger-zone-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.danger-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(225, 29, 72, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: 20px;
+  color: #ff6b81;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.danger-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.danger-button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+  box-shadow: 0 6px 20px rgba(225, 29, 72, 0.5);
+  transform: translateY(-1px);
+}
+
+.danger-button-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.danger-button-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.glass-danger-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 12, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.glass-danger-modal-card {
+  width: 100%;
+  max-width: 540px;
+  background: rgba(15, 17, 26, 0.96);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.9), 0 0 35px rgba(225, 29, 72, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.danger-impact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(225, 29, 72, 0.07);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #fca5a5;
+  line-height: 1.5;
+}
+
+.danger-input-field {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(8, 10, 16, 0.85);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: 10px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.danger-input-field:focus {
+  border-color: #f43f5e;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.2);
+}

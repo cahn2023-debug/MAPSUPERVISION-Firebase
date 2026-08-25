@@ -1479,9 +1479,12 @@ fun MapHubScreen(
 
         if (showSettingsDialog && selectedProjectForSettings != null) {
             val project = selectedProjectForSettings!!
+            val isCreator = session?.let { s -> projectState.catalogItems.firstOrNull { it.projectId == project.id }?.createdByUid == s.uid } == true
+            val isProjectAdmin = projectState.catalogItems.firstOrNull { it.projectId == project.id }?.isProjectAdmin == true
+            val canDelete = session?.isAdmin == true || isCreator || isProjectAdmin
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showSettingsDialog = false },
-                title = { Text("Cài đặt lưu trữ", fontWeight = FontWeight.Bold, color = textColor) },
+                title = { Text("Cài đặt lưu trữ & dự án", fontWeight = FontWeight.Bold, color = textColor) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
@@ -1534,6 +1537,61 @@ fun MapHubScreen(
                                 Text("Chọn thư mục")
                             }
                         }
+                        if (canDelete && project.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = dividerColor.copy(alpha = 0.5f))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = dangerColor.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = dangerColor.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Vùng nguy hiểm (Danger Zone)",
+                                    color = dangerColor,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Text(
+                                    text = "Xóa vĩnh viễn dữ liệu dự án trên thiết bị và Firebase Cloud. Hành động này không thể hoàn tác.",
+                                    color = secondaryTextColor,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (project.id == projectState.activeProjectId) {
+                                    Text(
+                                        text = "⚠️ Dự án đang mở. Vui lòng chuyển sang dự án khác trước khi xóa.",
+                                        color = orangeColor,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            showSettingsDialog = false
+                                            deletionProject = project
+                                            deletionIdentity = ""
+                                            deletionPassword = ""
+                                            deletionPendingConfirmed = false
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onPrimaryColor),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Xóa dự án này", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
@@ -1573,30 +1631,80 @@ fun MapHubScreen(
         }
 
         deletionProject?.let { project ->
+            val targetIdentifier = project.slug.ifBlank { project.name }
+            val isIdentityMatch = deletionIdentity.trim() == project.name || deletionIdentity.trim() == project.slug || deletionIdentity.trim() == project.id
+            val isConfirmEnabled = isIdentityMatch && deletionPassword.isNotBlank()
+
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { deletionProject = null },
-                title = { Text("Xóa vĩnh viễn project", fontWeight = FontWeight.Bold, color = dangerColor) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(dangerColor.copy(alpha = 0.15f), shape = RoundedCornerShape(10.dp))
+                                .border(1.dp, dangerColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.Delete, contentDescription = null, tint = dangerColor, modifier = Modifier.size(20.dp))
+                        }
+                        Column {
+                            Text("Xác nhận xóa vĩnh viễn", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium, color = dangerColor)
+                            Text("Dự án: ${project.name}", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                        }
+                    }
+                },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Dữ liệu nghiệp vụ trên Firebase sẽ bị xóa. Media Google Drive được giữ lại. Hành động này không thể hoàn tác.", color = secondaryTextColor)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(dangerColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                                .border(1.dp, dangerColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("⚠️ Cảnh báo mất dữ liệu:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = dangerColor)
+                            Text("• Dữ liệu GIS, công việc, nhật ký thực địa trên Firebase sẽ bị xóa vĩnh viễn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                            Text("• Dữ liệu Catalog và phân quyền thành viên sẽ bị hủy bỏ.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                            Text("• Dữ liệu ảnh thực địa trên Google Drive vẫn được giữ nguyên an toàn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                        }
+
+                        Text("1. Nhập chính xác tên hoặc mã dự án ($targetIdentifier):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = deletionIdentity,
                             onValueChange = { deletionIdentity = it },
-                            label = { Text("Nhập đúng tên hoặc mã project") },
+                            placeholder = { Text(targetIdentifier) },
                             singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            isError = deletionIdentity.isNotBlank() && !isIdentityMatch,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        Text("2. Mật khẩu tài khoản (xác thực lại quyền Admin):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = deletionPassword,
                             onValueChange = { deletionPassword = it },
-                            label = { Text("Mật khẩu xác thực lại") },
+                            placeholder = { Text("Nhập mật khẩu tài khoản...") },
                             singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
                             visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = deletionPendingConfirmed, onCheckedChange = { deletionPendingConfirmed = it })
-                            Text("Tôi xác nhận cả các thay đổi chưa đồng bộ (nếu có)", color = secondaryTextColor)
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { deletionPendingConfirmed = !deletionPendingConfirmed }
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = deletionPendingConfirmed,
+                                onCheckedChange = { deletionPendingConfirmed = it }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Tôi xác nhận chấp nhận hủy bỏ các thay đổi chưa đồng bộ (nếu có)", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
                         }
                     }
                 },
@@ -1606,13 +1714,25 @@ fun MapHubScreen(
                             onDeleteProject(project.id, deletionIdentity, deletionPassword, deletionPendingConfirmed)
                             deletionProject = null
                         },
-                        enabled = deletionIdentity.isNotBlank() && deletionPassword.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
-                    ) { Text("Xóa project") }
+                        enabled = isConfirmEnabled,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onPrimaryColor)
+                    ) {
+                        Text("Xác nhận Xóa", fontWeight = FontWeight.Bold)
+                    }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { deletionProject = null }) { Text("Hủy") }
-                }
+                    OutlinedButton(
+                        onClick = { deletionProject = null },
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, dividerColor),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = secondaryTextColor)
+                    ) {
+                        Text("Hủy")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.surface
             )
         }
 

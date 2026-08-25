@@ -867,3 +867,35 @@ export async function createDailyLogDocument(
   };
   await setDoc(ref, createEnvelope("daily_log", projectId, ref.id, payload, now));
 }
+
+export async function requestDeleteProjectApi(
+  projectId: string,
+  idToken: string,
+  typedIdentity: string,
+  confirmPendingOutbox: boolean = true
+): Promise<{ success: boolean; error?: { code: string; message: string } }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/deletion`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`
+    },
+    body: JSON.stringify({
+      requestId: `del_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+      typedIdentity: typedIdentity.trim(),
+      confirmPendingOutbox
+    })
+  });
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {
+    const rawText = await res.text().catch(() => "");
+    throw new Error(`Lỗi phản hồi máy chủ (${res.status}): ${rawText.slice(0, 120) || "Không nhận được phản hồi hợp lệ."}`);
+  }
+  if (!res.ok || !data?.success) {
+    const errorMsg = data?.error?.message || `Lỗi xử lý xóa dự án (Mã: ${res.status}).`;
+    throw new Error(errorMsg);
+  }
+  return data;
+}

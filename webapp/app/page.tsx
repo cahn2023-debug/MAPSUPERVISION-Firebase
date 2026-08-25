@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FirebaseError } from "firebase/app";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
-import { db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
+import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
 import {
   buildProjectMediaPreviewUrl,
   createDailyLogDocument,
@@ -12,6 +13,7 @@ import {
   createProjectDocument,
   createTaskDocument,
   emptyProjectCollections,
+  requestDeleteProjectApi,
   saveProjectMember,
   setActiveProjectForUser,
   subscribeCurrentProjectMember,
@@ -288,6 +290,10 @@ export default function HomePage() {
   const [mapFilterContractor, setMapFilterContractor] = useState("");
   const [mapFilterWork, setMapFilterWork] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     return observeAuth((nextUser) => {
@@ -655,6 +661,30 @@ export default function HomePage() {
     }
   }
 
+  async function handleDeleteProject(password: string, typedIdentity: string) {
+    if (!auth?.currentUser || !selectedProjectId) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      if (auth.currentUser.email && password) {
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+      }
+      const token = await auth.currentUser.getIdToken(true);
+      await requestDeleteProjectApi(selectedProjectId, token, typedIdentity, true);
+      setIsDeleteModalOpen(false);
+      setSelectedProjectId("");
+      setProject(null);
+      setDeleteSuccessMsg("Đã xóa vĩnh viễn dự án thành công khỏi hệ thống Firebase Cloud.");
+      setTimeout(() => setDeleteSuccessMsg(null), 6000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Xóa dự án thất bại.";
+      setDeleteError(msg);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   async function handleAccessRequestTransition(
     request: ProjectAccessRequestRow,
     action: AccessAdminAction,
@@ -914,6 +944,24 @@ export default function HomePage() {
       </aside>
 
       <main className="shell">
+        {deleteSuccessMsg ? (
+          <div style={{
+            padding: "12px 18px",
+            marginBottom: "16px",
+            background: "rgba(16, 185, 129, 0.15)",
+            border: "1px solid rgba(16, 185, 129, 0.4)",
+            borderRadius: "12px",
+            color: "#34d399",
+            fontWeight: "600",
+            fontSize: "13px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px"
+          }}>
+            <span>✓</span>
+            <span>{deleteSuccessMsg}</span>
+          </div>
+        ) : null}
 
       {/* Tab selector */}
       <nav className="tab-container">
@@ -1300,24 +1348,34 @@ export default function HomePage() {
           </section>
 
           {selectedProjectId ? (
-            <AdminAccessPanel
-              users={filteredUsers}
-              projectMembers={projectMembers}
-              contractorOptions={contractorOptions}
-              selectedManagedUid={selectedManagedUid}
-              onSelectManagedUid={setSelectedManagedUid}
-              memberDraft={memberDraft}
-              onMemberDraftChange={setMemberDraft}
-              memberSearch={memberSearch}
-              onMemberSearchChange={setMemberSearch}
-              memberWriteBusy={memberWriteBusy}
-              memberWriteState={memberWriteState}
-              onSaveMember={() => void handleSaveMember()}
-              onDeleteMember={(uid) => void handleDeleteMember(uid)}
-            />
+            <>
+              <AdminAccessPanel
+                users={filteredUsers}
+                projectMembers={projectMembers}
+                contractorOptions={contractorOptions}
+                selectedManagedUid={selectedManagedUid}
+                onSelectManagedUid={setSelectedManagedUid}
+                memberDraft={memberDraft}
+                onMemberDraftChange={setMemberDraft}
+                memberSearch={memberSearch}
+                onMemberSearchChange={setMemberSearch}
+                memberWriteBusy={memberWriteBusy}
+                memberWriteState={memberWriteState}
+                onSaveMember={() => void handleSaveMember()}
+                onDeleteMember={(uid) => void handleDeleteMember(uid)}
+              />
+              <ProjectDangerZone
+                project={project}
+                isAdmin={isAdmin}
+                onOpenDeleteModal={() => {
+                  setDeleteError(null);
+                  setIsDeleteModalOpen(true);
+                }}
+              />
+            </>
           ) : (
             <section className="notice" style={{ padding: "32px", textAlign: "center", marginTop: "24px" }}>
-              <h2 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: "800" }}>QUẢN LÝ THÀNH VIÊN</h2>
+              <h2 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: "800" }}>QUẢN LÝ THÀNH VIÊN & DỰ ÁN</h2>
               <p className="muted" style={{ margin: 0 }}>
                 Vui lòng chọn một dự án cụ thể ở phía trên để quản lý thành viên và phân quyền truy cập nhà thầu.
               </p>
@@ -1326,6 +1384,20 @@ export default function HomePage() {
         </>
       )}
     </main>
+
+    <DeleteProjectModal
+      isOpen={isDeleteModalOpen}
+      project={project}
+      busy={deleteBusy}
+      error={deleteError}
+      onClose={() => {
+        if (!deleteBusy) {
+          setIsDeleteModalOpen(false);
+          setDeleteError(null);
+        }
+      }}
+      onConfirm={handleDeleteProject}
+    />
     </div>
   );
 }
@@ -1886,6 +1958,218 @@ function List<T extends Record<string, unknown>>({
           {render(row)}
         </article>
       ))}
+    </div>
+  );
+}
+
+function ProjectDangerZone({
+  project,
+  isAdmin,
+  onOpenDeleteModal
+}: {
+  project: ProjectDoc | null;
+  isAdmin: boolean;
+  onOpenDeleteModal: () => void;
+}) {
+  if (!isAdmin || !project) return null;
+  return (
+    <section className="danger-zone-container">
+      <div className="danger-zone-header">
+        <span className="danger-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Danger Zone
+        </span>
+        <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#fca5a5" }}>
+          Vùng nguy hiểm — Quản lý hủy bỏ dự án
+        </h3>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "16px", marginTop: "12px" }}>
+        <div style={{ maxWidth: "600px" }}>
+          <p style={{ margin: "0 0 4px 0", fontSize: "13px", fontWeight: "600", color: "var(--ink)" }}>
+            Xóa vĩnh viễn dự án &quot;{project.name}&quot; ({project.projectCode || project.id})
+          </p>
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)", lineHeight: "1.5" }}>
+            Hành động này sẽ xóa hoàn toàn document dự án trên Firebase Firestore, hủy bỏ quyền của toàn bộ thành viên, dọn dẹp các subcollections (GIS, nhiệm vụ, nhật ký, ảnh) và gỡ bỏ khỏi Catalog. Thao tác này không thể hoàn tác.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="danger-button-primary"
+          onClick={onOpenDeleteModal}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+          Xóa dự án này
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function DeleteProjectModal({
+  isOpen,
+  project,
+  busy,
+  error,
+  onClose,
+  onConfirm
+}: {
+  isOpen: boolean;
+  project: ProjectDoc | null;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: (password: string, typedIdentity: string) => Promise<void>;
+}) {
+  const [typedIdentity, setTypedIdentity] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmedRisk, setConfirmedRisk] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTypedIdentity("");
+      setPassword("");
+      setConfirmedRisk(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !project) return null;
+
+  const targetIdentifier = project.projectCode || project.name;
+  const isMatch = typedIdentity.trim() === targetIdentifier.trim() || typedIdentity.trim() === project.name.trim() || typedIdentity.trim() === project.id.trim();
+  const canDelete = isMatch && password.length >= 6 && confirmedRisk && !busy;
+
+  return (
+    <div className="glass-danger-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="glass-danger-modal-card">
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
+          <div style={{
+            width: "42px",
+            height: "42px",
+            borderRadius: "12px",
+            background: "rgba(225, 29, 72, 0.2)",
+            border: "1px solid rgba(244, 63, 94, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#ff6b81",
+            flexShrink: 0
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "17px", fontWeight: "800", color: "#ffffff" }}>
+              Xác nhận xóa vĩnh viễn dự án
+            </h3>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
+              Bạn đang thực hiện yêu cầu xóa dự án <strong style={{ color: "#ff8f00" }}>{project.name}</strong>.
+            </p>
+          </div>
+        </div>
+
+        <div className="danger-impact-list">
+          <div>⚠️ <strong>Cảnh báo mất dữ liệu vĩnh viễn:</strong></div>
+          <div>• Toàn bộ bản ghi GIS, tuyến cáp, điểm mốc và tiến độ công trình sẽ bị xóa.</div>
+          <div>• Nhật ký thi công, báo cáo giám sát và phân quyền thành viên sẽ bị hủy bỏ.</div>
+          <div>• Bản ghi danh mục Cloud Catalog sẽ được gỡ bỏ ngay lập tức.</div>
+        </div>
+
+        {error ? (
+          <div style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            background: "rgba(239, 68, 68, 0.2)",
+            border: "1px solid rgba(239, 68, 68, 0.5)",
+            color: "#fca5a5",
+            fontSize: "12px",
+            fontWeight: "600"
+          }}>
+            {error}
+          </div>
+        ) : null}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div>
+            <label style={{ marginBottom: "6px", fontSize: "12px", color: "var(--ink)" }}>
+              1. Nhập chính xác tên hoặc mã dự án (<code style={{ color: "#ff6b81", userSelect: "all" }}>{targetIdentifier}</code>):
+            </label>
+            <input
+              type="text"
+              className="danger-input-field"
+              placeholder={`Nhập "${targetIdentifier}" để xác nhận...`}
+              value={typedIdentity}
+              disabled={busy}
+              onChange={(e) => setTypedIdentity(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ marginBottom: "6px", fontSize: "12px", color: "var(--ink)" }}>
+              2. Mật khẩu tài khoản Admin (xác thực quyền hạn):
+            </label>
+            <input
+              type="password"
+              className="danger-input-field"
+              placeholder="Nhập mật khẩu tài khoản hiện tại..."
+              value={password}
+              disabled={busy}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", textTransform: "none", fontSize: "12px", color: "#fca5a5" }}>
+            <input
+              type="checkbox"
+              checked={confirmedRisk}
+              disabled={busy}
+              onChange={(e) => setConfirmedRisk(e.target.checked)}
+              style={{ width: "16px", height: "16px", accentColor: "#e11d48", cursor: "pointer" }}
+            />
+            <span>Tôi hiểu toàn bộ dữ liệu dự án này sẽ bị xóa vĩnh viễn và không thể phục hồi.</span>
+          </label>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            className="danger-button-primary"
+            disabled={!canDelete}
+            onClick={() => void onConfirm(password, typedIdentity)}
+          >
+            {busy ? (
+              <>
+                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1"/>
+                </svg>
+                Đang xóa dự án...
+              </>
+            ) : (
+              "Tôi hiểu rủi ro, Xóa dự án này"
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

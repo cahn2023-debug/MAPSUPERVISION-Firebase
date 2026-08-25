@@ -9,7 +9,7 @@ labels:
   - spec-date:2026-08-23
   - revision
 createdAt: '2026-08-24T08:22:09.675Z'
-updatedAt: '2026-08-24T09:52:38.718Z'
+updatedAt: '2026-08-24T10:28:06.997Z'
 completedAt: '2026-08-24T09:14:42.007Z'
 timeSpent: 2836
 assignee: '@me'
@@ -57,5 +57,6 @@ Using kn-implement for task 08. Owned scope: Firebase/web authorization and work
 Implementation complete and reviewed. Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass, D5=pass, D6=pass, D7=pass, D8=pass, D9=pass, D10=pass, D11=pass, D12=pass, D13=pass. Verification: web npm test 32/32 pass; web TypeScript noEmit pass; :data/:project/:app compileDebugKotlin pass. Review verdict PASS with no blocking findings. System Decision Impact: candidate @decision/20260824-1520-local-first-project-deletion-with-administrator-cloud-decision (changed) — project-admin authorization, decision-to-worker wiring, first-write-wins, checkpoint retry, tombstone/media preservation, and Cloud-success-gated local completion are now implemented.
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass, D5=pass, D6=pass, D7=pass, D8=pass, D9=pass, D10=pass, D11=pass, D12=pass, D13=pass
 System Decision Impact: candidate @decision/20260824-1520-local-first-project-deletion-with-administrator-cloud-decision (changed) — linked evidence confirms the approved local-first lifecycle.
+📚 Extracted reusable lifecycle, concurrency, and restore-state lessons to @doc/learnings/learning-local-first-project-deletion-lifecycle.
 <!-- SECTION:NOTES:END -->
 

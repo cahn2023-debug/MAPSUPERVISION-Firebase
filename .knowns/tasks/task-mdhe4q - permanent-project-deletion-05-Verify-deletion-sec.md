@@ -8,21 +8,9 @@ labels:
   - spec:permanent-project-deletion
   - spec-date:2026-08-23
 createdAt: '2026-08-23T14:33:40.057Z'
-updatedAt: '2026-08-24T09:52:01.170Z'
+updatedAt: '2026-08-25T01:33:44.994Z'
 completedAt: '2026-08-23T17:13:24.585Z'
 timeSpent: 259
-fulfills:
-  - AC-1
-  - AC-2
-  - AC-3
-  - AC-4
-  - AC-5
-  - AC-6
-  - AC-7
-  - AC-8
-  - AC-9
-  - AC-10
-  - AC-11
 order: 50
 ---
 # [permanent-project-deletion-05] Verify deletion security, retry, offline, and media preservation
@@ -70,5 +58,7 @@ Final verification completed:
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
 System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed)
 Reconciled with the approved local-first spec revision: detached from the current spec execution set and retained as completed cloud-first baseline history. No implementation files changed.
+SDD metadata cleanup: removed stale fulfills links because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
+SDD metadata cleanup completed: stale fulfills links cleared because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
 <!-- SECTION:NOTES:END -->
 

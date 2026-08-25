@@ -8,16 +8,9 @@ labels:
   - spec:permanent-project-deletion
   - spec-date:2026-08-23
 createdAt: '2026-08-23T14:33:39.990Z'
-updatedAt: '2026-08-24T09:52:01.118Z'
+updatedAt: '2026-08-25T01:33:44.861Z'
 completedAt: '2026-08-23T17:08:43.217Z'
 timeSpent: 2627
-fulfills:
-  - AC-1
-  - AC-2
-  - AC-3
-  - AC-4
-  - AC-7
-  - AC-8
 order: 40
 ---
 # [permanent-project-deletion-04] Add Android deletion safeguards and status UI
@@ -57,5 +50,7 @@ Implemented Android deletion safeguards and status UI. Re-review: PASS after fix
 Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass
 System Decision Impact: candidate @decision/20260823-2129-permanent-project-deletion-lifecycle (changed) — verification confirms the approved deletion lifecycle invariants
 Reconciled with the approved local-first spec revision: detached from the current spec execution set and retained as completed cloud-first baseline history. No implementation files changed.
+SDD metadata cleanup: removed stale fulfills links because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
+SDD metadata cleanup completed: stale fulfills links cleared because this completed task is retained as detached historical baseline after the local-first spec revision; implementation history and acceptance criteria remain unchanged.
 <!-- SECTION:NOTES:END -->
 

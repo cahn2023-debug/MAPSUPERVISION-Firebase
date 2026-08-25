@@ -1,26 +1,53 @@
 import fs from "node:fs";
+import path from "node:path";
 import { cert, getApps, initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
 function readCredential() {
-  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE?.trim();
-  if (filePath) {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    if (typeof parsed.private_key === "string") {
-      parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (raw) {
+    try {
+      let clean = raw;
+      if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
+        clean = clean.slice(1, -1).trim();
+      }
+      const parsed = JSON.parse(clean);
+      if (typeof parsed.private_key === "string") {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+      }
+      return cert(parsed);
+    } catch (err) {
+      console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
     }
-    return cert(parsed);
   }
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) {
-    return applicationDefault();
+
+  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE?.trim();
+  const candidatePaths = [
+    filePath ? path.resolve(process.cwd(), filePath) : null,
+    filePath ? path.resolve(filePath) : null,
+    path.resolve(process.cwd(), "../mapsupervision-3d985eee34f0.json"),
+    path.resolve(process.cwd(), "mapsupervision-3d985eee34f0.json"),
+    path.resolve(__dirname, "../../mapsupervision-3d985eee34f0.json"),
+    path.resolve(__dirname, "../mapsupervision-3d985eee34f0.json")
+  ].filter((p): p is string => typeof p === "string" && p.length > 0);
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const content = fs.readFileSync(candidate, "utf8");
+        const parsed = JSON.parse(content);
+        if (typeof parsed.private_key === "string") {
+          parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+        }
+        return cert(parsed);
+      }
+    } catch (err) {
+      console.warn(`[FirebaseAdmin] Failed reading ${candidate}:`, err);
+    }
   }
-  const parsed = JSON.parse(raw);
-  if (typeof parsed.private_key === "string") {
-    parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-  }
-  return cert(parsed);
+
+  return applicationDefault();
 }
 
 function adminApp() {
@@ -29,7 +56,7 @@ function adminApp() {
   }
   return initializeApp({
     credential: readCredential(),
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "mapsupervision"
   });
 }
 

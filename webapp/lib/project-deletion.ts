@@ -50,6 +50,7 @@ export type DeletionAuthorizationInput = {
   isActiveOnDevice: boolean;
   projectName: string;
   projectCode: string | null;
+  projectId?: string;
   typedIdentity: string;
   authTimeEpochSeconds: number | undefined;
   requestIdMatches?: boolean;
@@ -65,11 +66,17 @@ export function validateDeletionAuthorization(input: DeletionAuthorizationInput)
   }
   if (input.currentState === "DELETED") throw new Error("ALREADY_DELETED");
   if (input.currentState === "DELETING" && !input.requestIdMatches) throw new Error("DELETION_IN_PROGRESS");
-  if (input.typedIdentity !== input.projectName && input.typedIdentity !== (input.projectCode ?? "")) {
+  
+  const normalizedTyped = input.typedIdentity.trim().toLowerCase();
+  const matchesName = input.projectName && normalizedTyped === input.projectName.trim().toLowerCase();
+  const matchesCode = input.projectCode && normalizedTyped === input.projectCode.trim().toLowerCase();
+  const matchesId = input.projectId && normalizedTyped === input.projectId.trim().toLowerCase();
+  if (!matchesName && !matchesCode && !matchesId) {
     throw new Error("IDENTITY_MISMATCH");
   }
+
   const now = input.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
-  if (!input.authTimeEpochSeconds || now - input.authTimeEpochSeconds > 300) {
+  if (!input.authTimeEpochSeconds || now - input.authTimeEpochSeconds > 600) {
     throw new Error("REAUTH_REQUIRED");
   }
 }

@@ -1,6 +1,14 @@
 {
   "schemaVersion": 1,
   "entries": {
+    "doc:doc-069736e9a9ecf7a7546c1d5ed91b6b14": {
+      "entityType": "doc",
+      "entityId": "doc-069736e9a9ecf7a7546c1d5ed91b6b14",
+      "path": "docs/learnings/monotonic-session-viewport-zoom-for-temporal-map-overlays.md",
+      "hash": "e58f5086e29bccede56c1c63eee502679d84babbf2d8eb5deda7b520b3f45a8c",
+      "revision": 1,
+      "headHash": "e58f5086e29bccede56c1c63eee502679d84babbf2d8eb5deda7b520b3f45a8c"
+    },
     "doc:doc-0d5cbeea345b160498365b0db3f50583": {
       "entityType": "doc",
       "entityId": "doc-0d5cbeea345b160498365b0db3f50583",
@@ -8,6 +16,38 @@
       "hash": "32e02e8a5ec6e87226f82c027114adeb2e3601ccd2356b16e37fcd6690ac9671",
       "revision": 2,
       "headHash": "32e02e8a5ec6e87226f82c027114adeb2e3601ccd2356b16e37fcd6690ac9671"
+    },
+    "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
+      "entityType": "doc",
+      "entityId": "doc-5552a2952ff80ae71093bbd4647e5d1f",
+      "path": "docs/learnings/learning-local-first-project-deletion-lifecycle.md",
+      "hash": "d3e3b7dd7353d0f0c560feb9c518dc51e26a03373c7410fca2ad477887179035",
+      "revision": 1,
+      "headHash": "d3e3b7dd7353d0f0c560feb9c518dc51e26a03373c7410fca2ad477887179035"
+    },
+    "doc:doc-5ebc14fa48a9919bfb9838e46079c885": {
+      "entityType": "doc",
+      "entityId": "doc-5ebc14fa48a9919bfb9838e46079c885",
+      "path": "docs/specs/2026-08-24/media-status-tags-by-object.md",
+      "hash": "bac9e454479789e09a0edd1d7b8f32506e36dbe3822e61b43e05953c4ed466e0",
+      "revision": 3,
+      "headHash": "bac9e454479789e09a0edd1d7b8f32506e36dbe3822e61b43e05953c4ed466e0"
+    },
+    "doc:doc-7caf63657d28fbda63878b564dd31929": {
+      "entityType": "doc",
+      "entityId": "doc-7caf63657d28fbda63878b564dd31929",
+      "path": "docs/learnings/learning-firebase-catalog-access-state-must-include-approved-requests.md",
+      "hash": "dc4069e736aa4d42d5d45dfb92b4d893a51c11caeff200253bb724fb8b728db5",
+      "revision": 1,
+      "headHash": "dc4069e736aa4d42d5d45dfb92b4d893a51c11caeff200253bb724fb8b728db5"
+    },
+    "doc:doc-91779fad2cc654c757a0a6e7e401003f": {
+      "entityType": "doc",
+      "entityId": "doc-91779fad2cc654c757a0a6e7e401003f",
+      "path": "docs/specs/2026-08-24/video-minimap-movement-tracking.md",
+      "hash": "9a8663bb0cfe3500eeea4573da1dfbeb6a2e995cdd534888c81c2490f7937603",
+      "revision": 5,
+      "headHash": "9a8663bb0cfe3500eeea4573da1dfbeb6a2e995cdd534888c81c2490f7937603"
     },
     "doc:doc-ab0e87ebf1bff31d721ff635fd59110f": {
       "entityType": "doc",
@@ -53,9 +93,9 @@
       "entityType": "doc",
       "entityId": "doc-f1129579c07034a2a63ea39677e1408d",
       "path": "docs/specs/2026-08-23/permanent-project-deletion.md",
-      "hash": "760cf8d8b5779cc9222e57ab043d0fb8e93c0c1188428944eb193a91691b6205",
-      "revision": 2,
-      "headHash": "760cf8d8b5779cc9222e57ab043d0fb8e93c0c1188428944eb193a91691b6205"
+      "hash": "b6c29e1ea617046092ce88676cc10a76f46395962be706c472cb0dc8cbc24de9",
+      "revision": 7,
+      "headHash": "b6c29e1ea617046092ce88676cc10a76f46395962be706c472cb0dc8cbc24de9"
     },
     "doc:doc-f48b73dd56ca6eca0c419753f1b4d6f0": {
       "entityType": "doc",
@@ -64,6 +104,14 @@
       "hash": "113339bcbdd8224708c99d7656edc100c9cdc2af4054c154361a5663cfe97373",
       "revision": 1,
       "headHash": "113339bcbdd8224708c99d7656edc100c9cdc2af4054c154361a5663cfe97373"
+    },
+    "task:0ri7hn": {
+      "entityType": "task",
+      "entityId": "0ri7hn",
+      "path": "tasks/task-0ri7hn - video-minimap-movement-tracking-02-Render-live-mo.md",
+      "hash": "ec167d8ddaa02366a7e3b0d7f06604eebb715cc68372d5f28eb1f5a851753a76",
+      "revision": 10,
+      "headHash": "ec167d8ddaa02366a7e3b0d7f06604eebb715cc68372d5f28eb1f5a851753a76"
     },
     "task:1st54w": {
       "entityType": "task",
@@ -81,6 +129,14 @@
       "revision": 6,
       "headHash": "e9615fe073eecfa9caff890a11f0c2a17b02d7775cbdc9be30d396a1fa2e05d8"
     },
+    "task:4a5rim": {
+      "entityType": "task",
+      "entityId": "4a5rim",
+      "path": "tasks/task-4a5rim - video-minimap-movement-tracking-03-Giữ-zoom-minim.md",
+      "hash": "5eb1c5dceaf3a718bfb570fadeed9a84c4ad02c989bfd35e651c3f8432a605cb",
+      "revision": 9,
+      "headHash": "5eb1c5dceaf3a718bfb570fadeed9a84c4ad02c989bfd35e651c3f8432a605cb"
+    },
     "task:4hpjy5": {
       "entityType": "task",
       "entityId": "4hpjy5",
@@ -97,6 +153,14 @@
       "revision": 9,
       "headHash": "ad0b9aa49bb5a83a48f95cd0ab545fefc243fe372f7650c3dee564fe60e3fc93"
     },
+    "task:7qsrje": {
+      "entityType": "task",
+      "entityId": "7qsrje",
+      "path": "tasks/task-7qsrje - media-status-tags-by-object-02-Di-chuyển-và-đồng.md",
+      "hash": "ed702e1bc2bc149df0a6c3cd634c4db2cfe6d5cc25487b0488eada4c9d41e672",
+      "revision": 8,
+      "headHash": "ed702e1bc2bc149df0a6c3cd634c4db2cfe6d5cc25487b0488eada4c9d41e672"
+    },
     "task:8b4bgf": {
       "entityType": "task",
       "entityId": "8b4bgf",
@@ -105,6 +169,14 @@
       "revision": 8,
       "headHash": "d96e72a4b6199492137403f2b8fb6f9ae2d9fa4f46e29bbc02c46e1b9177850e"
     },
+    "task:930kkg": {
+      "entityType": "task",
+      "entityId": "930kkg",
+      "path": "tasks/task-930kkg - permanent-project-deletion-08-Reconcile-Cloud-del.md",
+      "hash": "4699a493c9b7c247c408222d0c7e6d793e579eb10a24a43e629a79f01ad63efd",
+      "revision": 7,
+      "headHash": "4699a493c9b7c247c408222d0c7e6d793e579eb10a24a43e629a79f01ad63efd"
+    },
     "task:93i0ba": {
       "entityType": "task",
       "entityId": "93i0ba",
@@ -112,6 +184,14 @@
       "hash": "7f71392fb12f57d61df7a24a82bb86faa4786e5afea2fba69fe512ac7d4ba789",
       "revision": 9,
       "headHash": "7f71392fb12f57d61df7a24a82bb86faa4786e5afea2fba69fe512ac7d4ba789"
+    },
+    "task:avrsg3": {
+      "entityType": "task",
+      "entityId": "avrsg3",
+      "path": "tasks/task-avrsg3 - permanent-project-deletion-10-Verify-local-first.md",
+      "hash": "9c226889c01527d786dd0c065bd1993192d80d113e0dbdc0d45cc41f5e39a497",
+      "revision": 6,
+      "headHash": "9c226889c01527d786dd0c065bd1993192d80d113e0dbdc0d45cc41f5e39a497"
     },
     "task:baywan": {
       "entityType": "task",
@@ -137,6 +217,14 @@
       "revision": 4,
       "headHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949"
     },
+    "task:f6csl2": {
+      "entityType": "task",
+      "entityId": "f6csl2",
+      "path": "tasks/task-f6csl2 - media-status-tags-by-object-03-Phân-loại-và-lọc-m.md",
+      "hash": "19f06a1f5ad39fe69df3eaa708b93f427d0b3a3f74b14a0b8446b325f32b405b",
+      "revision": 8,
+      "headHash": "19f06a1f5ad39fe69df3eaa708b93f427d0b3a3f74b14a0b8446b325f32b405b"
+    },
     "task:gh61ke": {
       "entityType": "task",
       "entityId": "gh61ke",
@@ -161,6 +249,14 @@
       "revision": 5,
       "headHash": "b3f869c31b7b753423ae6150f92a30fac24f20b3340701365744f1697eb3cec6"
     },
+    "task:iixn7n": {
+      "entityType": "task",
+      "entityId": "iixn7n",
+      "path": "tasks/task-iixn7n - permanent-project-deletion-06-Implement-local-fir.md",
+      "hash": "102d2c9789b92475be1bb87f4780636c81af7a5531292b5ac03c87888fce9318",
+      "revision": 5,
+      "headHash": "102d2c9789b92475be1bb87f4780636c81af7a5531292b5ac03c87888fce9318"
+    },
     "task:ko9dx0": {
       "entityType": "task",
       "entityId": "ko9dx0",
@@ -173,9 +269,9 @@
       "entityType": "task",
       "entityId": "ks43wq",
       "path": "tasks/task-ks43wq - permanent-project-deletion-04-Add-Android-deletio.md",
-      "hash": "de4c76e20e31e108dd511ed2b0c99e93966e8825494a86cbfdb3f5839e165d19",
-      "revision": 7,
-      "headHash": "de4c76e20e31e108dd511ed2b0c99e93966e8825494a86cbfdb3f5839e165d19"
+      "hash": "7d33739e7495b2ff4a1d9eed48a08b1eb09c6902b78ff61516335aafc4ce16a4",
+      "revision": 10,
+      "headHash": "7d33739e7495b2ff4a1d9eed48a08b1eb09c6902b78ff61516335aafc4ce16a4"
     },
     "task:lxza27": {
       "entityType": "task",
@@ -197,9 +293,9 @@
       "entityType": "task",
       "entityId": "mdhe4q",
       "path": "tasks/task-mdhe4q - permanent-project-deletion-05-Verify-deletion-sec.md",
-      "hash": "c5c3c44a8ca7f0f4e565508c8e69d55b614fdb1116e354968eb308d2a1070527",
-      "revision": 8,
-      "headHash": "c5c3c44a8ca7f0f4e565508c8e69d55b614fdb1116e354968eb308d2a1070527"
+      "hash": "241ddf4c4d3219e75bdec4dbe75ae8c1dadb022f1755a10ba5569b22a830694b",
+      "revision": 11,
+      "headHash": "241ddf4c4d3219e75bdec4dbe75ae8c1dadb022f1755a10ba5569b22a830694b"
     },
     "task:mn9jia": {
       "entityType": "task",
@@ -229,9 +325,9 @@
       "entityType": "task",
       "entityId": "nygceq",
       "path": "tasks/task-nygceq - permanent-project-deletion-03-Propagate-deletion.md",
-      "hash": "a48c7616fc313b746590d217ecbbcab9b3a6a57e3817e554bc8404d4f7cf2e4b",
-      "revision": 8,
-      "headHash": "a48c7616fc313b746590d217ecbbcab9b3a6a57e3817e554bc8404d4f7cf2e4b"
+      "hash": "7ff482b55d1a660ada9d3dc7573a7bcbde741257641054b9e5ce3c770c8e6019",
+      "revision": 11,
+      "headHash": "7ff482b55d1a660ada9d3dc7573a7bcbde741257641054b9e5ce3c770c8e6019"
     },
     "task:ole2i0": {
       "entityType": "task",
@@ -257,13 +353,21 @@
       "revision": 11,
       "headHash": "7d6c520f8b8e82e2187457ec1b74d7ec6827124cbc326cdc6693b3862f7b4058"
     },
+    "task:qs2pyx": {
+      "entityType": "task",
+      "entityId": "qs2pyx",
+      "path": "tasks/task-qs2pyx - media-status-tags-by-object-04-Lọc-media-theo-thẻ.md",
+      "hash": "007b9710be18ecb8be2c703cb7fd4bf4bc5bad80c9fff62a5b8c13dbffd8801d",
+      "revision": 7,
+      "headHash": "007b9710be18ecb8be2c703cb7fd4bf4bc5bad80c9fff62a5b8c13dbffd8801d"
+    },
     "task:qwr70h": {
       "entityType": "task",
       "entityId": "qwr70h",
       "path": "tasks/task-qwr70h - permanent-project-deletion-01-Define-deletion-con.md",
-      "hash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686",
-      "revision": 11,
-      "headHash": "b2744a598a22e147d38e73b27a49d29e60a0d139703fa5a8a92a69adb42ec686"
+      "hash": "77fdd038493a837a82db2d97dca2d6697c84349c0b238f8e9b23ef6674c72537",
+      "revision": 14,
+      "headHash": "77fdd038493a837a82db2d97dca2d6697c84349c0b238f8e9b23ef6674c72537"
     },
     "task:ry4iav": {
       "entityType": "task",
@@ -289,6 +393,14 @@
       "revision": 7,
       "headHash": "437d342d356b86830d987e77ee962ae8e633cad16ba18f3da56127982c2a53c2"
     },
+    "task:t9fie1": {
+      "entityType": "task",
+      "entityId": "t9fie1",
+      "path": "tasks/task-t9fie1 - permanent-project-deletion-09-Propagate-decision.md",
+      "hash": "ed81b0ba58523713c899d7130b90a64d2f0106837a9d0330934868fe5196d79b",
+      "revision": 6,
+      "headHash": "ed81b0ba58523713c899d7130b90a64d2f0106837a9d0330934868fe5196d79b"
+    },
     "task:u5blkn": {
       "entityType": "task",
       "entityId": "u5blkn",
@@ -305,6 +417,14 @@
       "revision": 4,
       "headHash": "6ac4ca07705f0f5cc21d18940a4515a4a15c8462f584c58bf83e38ddcaa3a469"
     },
+    "task:ua65je": {
+      "entityType": "task",
+      "entityId": "ua65je",
+      "path": "tasks/task-ua65je - video-minimap-movement-tracking-01-Establish-sess.md",
+      "hash": "61ba4f0dcaec24f243de351508506647159193ff5a7bf6d4293a33a3f8842ad5",
+      "revision": 7,
+      "headHash": "61ba4f0dcaec24f243de351508506647159193ff5a7bf6d4293a33a3f8842ad5"
+    },
     "task:uie7ix": {
       "entityType": "task",
       "entityId": "uie7ix",
@@ -317,17 +437,17 @@
       "entityType": "task",
       "entityId": "ut3bss",
       "path": "tasks/task-ut3bss - permanent-project-deletion-02-Enforce-Firebase-de.md",
-      "hash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63",
-      "revision": 11,
-      "headHash": "e8216417006e54c2f16da63d5f8d056e3e401dd0c86e8c0dd42057ffc970ea63"
+      "hash": "77acd78db3351b0f3c8013c809c2a9cf1735b26515540b7651ff71606616f200",
+      "revision": 14,
+      "headHash": "77acd78db3351b0f3c8013c809c2a9cf1735b26515540b7651ff71606616f200"
     },
     "task:vy4got": {
       "entityType": "task",
       "entityId": "vy4got",
       "path": "tasks/task-vy4got - permanent-project-deletion-revision-Đặc-tả-xóa-lo.md",
-      "hash": "bef5876780bd886ea3e291af487f9cc92c4f881b072a395400404554c500bdc6",
-      "revision": 2,
-      "headHash": "bef5876780bd886ea3e291af487f9cc92c4f881b072a395400404554c500bdc6"
+      "hash": "600e09868b488be54a2698f3766c6b4df39282adb8611eff12541b512fcdd43a",
+      "revision": 6,
+      "headHash": "600e09868b488be54a2698f3766c6b4df39282adb8611eff12541b512fcdd43a"
     },
     "task:wlkka3": {
       "entityType": "task",
@@ -336,6 +456,30 @@
       "hash": "a1003b06be99e422415eb7617006f0ae33734eda7f79494f46af4986f65bf720",
       "revision": 4,
       "headHash": "a1003b06be99e422415eb7617006f0ae33734eda7f79494f46af4986f65bf720"
+    },
+    "task:y5uqki": {
+      "entityType": "task",
+      "entityId": "y5uqki",
+      "path": "tasks/task-y5uqki - permanent-project-deletion-07-Add-administrator-C.md",
+      "hash": "91d4de11881aaaa296d7ff56e05d4f006e632a127bfa9bc5ec10ed198db450d0",
+      "revision": 5,
+      "headHash": "91d4de11881aaaa296d7ff56e05d4f006e632a127bfa9bc5ec10ed198db450d0"
+    },
+    "task:yuh98l": {
+      "entityType": "task",
+      "entityId": "yuh98l",
+      "path": "tasks/task-yuh98l - media-status-tags-by-object-01-Lưu-catalog-và-trạ.md",
+      "hash": "d9ff41e93bcc2c5429faabe5c43c10e23a5b43f7b13a2aa61925f1be5b9eaca7",
+      "revision": 7,
+      "headHash": "d9ff41e93bcc2c5429faabe5c43c10e23a5b43f7b13a2aa61925f1be5b9eaca7"
+    },
+    "task:zfv69f": {
+      "entityType": "task",
+      "entityId": "zfv69f",
+      "path": "tasks/task-zfv69f - video-minimap-movement-tracking-03-Verify-timelin.md",
+      "hash": "f118ebb9dd12aa987fcb48b2bf73e8474c2d6fcc6e73d1febbb6ac2fbf358f48",
+      "revision": 7,
+      "headHash": "f118ebb9dd12aa987fcb48b2bf73e8474c2d6fcc6e73d1febbb6ac2fbf358f48"
     }
   }
 }
