@@ -80,6 +80,21 @@ class FirebaseProjectCatalogParserTest {
     }
 
     @Test
+    fun keeps_missing_or_blank_catalog_name_empty() {
+        val missingName = parseFirebaseProjectCatalog(
+            projectId = "project-missing-name",
+            fields = mapOf("projectCode" to "P-001")
+        )
+        val blankName = parseFirebaseProjectCatalog(
+            projectId = "project-blank-name",
+            fields = mapOf("projectName" to "   ", "projectCode" to "P-002")
+        )
+
+        assertEquals("", missingName?.projectName)
+        assertEquals("", blankName?.projectName)
+    }
+
+    @Test
     fun extracts_catalog_entry_from_envelope_project_doc() {
         val entry = extractCatalogEntryFromProjectDoc(
             projectId = "proj-100",
@@ -135,5 +150,20 @@ class FirebaseProjectCatalogParserTest {
         assertEquals("LEGACY-300", entry?.projectCode)
         assertEquals("admin-uid", entry?.createdByUid)
         assertEquals(FirebaseProjectCatalogStatus.ACTIVE, entry?.status)
+    }
+
+    @Test
+    fun keeps_missing_project_doc_name_empty() {
+        val entry = extractCatalogEntryFromProjectDoc(
+            projectId = "proj-missing-name",
+            docData = mapOf(
+                "payload" to mapOf(
+                    "projectCode" to "P-003",
+                    "isDeleted" to false
+                )
+            )
+        )
+
+        assertEquals("", entry?.projectName)
     }
 }

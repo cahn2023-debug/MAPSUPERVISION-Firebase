@@ -460,11 +460,6 @@ private fun ProjectCatalogCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "Mã dự án: ${entry.projectCode}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
                 StatusBadge(status = if (isAdmin) FirebaseAccessRequestStatus.APPROVED else status)
             }

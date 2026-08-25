@@ -730,7 +730,6 @@ internal fun parseFirebaseProjectCatalog(
     if (normalizedProjectId.isBlank()) return null
 
     val projectName = ((fields["projectName"] ?: fields["name"]) as? String)?.trim().orEmpty()
-        .ifBlank { normalizedProjectId }
     val slug = (fields["slug"] as? String)?.trim().orEmpty()
     val projectCode = ((fields["projectCode"] ?: fields["code"]) as? String)?.trim().orEmpty()
         .ifBlank { slug.ifBlank { normalizedProjectId.take(8).uppercase(Locale.ROOT) } }
@@ -767,7 +766,7 @@ internal fun extractCatalogEntryFromProjectDoc(
     val isDeleted = (payload["isDeleted"] as? Boolean) ?: (docData["isDeleted"] as? Boolean) ?: false
     if (isDeleted) return null
     val name = ((payload["name"] ?: payload["projectName"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim()
-        .orEmpty().ifBlank { projectId.trim() }
+        .orEmpty()
     val slug = ((payload["slug"] ?: docData["slug"]) as? String)?.trim().orEmpty()
     val projectCode = ((payload["projectCode"] ?: docData["projectCode"]) as? String)?.trim().orEmpty()
         .ifBlank { slug.ifBlank { projectId.take(8).uppercase(Locale.ROOT) } }
