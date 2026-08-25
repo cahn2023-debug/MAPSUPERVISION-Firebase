@@ -8,7 +8,7 @@ labels:
   - spec:camera-overlay-lifecycle-perf-fix
   - spec-date:2026-08-25
 createdAt: '2026-08-25T11:36:29.986Z'
-updatedAt: '2026-08-25T11:52:15.996Z'
+updatedAt: '2026-08-25T12:16:56.368Z'
 completedAt: '2026-08-25T11:38:47.001Z'
 timeSpent: 35
 assignee: '@me'
@@ -30,6 +30,10 @@ Isolate CameraX binding to cameraProvider/cameraSelector/isVideoMode only. Remov
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Changing zoomRatio does not rebind CameraX
+- [x] #2 Toggling Stamp does not rebind CameraX
+- [x] #3 Video stamp sampler runs at 250ms cadence
+- [x] #4 Final stop sample carries selected statusTag
 <!-- AC:END -->
 
 ## Implementation Notes

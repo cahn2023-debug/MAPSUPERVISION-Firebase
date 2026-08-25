@@ -8,7 +8,7 @@ labels:
   - spec:camera-overlay-lifecycle-perf-fix
   - spec-date:2026-08-25
 createdAt: '2026-08-25T11:36:41.011Z'
-updatedAt: '2026-08-25T11:52:25.000Z'
+updatedAt: '2026-08-25T12:17:07.884Z'
 completedAt: '2026-08-25T11:51:27.980Z'
 timeSpent: 562
 assignee: '@me'
@@ -27,6 +27,7 @@ Add unit tests for new state machine behavior and verify all tests pass via ./gr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 All unit tests pass via gradlew testDebugUnitTest
 <!-- AC:END -->
 
 ## Implementation Notes

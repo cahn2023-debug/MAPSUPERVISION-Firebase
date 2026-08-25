@@ -8,7 +8,7 @@ labels:
   - spec:camera-overlay-lifecycle-perf-fix
   - spec-date:2026-08-25
 createdAt: '2026-08-25T11:36:33.095Z'
-updatedAt: '2026-08-25T11:52:19.994Z'
+updatedAt: '2026-08-25T12:17:01.575Z'
 completedAt: '2026-08-25T11:41:55.985Z'
 timeSpent: 174
 assignee: '@me'
@@ -29,6 +29,9 @@ Precompute GIS geometry using remember(nodes) and remember(routes), skip OSM til
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Skip OSM tile fetch when stamp is disabled
+- [x] #2 Precompute GIS nodes and routes via remember
+- [x] #3 Recording buffers use standard mutableListOf
 <!-- AC:END -->
 
 ## Implementation Notes

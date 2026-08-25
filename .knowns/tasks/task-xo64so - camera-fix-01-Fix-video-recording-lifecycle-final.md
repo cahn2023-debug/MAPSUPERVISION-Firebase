@@ -8,7 +8,7 @@ labels:
   - spec:camera-overlay-lifecycle-perf-fix
   - spec-date:2026-08-25
 createdAt: '2026-08-25T11:36:25.992Z'
-updatedAt: '2026-08-25T11:52:13.001Z'
+updatedAt: '2026-08-25T12:16:52.326Z'
 completedAt: '2026-08-25T11:37:58.980Z'
 timeSpent: 60
 assignee: '@me'
@@ -28,6 +28,8 @@ Implement isFinalizingRecording and dismissAfterRecording state machine in Camer
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [x] #1 Tapping Close during recording waits for finalize before dismiss
+- [x] #2 While finalizing recording UI controls are disabled
 <!-- AC:END -->
 
 ## Implementation Notes
