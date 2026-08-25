@@ -21,9 +21,9 @@
       "entityType": "doc",
       "entityId": "doc-285a8394715267e447de652655327134",
       "path": "docs/specs/2026-08-25/web-backend-performance-optimization.md",
-      "hash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882",
-      "revision": 1,
-      "headHash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882"
+      "hash": "a9ce7373ca5b494ae77f5642e2b5923530e884ccf9719aa231c9425e84174aa2",
+      "revision": 3,
+      "headHash": "a9ce7373ca5b494ae77f5642e2b5923530e884ccf9719aa231c9425e84174aa2"
     },
     "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
       "entityType": "doc",
@@ -161,6 +161,14 @@
       "revision": 9,
       "headHash": "ad0b9aa49bb5a83a48f95cd0ab545fefc243fe372f7650c3dee564fe60e3fc93"
     },
+    "task:6zebli": {
+      "entityType": "task",
+      "entityId": "6zebli",
+      "path": "tasks/task-6zebli - web-backend-performance-optimization-01-Establish.md",
+      "hash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53",
+      "revision": 14,
+      "headHash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53"
+    },
     "task:7qsrje": {
       "entityType": "task",
       "entityId": "7qsrje",
@@ -265,6 +273,14 @@
       "revision": 5,
       "headHash": "102d2c9789b92475be1bb87f4780636c81af7a5531292b5ac03c87888fce9318"
     },
+    "task:j15llb": {
+      "entityType": "task",
+      "entityId": "j15llb",
+      "path": "tasks/task-j15llb - web-backend-performance-optimization-02-Scope-Fir.md",
+      "hash": "5d8a9979589c09709d07e499ffeb401e9a2845311a6eb9e304a9072ae5f777ac",
+      "revision": 2,
+      "headHash": "5d8a9979589c09709d07e499ffeb401e9a2845311a6eb9e304a9072ae5f777ac"
+    },
     "task:ko9dx0": {
       "entityType": "task",
       "entityId": "ko9dx0",
@@ -281,6 +297,14 @@
       "revision": 10,
       "headHash": "7d33739e7495b2ff4a1d9eed48a08b1eb09c6902b78ff61516335aafc4ce16a4"
     },
+    "task:lrhtrp": {
+      "entityType": "task",
+      "entityId": "lrhtrp",
+      "path": "tasks/task-lrhtrp - web-backend-performance-optimization-03-Optimize.md",
+      "hash": "84f0953f11d13ae8362a5a72c018d1f73b610170ec9a5b2ef9e794e8d0da3db6",
+      "revision": 2,
+      "headHash": "84f0953f11d13ae8362a5a72c018d1f73b610170ec9a5b2ef9e794e8d0da3db6"
+    },
     "task:lxza27": {
       "entityType": "task",
       "entityId": "lxza27",
@@ -293,9 +317,9 @@
       "entityType": "task",
       "entityId": "ly12b4",
       "path": "tasks/task-ly12b4 - firebase-project-catalog-recovery-02-Khôi-phục-ca.md",
-      "hash": "c52672a3c84491598fd2106374413173b0dfe5d9e7af28901288d78ec1a09ebb",
-      "revision": 6,
-      "headHash": "c52672a3c84491598fd2106374413173b0dfe5d9e7af28901288d78ec1a09ebb"
+      "hash": "efd708d7c3da743248b61502f45e62c19f3b845e3c5d315e0c5aa8a5ae635b6e",
+      "revision": 7,
+      "headHash": "efd708d7c3da743248b61502f45e62c19f3b845e3c5d315e0c5aa8a5ae635b6e"
     },
     "task:mdhe4q": {
       "entityType": "task",
@@ -408,6 +432,14 @@
       "hash": "ed81b0ba58523713c899d7130b90a64d2f0106837a9d0330934868fe5196d79b",
       "revision": 6,
       "headHash": "ed81b0ba58523713c899d7130b90a64d2f0106837a9d0330934868fe5196d79b"
+    },
+    "task:tvtytn": {
+      "entityType": "task",
+      "entityId": "tvtytn",
+      "path": "tasks/task-tvtytn - web-backend-performance-optimization-04-Prove-per.md",
+      "hash": "4621bed888fa6d7bf99a298678f7ae9bdc718dea8bb9993b4540481b677fe7aa",
+      "revision": 2,
+      "headHash": "4621bed888fa6d7bf99a298678f7ae9bdc718dea8bb9993b4540481b677fe7aa"
     },
     "task:u5blkn": {
       "entityType": "task",

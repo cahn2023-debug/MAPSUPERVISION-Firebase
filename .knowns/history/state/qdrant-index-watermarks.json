@@ -13,13 +13,25 @@
   "doc:doc-285a8394715267e447de652655327134": {
     "entityType": "doc",
     "entityId": "doc-285a8394715267e447de652655327134",
-    "canonicalHash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882",
-    "indexedHash": "8c7388ea73b484eace5eeecc44ad49091934ca219cdec9f6d6dfa222ae0c9882",
-    "revision": 1,
+    "canonicalHash": "a9ce7373ca5b494ae77f5642e2b5923530e884ccf9719aa231c9425e84174aa2",
+    "indexedHash": "83732ede6057c21e7251a7bf234b3c5ed58270c7fcbfd17147c6b8eebb9cc71d",
+    "revision": 3,
     "path": "docs/specs/2026-08-25/web-backend-performance-optimization.md",
-    "indexedRevision": 1,
+    "indexedRevision": 2,
     "indexedPath": "docs/specs/2026-08-25/web-backend-performance-optimization.md",
-    "indexedAt": "2026-08-25T06:39:22.2659683Z"
+    "indexedAt": "2026-08-25T06:48:08.3161452Z",
+    "stale": true
+  },
+  "doc:doc-3b9e3c4c2e90c727a7e931f9495bb64f": {
+    "entityType": "doc",
+    "entityId": "doc-3b9e3c4c2e90c727a7e931f9495bb64f",
+    "canonicalHash": "2a6aad53b51baa3baa4b2100182291f5eec87f38377fe3cf7d876549993d11a1",
+    "indexedHash": "2a6aad53b51baa3baa4b2100182291f5eec87f38377fe3cf7d876549993d11a1",
+    "revision": 1,
+    "path": "docs/specs/2026-08-25/camera-overlay-lifecycle-perf-fix.md",
+    "indexedRevision": 1,
+    "indexedPath": "docs/specs/2026-08-25/camera-overlay-lifecycle-perf-fix.md",
+    "indexedAt": "2026-08-25T11:53:00.431124Z"
   },
   "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
     "entityType": "doc",
@@ -172,6 +184,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:6zebli": {
+    "entityType": "task",
+    "entityId": "6zebli",
+    "canonicalHash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53",
+    "indexedHash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53",
+    "revision": 14,
+    "path": "tasks/6zebli.md",
+    "indexedRevision": 14,
+    "indexedPath": "tasks/6zebli.md",
+    "indexedAt": "2026-08-25T08:56:03.1584035Z"
+  },
   "task:7qsrje": {
     "entityType": "task",
     "entityId": "7qsrje",
@@ -232,6 +255,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:brr3pk": {
+    "entityType": "task",
+    "entityId": "brr3pk",
+    "canonicalHash": "c0fe3712636f0546a1fdafa1e4e62a404c70e2e0163a89cee2f9057a1e2e87b7",
+    "indexedHash": "c0fe3712636f0546a1fdafa1e4e62a404c70e2e0163a89cee2f9057a1e2e87b7",
+    "revision": 5,
+    "path": "tasks/brr3pk.md",
+    "indexedRevision": 5,
+    "indexedPath": "tasks/brr3pk.md",
+    "indexedAt": "2026-08-25T11:52:21.1206433Z"
+  },
   "task:cfhjsv": {
     "entityType": "task",
     "entityId": "cfhjsv",
@@ -249,6 +283,17 @@
     "path": "tasks/cur2hl.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
+  },
+  "task:eihjjs": {
+    "entityType": "task",
+    "entityId": "eihjjs",
+    "canonicalHash": "7903540bdeb407b0ef4cf70d8a3abe19fdd1c5dbec6dc2e11201fd025b889787",
+    "indexedHash": "7903540bdeb407b0ef4cf70d8a3abe19fdd1c5dbec6dc2e11201fd025b889787",
+    "revision": 5,
+    "path": "tasks/eihjjs.md",
+    "indexedRevision": 5,
+    "indexedPath": "tasks/eihjjs.md",
+    "indexedAt": "2026-08-25T11:52:30.1268254Z"
   },
   "task:f6csl2": {
     "entityType": "task",
@@ -299,6 +344,17 @@
     "indexedPath": "tasks/iixn7n.md",
     "indexedAt": "2026-08-24T09:52:44.3616731Z"
   },
+  "task:j15llb": {
+    "entityType": "task",
+    "entityId": "j15llb",
+    "canonicalHash": "5d8a9979589c09709d07e499ffeb401e9a2845311a6eb9e304a9072ae5f777ac",
+    "indexedHash": "5d8a9979589c09709d07e499ffeb401e9a2845311a6eb9e304a9072ae5f777ac",
+    "revision": 2,
+    "path": "tasks/j15llb.md",
+    "indexedRevision": 2,
+    "indexedPath": "tasks/j15llb.md",
+    "indexedAt": "2026-08-25T06:51:03.8652633Z"
+  },
   "task:ko9dx0": {
     "entityType": "task",
     "entityId": "ko9dx0",
@@ -317,6 +373,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:lrhtrp": {
+    "entityType": "task",
+    "entityId": "lrhtrp",
+    "canonicalHash": "84f0953f11d13ae8362a5a72c018d1f73b610170ec9a5b2ef9e794e8d0da3db6",
+    "indexedHash": "84f0953f11d13ae8362a5a72c018d1f73b610170ec9a5b2ef9e794e8d0da3db6",
+    "revision": 2,
+    "path": "tasks/lrhtrp.md",
+    "indexedRevision": 2,
+    "indexedPath": "tasks/lrhtrp.md",
+    "indexedAt": "2026-08-25T06:51:04.7163882Z"
+  },
   "task:lxza27": {
     "entityType": "task",
     "entityId": "lxza27",
@@ -329,8 +396,8 @@
   "task:ly12b4": {
     "entityType": "task",
     "entityId": "ly12b4",
-    "canonicalHash": "c52672a3c84491598fd2106374413173b0dfe5d9e7af28901288d78ec1a09ebb",
-    "revision": 6,
+    "canonicalHash": "efd708d7c3da743248b61502f45e62c19f3b845e3c5d315e0c5aa8a5ae635b6e",
+    "revision": 7,
     "path": "tasks/ly12b4.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
@@ -465,6 +532,17 @@
     "indexedPath": "tasks/t9fie1.md",
     "indexedAt": "2026-08-24T09:52:45.4980438Z"
   },
+  "task:tvtytn": {
+    "entityType": "task",
+    "entityId": "tvtytn",
+    "canonicalHash": "4621bed888fa6d7bf99a298678f7ae9bdc718dea8bb9993b4540481b677fe7aa",
+    "indexedHash": "4621bed888fa6d7bf99a298678f7ae9bdc718dea8bb9993b4540481b677fe7aa",
+    "revision": 2,
+    "path": "tasks/tvtytn.md",
+    "indexedRevision": 2,
+    "indexedPath": "tasks/tvtytn.md",
+    "indexedAt": "2026-08-25T06:51:04.8894909Z"
+  },
   "task:u5blkn": {
     "entityType": "task",
     "entityId": "u5blkn",
@@ -527,6 +605,28 @@
     "path": "tasks/wlkka3.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
+  },
+  "task:xo64so": {
+    "entityType": "task",
+    "entityId": "xo64so",
+    "canonicalHash": "e6f2398e101c235abce1d17b851dd4aba3517b305a7f68fcc8560a50c843899a",
+    "indexedHash": "e6f2398e101c235abce1d17b851dd4aba3517b305a7f68fcc8560a50c843899a",
+    "revision": 5,
+    "path": "tasks/xo64so.md",
+    "indexedRevision": 5,
+    "indexedPath": "tasks/xo64so.md",
+    "indexedAt": "2026-08-25T11:52:19.9856356Z"
+  },
+  "task:y5nh55": {
+    "entityType": "task",
+    "entityId": "y5nh55",
+    "canonicalHash": "f263e3c34e1cff76fc25f633c1fb8c7fce79cd30f786cfd2135260c5b316afe1",
+    "indexedHash": "f263e3c34e1cff76fc25f633c1fb8c7fce79cd30f786cfd2135260c5b316afe1",
+    "revision": 5,
+    "path": "tasks/y5nh55.md",
+    "indexedRevision": 5,
+    "indexedPath": "tasks/y5nh55.md",
+    "indexedAt": "2026-08-25T11:52:25.1647131Z"
   },
   "task:y5uqki": {
     "entityType": "task",

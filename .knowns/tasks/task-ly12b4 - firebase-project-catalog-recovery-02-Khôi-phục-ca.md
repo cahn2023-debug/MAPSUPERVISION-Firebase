@@ -8,9 +8,9 @@ labels:
   - spec:firebase-project-catalog-recovery
   - spec-date:2026-08-24
 createdAt: '2026-08-24T03:03:50.548Z'
-updatedAt: '2026-08-24T03:52:12.411Z'
+updatedAt: '2026-08-25T06:52:07.949Z'
 completedAt: '2026-08-24T03:41:52.575Z'
-timeSpent: 0
+timeSpent: 98318
 assignee: '@me'
 spec: specs/2026-08-24/firebase-project-catalog-recovery-approved
 fulfills:

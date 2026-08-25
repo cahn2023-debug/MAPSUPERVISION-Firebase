@@ -574,4 +574,91 @@ class CameraOverlayHelpersTest {
         assertEquals("01:25", formatRecordingDuration(85))
         assertEquals("12:03", formatRecordingDuration(723))
     }
+
+    @Test
+    fun `convertToCaptureMapNodes and Routes correctly map domain GIS entities`() {
+        val node = com.mapsupervision.domain.model.GisNode(
+            id = "n1",
+            projectId = "p1",
+            code = "NODE-101",
+            contractor = "c1",
+            latitude = 10.5,
+            longitude = 106.5
+        )
+        val route = com.mapsupervision.domain.model.GisRoute(
+            id = "r1",
+            projectId = "p1",
+            code = "ROUTE-202",
+            contractor = "c1",
+            startNodeCode = "N1",
+            endNodeCode = "N2",
+            points = listOf(10.5 to 106.5, 10.6 to 106.6)
+        )
+
+        val mapNodes = convertToCaptureMapNodes(listOf(node))
+        val mapRoutes = convertToCaptureMapRoutes(listOf(route))
+
+        assertEquals(1, mapNodes.size)
+        assertEquals("NODE-101", mapNodes[0].code)
+        assertEquals(10.5, mapNodes[0].latitude, 0.0001)
+        assertEquals(106.5, mapNodes[0].longitude, 0.0001)
+        assertFalse(mapNodes[0].highlighted)
+
+        assertEquals(1, mapRoutes.size)
+        assertEquals("ROUTE-202", mapRoutes[0].code)
+        assertEquals(2, mapRoutes[0].points.size)
+        assertFalse(mapRoutes[0].highlighted)
+    }
+
+    @Test
+    fun `buildCaptureStamp and buildVideoStampTimelineSample support precomputed mapNodes and mapRoutes`() {
+        val location = PhotoLocationSnapshot(latitude = 10.5, longitude = 106.5)
+        val mapNodes = listOf(
+            com.mapsupervision.domain.model.CaptureStampMapNode(
+                code = "N1",
+                latitude = 10.5,
+                longitude = 106.5,
+                label = "N1"
+            )
+        )
+        val mapRoutes = listOf(
+            com.mapsupervision.domain.model.CaptureStampMapRoute(
+                code = "R1",
+                points = listOf(10.5 to 106.5)
+            )
+        )
+
+        val stamp = buildCaptureStamp(
+            timestampMs = 5000L,
+            location = location,
+            address = "Test Road",
+            note = "Check node",
+            bearingDeg = 90f,
+            mapNodes = mapNodes,
+            mapRoutes = mapRoutes,
+            statusTag = "Thi công"
+        )
+
+        assertEquals("Thi công", stamp.statusTag)
+        assertEquals("Test Road", stamp.address)
+        assertEquals("Check node", stamp.note)
+        assertEquals(1, stamp.mapScene?.nodes?.size)
+        assertEquals(1, stamp.mapScene?.routes?.size)
+
+        val sample = buildVideoStampTimelineSample(
+            recordingStartElapsedMs = 1000L,
+            nowElapsedMs = 1250L,
+            location = location,
+            address = "Test Road",
+            note = "Check node",
+            bearingDeg = 90f,
+            mapNodes = mapNodes,
+            mapRoutes = mapRoutes,
+            statusTag = "Thi công"
+        )
+
+        assertEquals(250L, sample.elapsedMs)
+        assertEquals("Thi công", sample.stamp.statusTag)
+        assertEquals(1, sample.stamp.mapScene?.nodes?.size)
+    }
 }

@@ -11,7 +11,6 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import android.view.OrientationEventListener
 import android.view.Surface
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,7 +39,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -103,7 +101,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -178,41 +175,47 @@ internal fun resolveLatchedMinimapZoom(candidateZoom: Int, currentZoom: Int): In
     return candidateZoom.coerceIn(minZoom, maxZoom)
 }
 
+internal fun convertToCaptureMapNodes(nodes: List<GisNode>): List<CaptureStampMapNode> =
+    nodes.map {
+        CaptureStampMapNode(
+            code = it.code,
+            latitude = it.latitude,
+            longitude = it.longitude,
+            label = it.code,
+            highlighted = false
+        )
+    }
+
+internal fun convertToCaptureMapRoutes(routes: List<GisRoute>): List<CaptureStampMapRoute> =
+    routes.map {
+        CaptureStampMapRoute(
+            code = it.code,
+            points = it.points,
+            highlighted = false
+        )
+    }
+
 internal fun buildCaptureStamp(
     timestampMs: Long,
     location: PhotoLocationSnapshot?,
     address: String = "",
     note: String = "",
     bearingDeg: Float,
-    nodes: List<GisNode> = emptyList(),
-    routes: List<GisRoute> = emptyList(),
+    mapNodes: List<CaptureStampMapNode> = emptyList(),
+    mapRoutes: List<CaptureStampMapRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     statusTag: String? = null
 ): CaptureStamp {
-    val mapScene = if (nodes.isNotEmpty() || routes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null) {
+    val mapScene = if (mapNodes.isNotEmpty() || mapRoutes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null) {
         CaptureStampMapScene(
             centerLatitude = location?.latitude,
             centerLongitude = location?.longitude,
             cameraLatitude = location?.latitude,
             cameraLongitude = location?.longitude,
             bearingDeg = bearingDeg,
-            nodes = nodes.map {
-                CaptureStampMapNode(
-                    code = it.code,
-                    latitude = it.latitude,
-                    longitude = it.longitude,
-                    label = it.code,
-                    highlighted = false
-                )
-            },
-            routes = routes.map {
-                CaptureStampMapRoute(
-                    code = it.code,
-                    points = it.points,
-                    highlighted = false
-                )
-            },
+            nodes = mapNodes,
+            routes = mapRoutes,
             movementPath = movementPath,
             minimapZoom = minimapZoom
         )
@@ -229,6 +232,31 @@ internal fun buildCaptureStamp(
         statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }
     )
 }
+
+@JvmName("buildCaptureStampFromGis")
+internal fun buildCaptureStamp(
+    timestampMs: Long,
+    location: PhotoLocationSnapshot?,
+    address: String = "",
+    note: String = "",
+    bearingDeg: Float,
+    nodes: List<GisNode>,
+    routes: List<GisRoute> = emptyList(),
+    movementPath: List<Pair<Double, Double>> = emptyList(),
+    minimapZoom: Int? = null,
+    statusTag: String? = null
+): CaptureStamp = buildCaptureStamp(
+    timestampMs = timestampMs,
+    location = location,
+    address = address,
+    note = note,
+    bearingDeg = bearingDeg,
+    mapNodes = convertToCaptureMapNodes(nodes),
+    mapRoutes = convertToCaptureMapRoutes(routes),
+    movementPath = movementPath,
+    minimapZoom = minimapZoom,
+    statusTag = statusTag
+)
 
 internal class PhotoCaptureSession {
     var isCapturingPhoto by mutableStateOf(false)
@@ -386,8 +414,8 @@ internal fun buildVideoStampTimelineSample(
     address: String,
     note: String,
     bearingDeg: Float,
-    nodes: List<GisNode> = emptyList(),
-    routes: List<GisRoute> = emptyList(),
+    mapNodes: List<CaptureStampMapNode> = emptyList(),
+    mapRoutes: List<CaptureStampMapRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     tileBitmap: Any? = null,
@@ -401,8 +429,8 @@ internal fun buildVideoStampTimelineSample(
             address = address,
             note = note,
             bearingDeg = bearingDeg,
-            nodes = nodes,
-            routes = routes,
+            mapNodes = mapNodes,
+            mapRoutes = mapRoutes,
             movementPath = movementPath,
             minimapZoom = minimapZoom,
             statusTag = statusTag
@@ -410,6 +438,35 @@ internal fun buildVideoStampTimelineSample(
         tileBitmap = tileBitmap
     )
 }
+
+@JvmName("buildVideoStampTimelineSampleFromGis")
+internal fun buildVideoStampTimelineSample(
+    recordingStartElapsedMs: Long,
+    nowElapsedMs: Long,
+    location: PhotoLocationSnapshot?,
+    address: String,
+    note: String,
+    bearingDeg: Float,
+    nodes: List<GisNode>,
+    routes: List<GisRoute> = emptyList(),
+    movementPath: List<Pair<Double, Double>> = emptyList(),
+    minimapZoom: Int? = null,
+    tileBitmap: Any? = null,
+    statusTag: String? = null
+): VideoStampTimelineSample = buildVideoStampTimelineSample(
+    recordingStartElapsedMs = recordingStartElapsedMs,
+    nowElapsedMs = nowElapsedMs,
+    location = location,
+    address = address,
+    note = note,
+    bearingDeg = bearingDeg,
+    mapNodes = convertToCaptureMapNodes(nodes),
+    mapRoutes = convertToCaptureMapRoutes(routes),
+    movementPath = movementPath,
+    minimapZoom = minimapZoom,
+    tileBitmap = tileBitmap,
+    statusTag = statusTag
+)
 
 internal fun MutableList<VideoStampTimelineSample>.appendVideoStampTimelineSample(
     sample: VideoStampTimelineSample
@@ -499,6 +556,8 @@ fun CameraOverlay(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasAudioPermission = granted }
 
+    val captureMapNodes = remember(nodes) { convertToCaptureMapNodes(nodes) }
+    val captureMapRoutes = remember(routes) { convertToCaptureMapRoutes(routes) }
     var selectedStatusTag by remember { mutableStateOf<String?>("Hiện trạng") }
     var noteText by remember { mutableStateOf("") }
     var bearing by remember { mutableStateOf(0f) }
@@ -575,6 +634,8 @@ fun CameraOverlay(
     var isRecording by remember { mutableStateOf(false) }
     var isVideoMode by remember { mutableStateOf(false) }
     var isProcessingVideoStamp by remember { mutableStateOf(false) }
+    var isFinalizingRecording by remember { mutableStateOf(false) }
+    var dismissAfterRecording by remember { mutableStateOf(false) }
     var lensFacing by remember { mutableStateOf(CaptureLensFacing.BACK) }
     var flashMode by remember { mutableStateOf(CameraFlashMode.OFF) }
     var showSettingsSheet by remember { mutableStateOf(false) }
@@ -602,16 +663,13 @@ fun CameraOverlay(
     var currentTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var currentTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
     var currentTileZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
-    var cachedTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var cachedTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
-    var cachedTileZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
     var recordingStartElapsedMs by remember { mutableStateOf<Long?>(null) }
     var recordingDurationSeconds by remember { mutableStateOf(0) }
     var recordingTimelineTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var recordingTimelineTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
     var recordingTimelineTileZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
-    val recordingTimelineTileBitmaps = remember { mutableStateListOf<Bitmap>() }
-    val recordingTimelineSamples = remember { mutableStateListOf<VideoStampTimelineSample>() }
+    val recordingTimelineTileBitmaps = remember { mutableListOf<Bitmap>() }
+    val recordingTimelineSamples = remember { mutableListOf<VideoStampTimelineSample>() }
     val addressCache = remember { mutableMapOf<RoundedLocationKey, String>() }
     var previewSurfaceSize by remember { mutableStateOf(IntSize.Zero) }
     val previewViewport = remember(previewSurfaceSize, selectedAspectRatio) {
@@ -625,13 +683,12 @@ fun CameraOverlay(
     DisposableEffect(Unit) {
         onDispose {
             currentTileBitmap?.recycle()
-            cachedTileBitmap?.recycle()
             recordingTimelineTileBitmaps.forEach { it.recycle() }
             recordingTimelineTileBitmaps.clear()
         }
     }
 
-    val controlsEnabled = !isRecording && !isProcessingVideoStamp && !photoCaptureSession.isCapturingPhoto
+    val controlsEnabled = !isRecording && !isFinalizingRecording && !isProcessingVideoStamp && !photoCaptureSession.isCapturingPhoto
 
     LaunchedEffect(isRecording) {
         if (isRecording) {
@@ -647,43 +704,31 @@ fun CameraOverlay(
         }
     }
 
-    LaunchedEffect(
-        isRecording,
-        recordingStartElapsedMs,
-        stampEnabled,
-        liveLocation,
-        liveMovementPath,
-        liveMinimapZoom,
-        liveAddress,
-        noteText,
-        selectedStatusTag,
-        bearing,
-        nodes,
-        routes,
-        recordingTimelineTileBitmap
-    ) {
+    LaunchedEffect(isRecording, recordingStartElapsedMs, stampEnabled) {
         val startElapsedMs = recordingStartElapsedMs ?: return@LaunchedEffect
-        val tileBitmap = recordingTimelineTileBitmap
-        if (!isRecording || !stampEnabled || tileBitmap == null) {
+        if (!isRecording || !stampEnabled) {
             return@LaunchedEffect
         }
         while (isRecording) {
-            recordingTimelineSamples.appendVideoStampTimelineSample(
-                buildVideoStampTimelineSample(
-                    recordingStartElapsedMs = startElapsedMs,
-                    nowElapsedMs = SystemClock.elapsedRealtime(),
-                    location = liveLocation,
-                    address = liveAddress,
-                    note = noteText,
-                    bearingDeg = bearing,
-                    nodes = nodes,
-                    routes = routes,
-                    movementPath = liveMovementPath,
-                    minimapZoom = liveMinimapZoom,
-                    tileBitmap = tileBitmap,
-                    statusTag = selectedStatusTag
+            val tileBitmap = recordingTimelineTileBitmap
+            if (tileBitmap != null) {
+                recordingTimelineSamples.appendVideoStampTimelineSample(
+                    buildVideoStampTimelineSample(
+                        recordingStartElapsedMs = startElapsedMs,
+                        nowElapsedMs = SystemClock.elapsedRealtime(),
+                        location = liveLocation,
+                        address = liveAddress,
+                        note = noteText,
+                        bearingDeg = bearing,
+                        mapNodes = captureMapNodes,
+                        mapRoutes = captureMapRoutes,
+                        movementPath = liveMovementPath,
+                        minimapZoom = liveMinimapZoom,
+                        tileBitmap = tileBitmap,
+                        statusTag = selectedStatusTag
+                    )
                 )
-            )
+            }
             delay(VIDEO_STAMP_SAMPLE_INTERVAL_MS)
         }
     }
@@ -695,10 +740,6 @@ fun CameraOverlay(
             currentTileKey = null
             currentTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
             oldTile?.recycle()
-            cachedTileBitmap?.recycle()
-            cachedTileBitmap = null
-            cachedTileKey = null
-            cachedTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
             addressCache.clear()
         }
     }
@@ -721,8 +762,8 @@ fun CameraOverlay(
                     timestampMs = 0L,
                     location = loc,
                     bearingDeg = bearing,
-                    nodes = nodes,
-                    routes = routes,
+                    mapNodes = captureMapNodes,
+                    mapRoutes = captureMapRoutes,
                     movementPath = liveMovementPath
                 ).mapScene
                 val candidateZoom = PhotoStampRenderer.resolveMinimapZoom(
@@ -738,18 +779,15 @@ fun CameraOverlay(
                     reverseGeocode(context, safeLat, safeLng)
                 }.also { addressCache[locationKey] = it }
 
-                val nextTileBitmap = when {
-                    currentTileKey == locationKey && currentTileZoom == tileZoom && currentTileBitmap != null -> currentTileBitmap
-                    cachedTileKey == locationKey && cachedTileZoom == tileZoom && cachedTileBitmap != null -> snapshotBitmap(cachedTileBitmap)
-                    else -> {
-                        val fetchedTile = withContext(Dispatchers.IO) {
-                            PhotoStampRenderer.fetchOsmTile(safeLat, safeLng, zoom = tileZoom)
-                        }
-                        cachedTileBitmap?.takeIf { cachedTileKey != locationKey || cachedTileZoom != tileZoom }?.recycle()
-                        cachedTileBitmap = snapshotBitmap(fetchedTile)
-                        cachedTileKey = locationKey
-                        cachedTileZoom = tileZoom
-                        fetchedTile
+                if (!stampEnabled) {
+                    return@runCatching
+                }
+
+                val nextTileBitmap = if (currentTileKey == locationKey && currentTileZoom == tileZoom && currentTileBitmap != null) {
+                    currentTileBitmap
+                } else {
+                    withContext(Dispatchers.IO) {
+                        PhotoStampRenderer.fetchOsmTile(safeLat, safeLng, zoom = tileZoom)
                     }
                 }
 
@@ -904,7 +942,7 @@ fun CameraOverlay(
         }
     }
 
-    LaunchedEffect(cameraProvider, cameraSelector, isVideoMode, zoomRatio, stampEnabled) {
+    LaunchedEffect(cameraProvider, cameraSelector, isVideoMode) {
         val provider = cameraProvider ?: return@LaunchedEffect
         runCatching {
             provider.unbindAll()
@@ -934,6 +972,12 @@ fun CameraOverlay(
             boundCamera = null
             AppLogger.e(it, "camera.overlay.bind.failed")
         }
+    }
+
+    LaunchedEffect(boundCamera, zoomRatio) {
+        val camera = boundCamera ?: return@LaunchedEffect
+        val clampedZoom = clampZoomRatio(zoomRatio, minZoomRatio, maxZoomRatio)
+        camera.cameraControl.setZoomRatio(clampedZoom)
     }
 
     LaunchedEffect(flashMode) {
@@ -995,15 +1039,25 @@ fun CameraOverlay(
             )
             val viewport = previewViewport
             if (stampEnabled && viewport != null) {
-                val previewStamp = remember(liveLocation, liveMovementPath, liveMinimapZoom, liveAddress, noteText, bearing, selectedStatusTag) {
+                val previewStamp = remember(
+                    liveLocation,
+                    liveMovementPath,
+                    liveMinimapZoom,
+                    liveAddress,
+                    noteText,
+                    bearing,
+                    selectedStatusTag,
+                    captureMapNodes,
+                    captureMapRoutes
+                ) {
                     buildCaptureStamp(
                         timestampMs = System.currentTimeMillis(),
                         location = liveLocation,
                         address = liveAddress,
                         note = noteText,
                         bearingDeg = bearing,
-                        nodes = nodes,
-                        routes = routes,
+                        mapNodes = captureMapNodes,
+                        mapRoutes = captureMapRoutes,
                         movementPath = liveMovementPath,
                         minimapZoom = liveMinimapZoom,
                         statusTag = selectedStatusTag
@@ -1174,16 +1228,37 @@ fun CameraOverlay(
                 }
                 IconButton(
                     onClick = {
-                        if (!isProcessingVideoStamp) {
+                        if (!isProcessingVideoStamp && !isFinalizingRecording) {
                             if (isRecording) {
+                                dismissAfterRecording = true
+                                isFinalizingRecording = true
+                                val startElapsedMs = recordingStartElapsedMs
+                                val tileBitmap = recordingTimelineTileBitmap
+                                if (stampEnabled && startElapsedMs != null && tileBitmap != null) {
+                                    recordingTimelineSamples.appendVideoStampTimelineSample(
+                                        buildVideoStampTimelineSample(
+                                            recordingStartElapsedMs = startElapsedMs,
+                                            nowElapsedMs = SystemClock.elapsedRealtime(),
+                                            location = liveLocation,
+                                            address = liveAddress,
+                                            note = noteText,
+                                            bearingDeg = bearing,
+                                            mapNodes = captureMapNodes,
+                                            mapRoutes = captureMapRoutes,
+                                            movementPath = liveMovementPath,
+                                            minimapZoom = liveMinimapZoom,
+                                            tileBitmap = tileBitmap,
+                                            statusTag = selectedStatusTag
+                                        )
+                                    )
+                                }
                                 activeRecording?.stop()
-                                activeRecording = null
-                                isRecording = false
+                            } else {
+                                onDismiss()
                             }
-                            onDismiss()
                         }
                     },
-                    enabled = !isProcessingVideoStamp,
+                    enabled = !isProcessingVideoStamp && !isFinalizingRecording,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(Icons.Outlined.Close, contentDescription = "Đóng", tint = Color.White)
@@ -1454,35 +1529,37 @@ fun CameraOverlay(
                                 }
                             }
                             .clickable(
-                                enabled = !isProcessingVideoStamp,
+                                enabled = !isProcessingVideoStamp && !isFinalizingRecording,
                                 indication = null,
                                 interactionSource = remember { MutableInteractionSource() }
                             ) {
                                 focusManager.clearFocus()
                                 if (isVideoMode) {
                                     if (isRecording) {
-                                        val startElapsedMs = recordingStartElapsedMs
-                                        val tileBitmap = recordingTimelineTileBitmap
-                                        if (stampEnabled && startElapsedMs != null && tileBitmap != null) {
-                                            recordingTimelineSamples.appendVideoStampTimelineSample(
-                                                buildVideoStampTimelineSample(
-                                                    recordingStartElapsedMs = startElapsedMs,
-                                                    nowElapsedMs = SystemClock.elapsedRealtime(),
-                                                    location = liveLocation,
-                                                    address = liveAddress,
-                                                    note = noteText,
-                                                    bearingDeg = bearing,
-                                                    nodes = nodes,
-                                                    routes = routes,
-                                                    movementPath = liveMovementPath,
-                                                    minimapZoom = liveMinimapZoom,
-                                                    tileBitmap = tileBitmap
+                                        if (!isFinalizingRecording) {
+                                            isFinalizingRecording = true
+                                            val startElapsedMs = recordingStartElapsedMs
+                                            val tileBitmap = recordingTimelineTileBitmap
+                                            if (stampEnabled && startElapsedMs != null && tileBitmap != null) {
+                                                recordingTimelineSamples.appendVideoStampTimelineSample(
+                                                    buildVideoStampTimelineSample(
+                                                        recordingStartElapsedMs = startElapsedMs,
+                                                        nowElapsedMs = SystemClock.elapsedRealtime(),
+                                                        location = liveLocation,
+                                                        address = liveAddress,
+                                                        note = noteText,
+                                                        bearingDeg = bearing,
+                                                        mapNodes = captureMapNodes,
+                                                        mapRoutes = captureMapRoutes,
+                                                        movementPath = liveMovementPath,
+                                                        minimapZoom = liveMinimapZoom,
+                                                        tileBitmap = tileBitmap,
+                                                        statusTag = selectedStatusTag
+                                                    )
                                                 )
-                                            )
+                                            }
+                                            activeRecording?.stop()
                                         }
-                                        activeRecording?.stop()
-                                        activeRecording = null
-                                        isRecording = false
                                     } else {
                                         if (!hasAudioPermission) {
                                             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -1494,8 +1571,8 @@ fun CameraOverlay(
                                             address = liveAddress,
                                             note = noteText,
                                             bearingDeg = bearing,
-                                            nodes = nodes,
-                                            routes = routes,
+                                            mapNodes = captureMapNodes,
+                                            mapRoutes = captureMapRoutes,
                                             movementPath = liveMovementPath,
                                             minimapZoom = liveMinimapZoom,
                                             statusTag = selectedStatusTag
@@ -1519,8 +1596,8 @@ fun CameraOverlay(
                                                     address = liveAddress,
                                                     note = noteText,
                                                     bearingDeg = bearing,
-                                                    nodes = nodes,
-                                                    routes = routes,
+                                                    mapNodes = captureMapNodes,
+                                                    mapRoutes = captureMapRoutes,
                                                     movementPath = liveMovementPath,
                                                     minimapZoom = liveMinimapZoom,
                                                     statusTag = selectedStatusTag,
@@ -1557,51 +1634,53 @@ fun CameraOverlay(
                                                     activeRecording = null
                                                     val timelineSnapshot = recordingTimelineSamples.toList()
                                                     if (!event.hasError()) {
-                                                        coroutineScope.launch {
-                                                            try {
-                                                                postProcessRecordedVideo(
-                                                                    videoFile = videoFile,
-                                                                    stampEnabled = stampEnabled,
-                                                                    stampAtRecordStart = stampAtRecordStart,
-                                                                    tileBitmap = recordingTileBitmap,
-                                                                    timelineSamples = timelineSnapshot,
-                                                                    photoPipelineService = photoPipelineService,
-                                                                    setProcessingVideoStamp = { isProcessingVideoStamp = it },
-                                                                    onSavePhoto = { file ->
-                                                                        onSavePhoto(
-                                                                            file,
-                                                                            stampAtRecordStart?.statusTag ?: selectedStatusTag,
-                                                                            stampAtRecordStart?.note ?: noteText,
-                                                                            stampAtRecordStart?.address ?: liveAddress
-                                                                        )
-                                                                    },
-                                                                    onPhotoCaptured = onPhotoCaptured
-                                                                )
-                                                                onDismiss()
-                                                            } catch (error: Throwable) {
-                                                                AppLogger.e(error, "camera.overlay.capture.video.failed")
-                                                                runCatching { videoFile.delete() }
-                                                                onDismiss()
-                                                            } finally {
-                                                                recordingTimelineSamples.clear()
-                                                                recordingStartElapsedMs = null
-                                                                recordingTimelineTileBitmap = null
-                                                                recordingTimelineTileKey = null
-                                                                recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
-                                                                recordingTimelineTileBitmaps.forEach { it.recycle() }
-                                                                recordingTimelineTileBitmaps.clear()
-                                                            }
-                                                        }
+                                                         coroutineScope.launch {
+                                                             try {
+                                                                 postProcessRecordedVideo(
+                                                                     videoFile = videoFile,
+                                                                     stampEnabled = stampEnabled,
+                                                                     stampAtRecordStart = stampAtRecordStart,
+                                                                     tileBitmap = recordingTileBitmap,
+                                                                     timelineSamples = timelineSnapshot,
+                                                                     photoPipelineService = photoPipelineService,
+                                                                     setProcessingVideoStamp = { isProcessingVideoStamp = it },
+                                                                     onSavePhoto = { file ->
+                                                                         onSavePhoto(
+                                                                             file,
+                                                                             stampAtRecordStart?.statusTag ?: selectedStatusTag,
+                                                                             stampAtRecordStart?.note ?: noteText,
+                                                                             stampAtRecordStart?.address ?: liveAddress
+                                                                         )
+                                                                     },
+                                                                     onPhotoCaptured = onPhotoCaptured
+                                                                 )
+                                                                 onDismiss()
+                                                             } catch (error: Throwable) {
+                                                                 AppLogger.e(error, "camera.overlay.capture.video.failed")
+                                                                 runCatching { videoFile.delete() }
+                                                                 onDismiss()
+                                                             } finally {
+                                                                 isFinalizingRecording = false
+                                                                 recordingTimelineSamples.clear()
+                                                                 recordingStartElapsedMs = null
+                                                                 recordingTimelineTileBitmap = null
+                                                                 recordingTimelineTileKey = null
+                                                                 recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                                                 recordingTimelineTileBitmaps.forEach { it.recycle() }
+                                                                 recordingTimelineTileBitmaps.clear()
+                                                             }
+                                                         }
                                                     } else {
-                                                        recordingTimelineSamples.clear()
-                                                        recordingStartElapsedMs = null
-                                                        recordingTimelineTileBitmap = null
-                                                        recordingTimelineTileKey = null
-                                                        recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
-                                                        recordingTimelineTileBitmaps.forEach { it.recycle() }
-                                                        recordingTimelineTileBitmaps.clear()
-                                                        runCatching { videoFile.delete() }
-                                                        onDismiss()
+                                                         isFinalizingRecording = false
+                                                         recordingTimelineSamples.clear()
+                                                         recordingStartElapsedMs = null
+                                                         recordingTimelineTileBitmap = null
+                                                         recordingTimelineTileKey = null
+                                                         recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                                         recordingTimelineTileBitmaps.forEach { it.recycle() }
+                                                         recordingTimelineTileBitmaps.clear()
+                                                         runCatching { videoFile.delete() }
+                                                         onDismiss()
                                                     }
                                                 }
                                             }
@@ -1617,8 +1696,8 @@ fun CameraOverlay(
                                         address = liveAddress,
                                         note = noteText,
                                         bearingDeg = bearing,
-                                        nodes = nodes,
-                                        routes = routes,
+                                        mapNodes = captureMapNodes,
+                                        mapRoutes = captureMapRoutes,
                                         movementPath = liveMovementPath,
                                         minimapZoom = liveMinimapZoom,
                                         statusTag = capturedStatusTag
