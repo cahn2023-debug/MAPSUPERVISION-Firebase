@@ -460,6 +460,13 @@ class FirebaseSyncRepositoryImplTest {
         assertEquals("proj-1", row["projectId"])
     }
 
+    @Test
+    fun remotePhotoWithOlderTimestampDoesNotReplaceLocalTagChange() {
+        assertFalse(shouldApplyRemoteRow(localUpdatedAtEpochMs = 2_000L, remoteUpdatedAtEpochMs = 1_999L))
+        assertTrue(shouldApplyRemoteRow(localUpdatedAtEpochMs = 2_000L, remoteUpdatedAtEpochMs = 2_001L))
+        assertTrue(shouldApplyRemoteRow(localUpdatedAtEpochMs = null, remoteUpdatedAtEpochMs = 1L))
+    }
+
     private class TestFirebaseRuntime(context: Context) : FirebaseRuntime(context) {
         override fun authConfigured(): Boolean = true
         override suspend fun getFirebaseToken(): String = "test-token"

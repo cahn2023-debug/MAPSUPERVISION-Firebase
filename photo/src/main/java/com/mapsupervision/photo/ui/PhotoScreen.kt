@@ -115,6 +115,10 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
         if (uris.isNotEmpty()) viewModel.importFromGallery(uris, objectCode, engineer)
     }
     val availableTagOptions by viewModel.availableTagOptions.collectAsState()
+    val statusTagOptions by viewModel.statusTagOptions.collectAsState()
+    val activeStatusTag by viewModel.activeStatusTag.collectAsState()
+    val statusTagFilter by viewModel.statusTagFilter.collectAsState()
+    var newStatusTag by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Quan ly hinh anh", style = MaterialTheme.typography.titleLarge)
@@ -127,6 +131,29 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = objectCode, onValueChange = { objectCode = it }, label = { Text("Doi tuong") })
             OutlinedTextField(value = engineer, onValueChange = { engineer = it }, label = { Text("Ky su") })
+        }
+
+        Text("The trang thai", style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            statusTagOptions.forEach { tag ->
+                FilterChip(
+                    selected = activeStatusTag == tag,
+                    onClick = { viewModel.setActiveStatusTag(if (activeStatusTag == tag) null else tag) },
+                    label = { Text(tag) }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = newStatusTag,
+                onValueChange = { newStatusTag = it },
+                label = { Text("Tag tuy chinh") },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedButton(onClick = {
+                viewModel.addCustomStatusTag(newStatusTag)
+                newStatusTag = ""
+            }) { Text("Them tag") }
         }
 
         if (!hasCameraPermission) {
@@ -173,12 +200,26 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
             )
         }
 
-        val matchedPhotos = photos.filter { it.matchedNodeCode != null || it.matchedRouteCode != null || it.resolvedTagCodes.isNotEmpty() }
-        val unmatchedPhotos = photos.filterNot { it.matchedNodeCode != null || it.matchedRouteCode != null || it.resolvedTagCodes.isNotEmpty() }
+        Text("Loc the cua doi tuong $objectCode", style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            statusTagOptions.forEach { tag ->
+                FilterChip(
+                    selected = statusTagFilter == tag,
+                    onClick = { viewModel.toggleStatusTagFilter(tag) },
+                    label = { Text(tag) }
+                )
+            }
+        }
+
+        val statusTagFilteredPhotos = statusTagFilter?.let { tag ->
+            photos.filter { it.objectCode == objectCode.trim() && it.statusTag == tag }
+        } ?: photos
+        val matchedPhotos = statusTagFilteredPhotos.filter { it.matchedNodeCode != null || it.matchedRouteCode != null || it.resolvedTagCodes.isNotEmpty() }
+        val unmatchedPhotos = statusTagFilteredPhotos.filterNot { it.matchedNodeCode != null || it.matchedRouteCode != null || it.resolvedTagCodes.isNotEmpty() }
         val visiblePhotos = when (statusFilter) {
             "MATCHED" -> matchedPhotos
             "UNMATCHED" -> unmatchedPhotos
-            else -> photos
+            else -> statusTagFilteredPhotos
         }
 
         ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -260,6 +301,21 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text("The trang thai", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        statusTagOptions.forEach { tag ->
+                            FilterChip(
+                                selected = selectedPhoto.statusTag == tag,
+                                onClick = { viewModel.updateSelectedPhotoStatusTag(tag) },
+                                label = { Text(tag) }
+                            )
+                        }
+                        FilterChip(
+                            selected = selectedPhoto.statusTag == null,
+                            onClick = { viewModel.updateSelectedPhotoStatusTag(null) },
+                            label = { Text("Bo the") }
+                        )
+                    }
                     OutlinedTextField(
                         value = offsetText,
                         onValueChange = {

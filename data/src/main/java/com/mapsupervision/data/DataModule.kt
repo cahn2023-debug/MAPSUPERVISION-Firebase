@@ -17,6 +17,7 @@ import com.mapsupervision.data.db.dao.TaskDao
 import com.mapsupervision.data.db.dao.ProjectDao
 import com.mapsupervision.data.db.dao.SitePhotoDao
 import com.mapsupervision.data.db.dao.WorkCategoryDao
+import com.mapsupervision.data.db.dao.MediaStatusTagDao
 import com.mapsupervision.data.repository.DailyLogRepositoryImpl
 import com.mapsupervision.data.repository.AiDecisionCacheStoreImpl
 import com.mapsupervision.data.repository.ChatHistoryRepositoryImpl
@@ -28,6 +29,7 @@ import com.mapsupervision.data.repository.ProjectRepositoryImpl
 import com.mapsupervision.data.repository.NoteRepositoryImpl
 import com.mapsupervision.data.repository.TaskRepositoryImpl
 import com.mapsupervision.data.repository.WorkCategoryRepositoryImpl
+import com.mapsupervision.data.repository.MediaStatusTagRepositoryImpl
 import com.mapsupervision.domain.repository.DailyLogRepository
 import com.mapsupervision.domain.repository.ChatHistoryRepository
 import com.mapsupervision.domain.repository.GisRepository
@@ -38,6 +40,7 @@ import com.mapsupervision.domain.repository.ProjectRepository
 import com.mapsupervision.domain.repository.NoteRepository
 import com.mapsupervision.domain.repository.TaskRepository
 import com.mapsupervision.domain.repository.WorkCategoryRepository
+import com.mapsupervision.domain.repository.MediaStatusTagRepository
 import com.mapsupervision.domain.repository.StampDataRepository
 import com.mapsupervision.domain.repository.FirebaseSyncRepository
 import com.mapsupervision.domain.repository.FirebaseAccessRepository
@@ -133,6 +136,9 @@ object DataModule {
     fun provideWorkCategoryDao(db: MapSupervisionDatabase): WorkCategoryDao = db.workCategoryDao()
 
     @Provides
+    fun provideMediaStatusTagDao(db: MapSupervisionDatabase): MediaStatusTagDao = db.mediaStatusTagDao()
+
+    @Provides
     fun provideAiDecisionCacheDao(db: MapSupervisionDatabase): AiDecisionCacheDao = db.aiDecisionCacheDao()
 
     @Provides
@@ -190,6 +196,9 @@ abstract class DataBindModule {
 
     @Binds
     abstract fun bindWorkCategoryRepository(impl: WorkCategoryRepositoryImpl): WorkCategoryRepository
+
+    @Binds
+    abstract fun bindMediaStatusTagRepository(impl: MediaStatusTagRepositoryImpl): MediaStatusTagRepository
 
     @Binds
     abstract fun bindTfLiteRepository(impl: com.mapsupervision.data.tflite.TfLiteRepositoryImpl): com.mapsupervision.ai.core.repository.TfLiteRepository

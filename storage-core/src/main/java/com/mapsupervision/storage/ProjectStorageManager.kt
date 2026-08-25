@@ -5,6 +5,8 @@ import android.media.MediaScannerConnection
 import android.os.Environment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
 import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -150,6 +152,67 @@ open class ProjectStorageManager @Inject constructor(
         return File(File(projectRoot(projectSlug), category), sanitizedObject).apply { mkdirs() }
     }
 
+    fun resolveMediaFolder(projectSlug: String, isRoute: Boolean, objectCode: String, statusTag: String?): File {
+        val objectFolder = resolveObjectFolder(projectSlug, isRoute, objectCode)
+        return statusTag?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { File(objectFolder, sanitizeFolderName(it)).apply { mkdirs() } }
+            ?: objectFolder
+    }
+
+    /**
+     * Moves the original and optional thumbnail together while preserving their filenames.
+     * The caller updates the database only after this method returns successfully.
+     */
+    open fun moveMediaFiles(sourceFile: File, sourceThumbnail: File, targetDirectory: File): MediaMoveResult {
+        require(sourceFile.exists()) { "Source media file does not exist: ${sourceFile.absolutePath}" }
+        require(targetDirectory.mkdirs() || targetDirectory.exists()) {
+            "Unable to create media target directory: ${targetDirectory.absolutePath}"
+        }
+
+        val thumbnailWasPresent = sourceThumbnail.exists()
+        val sources = linkedSetOf(sourceFile, sourceThumbnail).filter { it.exists() }
+        val moves = sources.map { source ->
+            val target = File(targetDirectory, source.name)
+            require(source.canonicalFile == target.canonicalFile || !target.exists()) {
+                "Target media file already exists: ${target.absolutePath}"
+            }
+            source to target
+        }
+        val completed = mutableListOf<Pair<File, File>>()
+        try {
+            moves.forEach { (source, target) ->
+                if (source.canonicalFile == target.canonicalFile) return@forEach
+                moveFile(source, target)
+                completed += source to target
+            }
+        } catch (error: Throwable) {
+            completed.asReversed().forEach { (source, target) ->
+                runCatching { moveFile(target, source) }
+            }
+            throw error
+        }
+
+        val movedOriginal = File(targetDirectory, sourceFile.name)
+        val movedThumbnail = if (thumbnailWasPresent || sourceThumbnail.absolutePath == sourceFile.absolutePath) {
+            File(targetDirectory, sourceThumbnail.name)
+        } else {
+            sourceThumbnail
+        }
+        return MediaMoveResult(
+            filePath = movedOriginal.absolutePath,
+            thumbnailPath = movedThumbnail.absolutePath
+        )
+    }
+
+    private fun moveFile(source: File, target: File) {
+        target.parentFile?.mkdirs()
+        try {
+            Files.move(source.toPath(), target.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), target.toPath())
+        }
+    }
+
     fun prepareImportedProjectStorage(projectSlug: String, projectId: String) {
         val customPath = getCustomPath(projectSlug)
         clearCustomPath(projectSlug)
@@ -196,3 +259,8 @@ open class ProjectStorageManager @Inject constructor(
         MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
     }
 }
+
+data class MediaMoveResult(
+    val filePath: String,
+    val thumbnailPath: String
+)

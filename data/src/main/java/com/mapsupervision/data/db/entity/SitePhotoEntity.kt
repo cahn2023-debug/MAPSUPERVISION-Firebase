@@ -41,6 +41,7 @@ data class SitePhotoEntity(
     val projectId: String,
     val objectCode: String,
     val tagCodesCsv: String,
+    val statusTag: String? = null,
     val filePath: String,
     val thumbnailPath: String,
     val latitude: Double?,

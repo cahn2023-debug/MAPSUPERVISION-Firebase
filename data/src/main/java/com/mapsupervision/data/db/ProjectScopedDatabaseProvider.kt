@@ -285,6 +285,10 @@ class ProjectScopedDatabaseProvider @Inject constructor(
                 val list = sharedDatabase.workCategoryDao().byProject(projectId)
                 for (entity in list) projectDatabase.workCategoryDao().upsert(entity)
             }
+            if (isTableEmpty(projectDatabase, projectId, "media_status_tags")) {
+                val list = sharedDatabase.mediaStatusTagDao().byProject(projectId)
+                for (entity in list) projectDatabase.mediaStatusTagDao().insert(entity)
+            }
             if (isTableEmpty(projectDatabase, projectId, "work_plan")) {
                 val list = sharedDatabase.workPlanDao().byProject(projectId)
                 for (entity in list.map { it.normalizeForBridge(lookupAfterRoutes) }) {
@@ -358,6 +362,10 @@ class ProjectScopedDatabaseProvider @Inject constructor(
             if (isTableEmpty(sharedDatabase, projectId, "work_categories")) {
                 val list = projectDatabase.workCategoryDao().byProject(projectId)
                 for (entity in list) sharedDatabase.workCategoryDao().upsert(entity)
+            }
+            if (isTableEmpty(sharedDatabase, projectId, "media_status_tags")) {
+                val list = projectDatabase.mediaStatusTagDao().byProject(projectId)
+                for (entity in list) sharedDatabase.mediaStatusTagDao().insert(entity)
             }
             if (isTableEmpty(sharedDatabase, projectId, "work_plan")) {
                 val list = projectDatabase.workPlanDao().byProject(projectId)
@@ -658,6 +666,7 @@ private val CORE_TABLES = listOf(
     "work_volume_progress",
     "daily_log",
     "work_categories",
+    "media_status_tags",
     "work_plan"
 )
 

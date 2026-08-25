@@ -109,6 +109,7 @@ export async function POST(
   const objectCode = textField(form, "objectCode");
   const objectType = textField(form, "objectType") as DriveMediaObjectType;
   const mediaType = textField(form, "mediaType") as DriveMediaType;
+  const statusTag = textField(form, "statusTag") || undefined;
   const mimeType = textField(form, "mimeType") || "application/octet-stream";
   const capturedAtEpochMs = Number(textField(form, "capturedAtEpochMs") || Date.now());
   const address = textField(form, "address") || undefined;
@@ -133,6 +134,7 @@ export async function POST(
       rootFolderId: access.mediaStorageFolderId,
       photoId,
       objectCode,
+      statusTag,
       objectType,
       mediaType,
       mimeType,

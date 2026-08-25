@@ -20,6 +20,7 @@ import com.mapsupervision.data.db.dao.ImportSessionDao
 import com.mapsupervision.data.db.dao.ImportVersionDao
 import com.mapsupervision.data.db.dao.EventOutboxDao
 import com.mapsupervision.data.db.dao.MaterialProgressDao
+import com.mapsupervision.data.db.dao.MediaStatusTagDao
 import com.mapsupervision.data.db.dao.NodeProgressDao
 import com.mapsupervision.data.db.dao.NoteDao
 import com.mapsupervision.data.db.dao.PhotoTagDao
@@ -45,6 +46,7 @@ import com.mapsupervision.data.db.entity.ImportSessionEntity
 import com.mapsupervision.data.db.entity.ImportVersionEntity
 import com.mapsupervision.data.db.entity.EventOutboxEntity
 import com.mapsupervision.data.db.entity.MaterialProgressEntity
+import com.mapsupervision.data.db.entity.MediaStatusTagEntity
 import com.mapsupervision.data.db.entity.NodeProgressEntity
 import com.mapsupervision.data.db.entity.NoteEntity
 import com.mapsupervision.data.db.entity.PhotoTagEntity
@@ -83,6 +85,7 @@ import com.mapsupervision.data.db.dao.MaterialDeclarationDao
         ImportAuditEntity::class,
         EventOutboxEntity::class,
         MaterialProgressEntity::class,
+        MediaStatusTagEntity::class,
         NoteEntity::class,
         PhotoTagEntity::class,
         TaskEntity::class,
@@ -96,7 +99,7 @@ import com.mapsupervision.data.db.dao.MaterialDeclarationDao
         MaterialDeclarationEntity::class,
         RagDocumentEmbeddingEntity::class
     ],
-    version = 51,
+    version = 52,
     exportSchema = true
 )
 @TypeConverters(DbTypeConverters::class)
@@ -118,6 +121,7 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
     abstract fun eventOutboxDao(): EventOutboxDao
     abstract fun workVolumeProgressDao(): MaterialProgressDao
     fun materialProgressDao(): MaterialProgressDao = workVolumeProgressDao()
+    abstract fun mediaStatusTagDao(): MediaStatusTagDao
     abstract fun noteDao(): NoteDao
     abstract fun photoTagDao(): PhotoTagDao
     abstract fun taskDao(): TaskDao
@@ -2956,6 +2960,20 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_51_52 = object : Migration(51, 52) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `site_photos` ADD COLUMN `statusTag` TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `media_status_tags` (" +
+                        "`id` TEXT NOT NULL, `projectId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`normalizedName` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`), FOREIGN KEY(`projectId`) REFERENCES `projects`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_media_status_tags_projectId_normalizedName` ON `media_status_tags` (`projectId`, `normalizedName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_status_tags_projectId_createdAtEpochMs` ON `media_status_tags` (`projectId`, `createdAtEpochMs`)")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_8_9,
             MIGRATION_9_10,
@@ -2999,7 +3017,8 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             MIGRATION_47_48,
             MIGRATION_48_49,
             MIGRATION_49_50,
-            MIGRATION_50_51
+            MIGRATION_50_51,
+            MIGRATION_51_52
         )
     }
 }

@@ -79,9 +79,10 @@ open class PhotoPipelineService @Inject constructor(
         locationLabel: String?,
         note: String?,
         folderType: CaptureFolderType,
-        objectCode: String
+        objectCode: String,
+        statusTag: String?
     ): File {
-        val root = storageManager.resolveObjectFolder(storageRef.slug, folderType == CaptureFolderType.ROUTE, objectCode)
+        val root = storageManager.resolveMediaFolder(storageRef.slug, folderType == CaptureFolderType.ROUTE, objectCode, statusTag)
         val fileName = storageManager.buildMediaFileName(capturedAt, locationLabel, note, "jpg")
         val out = storageManager.generateUniqueFile(root, fileName.substringBeforeLast("."), "jpg")
         AppLogger.d(
@@ -96,9 +97,10 @@ open class PhotoPipelineService @Inject constructor(
         locationLabel: String?,
         note: String?,
         folderType: CaptureFolderType,
-        objectCode: String
+        objectCode: String,
+        statusTag: String?
     ): File {
-        val root = storageManager.resolveObjectFolder(storageRef.slug, folderType == CaptureFolderType.ROUTE, objectCode)
+        val root = storageManager.resolveMediaFolder(storageRef.slug, folderType == CaptureFolderType.ROUTE, objectCode, statusTag)
         val fileName = storageManager.buildMediaFileName(capturedAt, locationLabel, note, "mp4")
         val out = storageManager.generateUniqueFile(root, fileName.substringBeforeLast("."), "mp4")
         AppLogger.d(
@@ -114,9 +116,10 @@ open class PhotoPipelineService @Inject constructor(
         note: String?,
         objectCode: String,
         engineer: String,
-        folderType: CaptureFolderType = CaptureFolderType.NODE
+        folderType: CaptureFolderType = CaptureFolderType.NODE,
+        statusTag: String? = null
     ): File {
-        val out = createCaptureOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode)
+        val out = createCaptureOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode, statusTag)
         val bitmap = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.DKGRAY)
@@ -167,7 +170,8 @@ open class PhotoPipelineService @Inject constructor(
         note: String?,
         folderType: CaptureFolderType,
         objectCode: String,
-        sourceUri: String
+        sourceUri: String,
+        statusTag: String?
     ): File {
         AppLogger.d(
             "photo.pipeline.gallery.import.start projectId=${storageRef.id} objectCode=$objectCode sourceUri=$sourceUri"
@@ -176,9 +180,9 @@ open class PhotoPipelineService @Inject constructor(
         val mimeType = appContext.contentResolver.getType(uri) ?: ""
         val isVideo = mimeType.startsWith("video/") || uri.path?.endsWith(".mp4", ignoreCase = true) == true
         val out = if (isVideo) {
-            createCaptureVideoOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode)
+            createCaptureVideoOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode, statusTag)
         } else {
-            createCaptureOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode)
+            createCaptureOutputFile(storageRef, capturedAt, locationLabel, note, folderType, objectCode, statusTag)
         }
         appContext.contentResolver.openInputStream(uri).use { input ->
             requireNotNull(input) { "Cannot open gallery input stream" }

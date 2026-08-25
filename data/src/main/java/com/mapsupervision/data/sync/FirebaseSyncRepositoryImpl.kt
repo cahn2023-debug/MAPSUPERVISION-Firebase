@@ -293,6 +293,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                 photoId = photo.id,
                 objectType = objectType,
                 objectCode = photo.objectCode,
+                statusTag = photo.statusTag,
                 mediaType = photo.mediaType,
                 mimeType = photo.mimeType,
                 capturedAtEpochMs = photo.capturedAtEpochMs,
@@ -422,7 +423,18 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         rowsToApply.forEach { envelope ->
             val row = mergeEnvelopeRow(table, envelope)
             targetDatabases.forEach { database ->
-                upsertRow(database.openHelper.writableDatabase, table.tableName, row)
+                val localUpdatedAt = database.openHelper.readableDatabase
+                    .query(
+                        SimpleSQLiteQuery(
+                            "SELECT ${table.syncCursorColumn} FROM ${table.tableName} WHERE ${table.idColumn} = ?",
+                            arrayOf(envelope.id)
+                        )
+                    ).use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getLong(0) else null
+                    }
+                if (shouldApplyRemoteRow(localUpdatedAt, envelope.updatedAtEpochMs)) {
+                    upsertRow(database.openHelper.writableDatabase, table.tableName, row)
+                }
             }
         }
         return rowsToApply.size
@@ -586,3 +598,6 @@ internal fun mergeEnvelopeRow(
         baseRow + mapOf("projectId" to envelope.projectId)
     }
 }
+
+internal fun shouldApplyRemoteRow(localUpdatedAtEpochMs: Long?, remoteUpdatedAtEpochMs: Long): Boolean =
+    localUpdatedAtEpochMs == null || remoteUpdatedAtEpochMs > localUpdatedAtEpochMs

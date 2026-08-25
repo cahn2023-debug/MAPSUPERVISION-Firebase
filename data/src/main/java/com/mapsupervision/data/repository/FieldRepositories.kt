@@ -42,6 +42,8 @@ import com.mapsupervision.domain.repository.WorkVolumeProgressRepository
 import com.mapsupervision.domain.repository.PhotoRepository
 import com.mapsupervision.domain.repository.ProgressRepository
 import com.mapsupervision.domain.repository.WorkPlanRepository
+import com.mapsupervision.storage.ProjectStorageManager
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -128,7 +130,8 @@ class ProgressRepositoryImpl @Inject constructor(
 class PhotoRepositoryImpl @Inject constructor(
     private val dao: SitePhotoDao,
     private val projectScopedDatabaseProvider: ProjectScopedDatabaseProvider,
-    private val projectDao: ProjectDao
+    private val projectDao: ProjectDao,
+    private val storageManager: ProjectStorageManager
 ) : PhotoRepository {
     override suspend fun add(photo: SitePhoto): AppResult<Unit> = withContext(Dispatchers.IO) { runCatching {
         val normalized = photo.normalizeForStorage()
@@ -187,6 +190,57 @@ class PhotoRepositoryImpl @Inject constructor(
         onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(DatabaseException("Failed to add photo", it)) }
     ) }
+
+    override suspend fun updateStatusTag(photo: SitePhoto, statusTag: String?): AppResult<SitePhoto> =
+        withContext(Dispatchers.IO) {
+            val normalizedStatusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }
+            if (photo.statusTag?.trim()?.takeIf { it.isNotEmpty() } == normalizedStatusTag) {
+                return@withContext AppResult.Success(photo.copy(statusTag = normalizedStatusTag))
+            }
+
+            runCatching {
+                val project = projectDao.get(photo.projectId)
+                val projectSlug = project?.slug?.trim().orEmpty().ifBlank { photo.projectId }
+                val isRoute = photo.matchedRouteId != null || !photo.matchedRouteCode.isNullOrBlank()
+                val targetDirectory = storageManager.resolveMediaFolder(
+                    projectSlug = projectSlug,
+                    isRoute = isRoute,
+                    objectCode = photo.objectCode,
+                    statusTag = normalizedStatusTag
+                )
+                val moved = storageManager.moveMediaFiles(
+                    sourceFile = File(photo.filePath),
+                    sourceThumbnail = File(photo.thumbnailPath),
+                    targetDirectory = targetDirectory
+                )
+                val updated = photo.copy(
+                    statusTag = normalizedStatusTag,
+                    filePath = moved.filePath,
+                    thumbnailPath = moved.thumbnailPath,
+                    updatedAtEpochMs = maxOf(System.currentTimeMillis(), photo.updatedAtEpochMs + 1L),
+                    syncStatus = SitePhotoSyncStatus.PENDING,
+                    syncErrorMessage = null,
+                    lastSyncAttemptEpochMs = null
+                )
+                when (val result = add(updated)) {
+                    is AppResult.Success -> updated
+                    is AppResult.Error -> {
+                        runCatching {
+                            storageManager.moveMediaFiles(
+                                sourceFile = File(updated.filePath),
+                                sourceThumbnail = File(updated.thumbnailPath),
+                                targetDirectory = File(photo.filePath).parentFile
+                                    ?: error("Original media directory is missing")
+                            )
+                        }
+                        throw result.throwable
+                    }
+                }
+            }.fold(
+                onSuccess = { AppResult.Success(it) },
+                onFailure = { AppResult.Error(DatabaseException("Failed to update photo status tag", it)) }
+            )
+        }
 
     override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> = withContext(Dispatchers.IO) { runCatching {
         val rows = dao(projectId).byProjectSummary(projectId)
@@ -280,6 +334,7 @@ class PhotoRepositoryImpl @Inject constructor(
         projectId = projectId,
         objectCode = objectCode,
         tagCodesCsv = tagCodesCsv,
+        statusTag = statusTag,
         filePath = filePath,
         thumbnailPath = thumbnailPath,
         latitude = latitude,
@@ -311,6 +366,7 @@ class PhotoRepositoryImpl @Inject constructor(
         projectId = projectId,
         objectCode = objectCode,
         tagCodesCsv = if (tags.isNotEmpty()) joinCsvList(tags) else tagCodesCsv,
+        statusTag = statusTag,
         tagCodes = if (tags.isNotEmpty()) tags else parseCsvList(tagCodesCsv),
         matchedNodeCode = matchedNodeCode,
         matchedRouteCode = matchedRouteCode,

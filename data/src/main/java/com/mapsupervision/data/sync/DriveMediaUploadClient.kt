@@ -36,6 +36,7 @@ internal data class DriveMediaUploadRequest(
     val photoId: String,
     val objectType: DriveMediaObjectType,
     val objectCode: String,
+    val statusTag: String? = null,
     val mediaType: MediaType,
     val mimeType: String,
     val capturedAtEpochMs: Long,
@@ -86,6 +87,7 @@ internal open class DriveMediaUploadClient(
             .addFormDataPart("projectName", request.projectName)
             .addFormDataPart("objectType", request.objectType.name)
             .addFormDataPart("objectCode", request.objectCode)
+            .addFormDataPart("statusTag", request.statusTag.orEmpty())
             .addFormDataPart("mediaType", request.mediaType.name)
             .addFormDataPart("mimeType", request.mimeType)
             .addFormDataPart("capturedAtEpochMs", request.capturedAtEpochMs.toString())
@@ -159,7 +161,11 @@ internal open class DriveMediaUploadClient(
             )
         }
 
-        val parentId = ensureFolderPath(accessToken, projectFolderId, folderSegments)
+        val taggedSegments = request.statusTag?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { folderSegments + sanitizeSegment(it) }
+            ?: folderSegments
+
+        val parentId = ensureFolderPath(accessToken, projectFolderId, taggedSegments)
         val originalExtension = extensionForMime(
             request.mimeType,
             if (request.mediaType == MediaType.VIDEO) "mp4" else "jpg"
@@ -176,7 +182,8 @@ internal open class DriveMediaUploadClient(
             photoId = request.photoId,
             name = originalName,
             mimeType = request.mimeType,
-            bytes = request.originalFile.readBytes()
+            bytes = request.originalFile.readBytes(),
+            allowCrossFolderMove = !request.statusTag.isNullOrBlank()
         )
 
         val thumbnailFile = request.thumbnailFile
@@ -199,7 +206,8 @@ internal open class DriveMediaUploadClient(
                 photoId = "${request.photoId}__thumb",
                 name = thumbnailName,
                 mimeType = request.mimeType,
-                bytes = thumbnailFile.readBytes()
+                bytes = thumbnailFile.readBytes(),
+                allowCrossFolderMove = !request.statusTag.isNullOrBlank()
             )
         }
 
@@ -348,21 +356,24 @@ internal open class DriveMediaUploadClient(
         photoId: String,
         name: String,
         mimeType: String,
-        bytes: ByteArray
+        bytes: ByteArray,
+        allowCrossFolderMove: Boolean = false
     ): String {
-        val existingId = findChildFileByPhotoId(accessToken, parentId, photoId)
-        if (existingId != null) {
-            uploadMultipartFile(
+        val existing = findChildFileByPhotoId(accessToken, parentId, photoId)
+            ?: if (allowCrossFolderMove) findFileByPhotoId(accessToken, photoId) else null
+        if (existing != null) {
+            uploadMultipartFileWithParentMove(
                 accessToken = accessToken,
-                fileId = existingId,
+                fileId = existing.id,
                 parentId = parentId,
+                removeParentIds = existing.parents.filter { it != parentId },
                 photoId = photoId,
                 name = name,
                 mimeType = mimeType,
                 bytes = bytes
             )
-            ensurePublicReader(accessToken, existingId)
-            return existingId
+            ensurePublicReader(accessToken, existing.id)
+            return existing.id
         }
 
         val resolvedName = resolveUniqueFileName(accessToken, parentId, name)
@@ -381,17 +392,38 @@ internal open class DriveMediaUploadClient(
         return createdId
     }
 
-    private fun findChildFileByPhotoId(accessToken: String, parentId: String, photoId: String): String? {
+    private fun findFileByPhotoId(accessToken: String, photoId: String): ExistingDriveFile? {
+        val query = listOf(
+            "appProperties has { key='mapsupervisionPhotoId' and value='${escapeDriveQuery(photoId)}' }",
+            "mimeType != '$FOLDER_MIME_TYPE'",
+            "trashed = false"
+        ).joinToString(" and ")
+        val url = buildDriveListUrl(query, fields = "files(id,parents)")
+        val responseText = authorizedJsonRequest(accessToken, url)
+        val files = Json.parseToJsonElement(responseText).jsonObject["files"]?.let { it.jsonArray }.orEmpty()
+        return files.firstOrNull()?.jsonObject?.let { file ->
+            ExistingDriveFile(
+                id = file["id"]?.jsonPrimitive?.content.orEmpty(),
+                parents = file["parents"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+            )
+        }?.takeIf { it.id.isNotBlank() }
+    }
+
+    private fun findChildFileByPhotoId(accessToken: String, parentId: String, photoId: String): ExistingDriveFile? {
         val query = listOf(
             "'${escapeDriveQuery(parentId)}' in parents",
             "appProperties has { key='mapsupervisionPhotoId' and value='${escapeDriveQuery(photoId)}' }",
             "mimeType != '$FOLDER_MIME_TYPE'",
             "trashed = false"
         ).joinToString(" and ")
-        val url = buildDriveListUrl(query)
-        val responseText = authorizedJsonRequest(accessToken, url)
+        val responseText = authorizedJsonRequest(accessToken, buildDriveListUrl(query, fields = "files(id,parents)"))
         val files = Json.parseToJsonElement(responseText).jsonObject["files"]?.let { it.jsonArray }.orEmpty()
-        return files.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.content
+        return files.firstOrNull()?.jsonObject?.let { file ->
+            ExistingDriveFile(
+                id = file["id"]?.jsonPrimitive?.content.orEmpty(),
+                parents = file["parents"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+            )
+        }?.takeIf { it.id.isNotBlank() }
     }
 
     private fun findChildFile(accessToken: String, parentId: String, name: String): String? {
@@ -431,6 +463,26 @@ internal open class DriveMediaUploadClient(
         name: String,
         mimeType: String,
         bytes: ByteArray
+    ): String = uploadMultipartFileWithParentMove(
+        accessToken = accessToken,
+        fileId = fileId,
+        parentId = parentId,
+        removeParentIds = emptyList(),
+        photoId = photoId,
+        name = name,
+        mimeType = mimeType,
+        bytes = bytes
+    )
+
+    private fun uploadMultipartFileWithParentMove(
+        accessToken: String,
+        fileId: String?,
+        parentId: String,
+        removeParentIds: List<String>,
+        photoId: String,
+        name: String,
+        mimeType: String,
+        bytes: ByteArray
     ): String {
         val metadataJson = buildString {
             append("{")
@@ -446,7 +498,14 @@ internal open class DriveMediaUploadClient(
         val uploadUrl = if (fileId == null) {
             "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id"
         } else {
-            "https://www.googleapis.com/upload/drive/v3/files/$fileId?uploadType=multipart&supportsAllDrives=true&fields=id"
+            buildString {
+                append("https://www.googleapis.com/upload/drive/v3/files/$fileId")
+                append("?uploadType=multipart&supportsAllDrives=true&fields=id")
+                append("&addParents=${urlEncode(parentId)}")
+                if (removeParentIds.isNotEmpty()) {
+                    append("&removeParents=${urlEncode(removeParentIds.joinToString(","))}")
+                }
+            }
         }
         val requestBuilder = Request.Builder()
             .url(uploadUrl)
@@ -534,8 +593,8 @@ internal open class DriveMediaUploadClient(
         return "$action ($statusCode): $responseText"
     }
 
-    private fun buildDriveListUrl(query: String): String =
-        "https://www.googleapis.com/drive/v3/files?q=${urlEncode(query)}&fields=files(id,name)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true"
+    private fun buildDriveListUrl(query: String, fields: String = "files(id,name)"): String =
+        "https://www.googleapis.com/drive/v3/files?q=${urlEncode(query)}&fields=${urlEncode(fields)}&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true"
 
     internal fun sanitizeSegment(value: String, default: String = "unknown"): String =
         value.trim()
@@ -603,6 +662,11 @@ internal open class DriveMediaUploadClient(
     private data class DriveServiceAccount(
         val clientEmail: String,
         val privateKey: String
+    )
+
+    private data class ExistingDriveFile(
+        val id: String,
+        val parents: List<String>
     )
 
     private companion object {

@@ -70,6 +70,15 @@ import java.util.Locale
 
 enum class SortKey { NONE, STT, NAME, PLANNED, ACTUAL, PERCENT }
 
+private const val ALL_STATUS_TAG_LABEL = "Tất cả"
+
+internal fun filterReportPhotosByStatusTag(
+    photos: List<SitePhoto>,
+    statusTag: String?
+): List<SitePhoto> = statusTag?.let { selected ->
+    photos.filter { it.statusTag == selected }
+} ?: photos
+
 private const val ALL_CONTRACTORS_LABEL = "Tất cả nhà thầu"
 
 @Composable
@@ -85,6 +94,7 @@ fun ReportingScreen(
     val wordPath by viewModel.lastWordReportPath.collectAsStateWithLifecycle()
     val zipPath by viewModel.lastPackagePath.collectAsStateWithLifecycle()
     val reportSnapshot by viewModel.reportSnapshot.collectAsStateWithLifecycle()
+    val statusTagOptions by viewModel.statusTagOptions.collectAsStateWithLifecycle()
     val aiDraft = reportSnapshot.aiDraft
     val photos = reportSnapshot.photos
     val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
@@ -93,8 +103,10 @@ fun ReportingScreen(
     var showFormatMenu by remember { mutableStateOf(false) }
     var showPreviewDialog by remember { mutableStateOf(false) }
     var showContractorMenu by remember { mutableStateOf(false) }
+    var showStatusTagMenu by remember { mutableStateOf(false) }
     var selectedExportFormat by remember { mutableStateOf("") }
     var selectedContractor by remember { mutableStateOf(ALL_CONTRACTORS_LABEL) }
+    var selectedStatusTag by remember { mutableStateOf(ALL_STATUS_TAG_LABEL) }
 
     var sortBy by remember { mutableStateOf(SortKey.NONE) }
     var isAscending by remember { mutableStateOf(true) }
@@ -114,6 +126,12 @@ fun ReportingScreen(
             contractorOptions.none { it.equals(selectedContractor, ignoreCase = true) }
         ) {
             selectedContractor = ALL_CONTRACTORS_LABEL
+        }
+    }
+
+    LaunchedEffect(activeProjectId, statusTagOptions) {
+        if (selectedStatusTag != ALL_STATUS_TAG_LABEL && statusTagOptions.none { it == selectedStatusTag }) {
+            selectedStatusTag = ALL_STATUS_TAG_LABEL
         }
     }
 
@@ -185,9 +203,13 @@ fun ReportingScreen(
             return@Scaffold
         }
 
-        val filteredPhotos = if (photoFilterNodeCode != null)
+        val objectFilteredPhotos = if (photoFilterNodeCode != null)
             photos.filter { it.objectCode == photoFilterNodeCode }
         else photos
+        val filteredPhotos = filterReportPhotosByStatusTag(
+            photos = objectFilteredPhotos,
+            statusTag = selectedStatusTag.takeUnless { it == ALL_STATUS_TAG_LABEL }
+        )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -321,6 +343,26 @@ fun ReportingScreen(
                         if (photoFilterNodeCode != null) {
                             IconButton(onClick = onClearPhotoFilter) {
                                 Icon(Icons.Outlined.Close, contentDescription = "Xóa bộ lọc", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Box {
+                            OutlinedButton(onClick = { showStatusTagMenu = true }) {
+                                Text(selectedStatusTag)
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                            }
+                            DropdownMenu(
+                                expanded = showStatusTagMenu,
+                                onDismissRequest = { showStatusTagMenu = false }
+                            ) {
+                                (listOf(ALL_STATUS_TAG_LABEL) + statusTagOptions).forEach { tag ->
+                                    DropdownMenuItem(
+                                        text = { Text(tag) },
+                                        onClick = {
+                                            selectedStatusTag = tag
+                                            showStatusTagMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                         // Toggle show/hide photos

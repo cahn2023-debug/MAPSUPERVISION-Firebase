@@ -12,6 +12,7 @@ export type DriveMediaUpload = {
   photoId: string;
   objectType: DriveMediaObjectType;
   objectCode: string;
+  statusTag?: string;
   mediaType: DriveMediaType;
   mimeType: string;
   capturedAtEpochMs: number;
@@ -277,7 +278,30 @@ export async function findChildFile(drive: drive_v3.Drive, parentId: string, nam
   return response.data.files?.[0]?.id ?? null;
 }
 
-async function findChildFileByPhotoId(drive: drive_v3.Drive, parentId: string, photoId: string): Promise<string | null> {
+async function findFileByPhotoId(
+  drive: drive_v3.Drive,
+  photoId: string
+): Promise<{ id: string; parents: string[] } | null> {
+  const response = await drive.files.list({
+    q: [
+      `appProperties has { key='mapsupervisionPhotoId' and value='${escapeDriveQuery(photoId)}' }`,
+      `mimeType != '${folderMimeType}'`,
+      "trashed = false"
+    ].join(" and "),
+    fields: "files(id,parents)",
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+  const file = response.data.files?.[0];
+  return file?.id ? { id: file.id, parents: file.parents ?? [] } : null;
+}
+
+async function findChildFileByPhotoId(
+  drive: drive_v3.Drive,
+  parentId: string,
+  photoId: string
+): Promise<{ id: string; parents: string[] } | null> {
   const response = await drive.files.list({
     q: [
       `'${escapeDriveQuery(parentId)}' in parents`,
@@ -285,12 +309,13 @@ async function findChildFileByPhotoId(drive: drive_v3.Drive, parentId: string, p
       `mimeType != '${folderMimeType}'`,
       "trashed = false"
     ].join(" and "),
-    fields: "files(id,name)",
+    fields: "files(id,parents)",
     pageSize: 1,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true
   });
-  return response.data.files?.[0]?.id ?? null;
+  const file = response.data.files?.[0];
+  return file?.id ? { id: file.id, parents: file.parents ?? [] } : null;
 }
 
 async function ensurePublicReader(drive: drive_v3.Drive, fileId: string): Promise<void> {
@@ -322,16 +347,20 @@ async function upsertFile(
   photoId: string,
   name: string,
   mimeType: string,
-  bytes: Buffer
+  bytes: Buffer,
+  allowCrossFolderMove = false
 ): Promise<string> {
   const media = {
     mimeType,
     body: Readable.from(bytes)
   };
-  const existingId = await findChildFileByPhotoId(drive, parentId, photoId);
-  if (existingId) {
+  const existing = await findChildFileByPhotoId(drive, parentId, photoId)
+    ?? (allowCrossFolderMove ? await findFileByPhotoId(drive, photoId) : null);
+  if (existing) {
     await drive.files.update({
-      fileId: existingId,
+      fileId: existing.id,
+      addParents: parentId,
+      removeParents: existing.parents.filter((parent) => parent !== parentId).join(",") || undefined,
       requestBody: {
         name,
         appProperties: {
@@ -342,8 +371,8 @@ async function upsertFile(
       fields: "id",
       supportsAllDrives: true
     });
-    await ensurePublicReader(drive, existingId);
-    return existingId;
+    await ensurePublicReader(drive, existing.id);
+    return existing.id;
   }
 
   let resolvedName = name;
@@ -462,7 +491,10 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
   const folderSegments = input.mediaType === "VIDEO"
     ? ["media", "videos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder]
     : ["photos", input.objectType === "ROUTE" ? "Routes" : "Nodes", objectFolder];
-  const parentId = await ensureFolderPath(drive, projectFolderId, folderSegments);
+  const taggedSegments = input.statusTag?.trim()
+    ? [...folderSegments, sanitizeSegment(input.statusTag)]
+    : folderSegments;
+  const parentId = await ensureFolderPath(drive, projectFolderId, taggedSegments);
   const originalExtension = input.original.extension || extensionForMime(input.mimeType, input.mediaType === "VIDEO" ? "mp4" : "jpg");
   const originalName = buildDriveMediaFileName({
     capturedAtEpochMs: input.capturedAtEpochMs,
@@ -470,7 +502,16 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
     captureNote: input.captureNote,
     extension: originalExtension
   });
-  const originalId = await upsertFile(drive, parentId, input.photoId, originalName, input.mimeType, input.original.bytes);
+  const allowCrossFolderMove = Boolean(input.statusTag?.trim());
+  const originalId = await upsertFile(
+    drive,
+    parentId,
+    input.photoId,
+    originalName,
+    input.mimeType,
+    input.original.bytes,
+    allowCrossFolderMove
+  );
 
   let thumbnailUrl: string | undefined;
   if (input.thumbnail) {
@@ -486,7 +527,8 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
         extension: thumbnailExtension
       }),
       input.thumbnail.mimeType,
-      input.thumbnail.bytes
+      input.thumbnail.bytes,
+      allowCrossFolderMove
     );
     thumbnailUrl = publicDriveUrl(thumbnailId);
   }
@@ -495,6 +537,6 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
     remoteUrl: publicDriveUrl(originalId),
     thumbnailUrl,
     driveFileId: originalId,
-    drivePath: [projectFolder, ...folderSegments, originalName].join("/")
+    drivePath: [projectFolder, ...taggedSegments, originalName].join("/")
   };
 }

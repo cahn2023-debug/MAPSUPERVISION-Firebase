@@ -24,6 +24,7 @@ data class SitePhoto(
     val projectId: String,
     val objectCode: String,
     val tagCodesCsv: String = "",
+    val statusTag: String? = null,
     val tagCodes: List<String> = emptyList(),
     val matchedNodeCode: String? = null,
     val matchedRouteCode: String? = null,

@@ -18,7 +18,8 @@ interface IPhotoPipelineService {
         locationLabel: String?,
         note: String?,
         folderType: CaptureFolderType,
-        objectCode: String
+        objectCode: String,
+        statusTag: String? = null
     ): File
 
     fun createCaptureVideoOutputFile(
@@ -27,7 +28,8 @@ interface IPhotoPipelineService {
         locationLabel: String?,
         note: String?,
         folderType: CaptureFolderType,
-        objectCode: String
+        objectCode: String,
+        statusTag: String? = null
     ): File
 
     fun importFromGallery(
@@ -37,7 +39,8 @@ interface IPhotoPipelineService {
         note: String?,
         folderType: CaptureFolderType,
         objectCode: String,
-        sourceUri: String
+        sourceUri: String,
+        statusTag: String? = null
     ): File
 
     fun createThumbnail(storageRef: ProjectStorageRef, sourceFile: File): File

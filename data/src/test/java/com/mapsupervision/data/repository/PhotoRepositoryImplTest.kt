@@ -14,6 +14,7 @@ import com.mapsupervision.data.db.entity.GisRouteEntity
 import com.mapsupervision.data.db.entity.ProjectEntity
 import com.mapsupervision.data.db.entity.SitePhotoEntity
 import com.mapsupervision.domain.model.MediaType
+import com.mapsupervision.domain.model.MediaStatusTag
 import com.mapsupervision.domain.model.PhotoLocationStatus
 import com.mapsupervision.domain.model.ProjectStorageMode
 import com.mapsupervision.domain.model.SitePhoto
@@ -58,7 +59,7 @@ class PhotoRepositoryImplTest {
             .allowMainThreadQueries()
             .build()
         provider = ProjectScopedDatabaseProvider(context, sharedDatabase, storageManager)
-        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao())
+        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao(), storageManager)
     }
 
     @After
@@ -188,6 +189,75 @@ class PhotoRepositoryImplTest {
         )
     }
 
+    @Test
+    fun `status tag is persisted separately from matching tag codes`() = runBlocking {
+        val project = projectEntity("project-status-tag", File(tempDir, "status/project.sqlite"))
+        sharedDatabase.projectDao().upsert(project)
+
+        val result = repository.add(
+            sitePhoto(
+                projectId = project.id,
+                objectCode = "NODE-1",
+                statusTag = "Thi công"
+            ).copy(tagCodesCsv = "NODE-1", tagCodes = listOf("NODE-1"))
+        )
+
+        assertTrue(result is AppResult.Success)
+        val photo = (repository.byProject(project.id) as AppResult.Success).data.single()
+        assertEquals("Thi công", photo.statusTag)
+        assertEquals(listOf("NODE-1"), photo.tagCodes)
+    }
+
+    @Test
+    fun `status tag update moves local media and queues cloud retry`() = runBlocking {
+        val project = projectEntity("project-move", File(tempDir, "move/project.sqlite"))
+        val projectRoot = File(tempDir, "public/project-move")
+        storageManager.setCustomPath(project.slug, projectRoot.absolutePath)
+        sharedDatabase.projectDao().upsert(project)
+        val sourceFolder = storageManager.resolveObjectFolder(project.slug, false, "NODE-1")
+        val sourceFile = File(sourceFolder, "capture.jpg").apply { writeText("image") }
+        val sourceThumbnail = File(sourceFolder, "capture-thumb.jpg").apply { writeText("thumbnail") }
+        val original = sitePhoto(project.id, "NODE-1").copy(
+            filePath = sourceFile.absolutePath,
+            thumbnailPath = sourceThumbnail.absolutePath,
+            syncStatus = SitePhotoSyncStatus.DONE,
+            remoteUrl = "https://drive.google.com/uc?export=view&id=old"
+        )
+        repository.add(original)
+
+        val result = repository.updateStatusTag(original, "Thi công")
+
+        assertTrue(result is AppResult.Success)
+        val updated = (result as AppResult.Success).data
+        assertEquals("Thi công", updated.statusTag)
+        assertEquals(SitePhotoSyncStatus.PENDING, updated.syncStatus)
+        assertTrue(File(updated.filePath).exists())
+        assertTrue(File(updated.thumbnailPath).exists())
+        assertTrue(updated.filePath.contains("Thi-công"))
+        assertTrue(!sourceFile.exists())
+        assertTrue(!sourceThumbnail.exists())
+        storageManager.clearCustomPath(project.slug)
+    }
+
+    @Test
+    fun `custom media status tags are project scoped and reject duplicates`() = runBlocking {
+        val project = projectEntity("project-custom-tag", File(tempDir, "custom/project.sqlite"))
+        sharedDatabase.projectDao().upsert(project)
+        val tagRepository = MediaStatusTagRepositoryImpl(sharedDatabase.mediaStatusTagDao(), provider)
+
+        val added = tagRepository.add(MediaStatusTag("tag-1", project.id, "Nghiệm thu", 1L))
+        val duplicate = tagRepository.add(MediaStatusTag("tag-2", project.id, " nghiệm THU ", 2L))
+        val systemDuplicate = tagRepository.add(MediaStatusTag("tag-3", project.id, "Thi công", 3L))
+
+        assertTrue(added is AppResult.Success)
+        assertTrue(duplicate is AppResult.Error)
+        assertTrue(systemDuplicate is AppResult.Error)
+        assertEquals(
+            listOf("Nghiệm thu"),
+            (tagRepository.byProject(project.id) as AppResult.Success).data.map { it.name }
+        )
+    }
+
     private fun projectEntity(projectId: String, scopedFile: File) = ProjectEntity(
         id = projectId,
         name = projectId,
@@ -205,7 +275,8 @@ class PhotoRepositoryImplTest {
         matchedRouteCode: String? = null,
         mediaType: MediaType = MediaType.IMAGE,
         mimeType: String = "image/jpeg",
-        durationMs: Long = 0L
+        durationMs: Long = 0L,
+        statusTag: String? = null
     ) = SitePhoto(
         id = "photo-$objectCode-$mediaType",
         projectId = projectId,
@@ -224,6 +295,7 @@ class PhotoRepositoryImplTest {
         mediaType = mediaType,
         mimeType = mimeType,
         durationMs = durationMs,
+        statusTag = statusTag,
         syncStatus = SitePhotoSyncStatus.PENDING
     )
 

@@ -10,11 +10,14 @@ import com.mapsupervision.ai.core.AIFacade
 import com.mapsupervision.ai.core.PhotoQualityPayload
 import com.mapsupervision.ai.core.PhotoQualityResult
 import com.mapsupervision.domain.model.SitePhoto
+import com.mapsupervision.domain.model.MediaStatusTag
+import com.mapsupervision.domain.model.MediaStatusTags
 import com.mapsupervision.domain.model.joinCsvList
 import com.mapsupervision.domain.model.resolvedTagCodes
 import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.GisRepository
 import com.mapsupervision.domain.repository.PhotoRepository
+import com.mapsupervision.domain.repository.MediaStatusTagRepository
 import com.mapsupervision.domain.repository.ProjectRepository
 import com.mapsupervision.domain.repository.ProjectSyncRepository
 import com.mapsupervision.domain.service.CaptureFolderType
@@ -39,6 +42,7 @@ import kotlinx.coroutines.withContext
 class PhotoViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val photoRepository: PhotoRepository,
+    private val mediaStatusTagRepository: MediaStatusTagRepository,
     private val activeProjectRepository: ActiveProjectRepository,
     private val gisRepository: GisRepository,
     private val projectRepository: ProjectRepository,
@@ -56,6 +60,12 @@ class PhotoViewModel @Inject constructor(
     val selectedPhotoForReview: StateFlow<SitePhoto?> = _selectedPhotoForReview.asStateFlow()
     private val _availableTagOptions = MutableStateFlow<List<String>>(emptyList())
     val availableTagOptions: StateFlow<List<String>> = _availableTagOptions.asStateFlow()
+    private val _statusTagOptions = MutableStateFlow(MediaStatusTags.systemNames)
+    val statusTagOptions: StateFlow<List<String>> = _statusTagOptions.asStateFlow()
+    private val _activeStatusTag = MutableStateFlow<String?>(null)
+    val activeStatusTag: StateFlow<String?> = _activeStatusTag.asStateFlow()
+    private val _statusTagFilter = MutableStateFlow<String?>(null)
+    val statusTagFilter: StateFlow<String?> = _statusTagFilter.asStateFlow()
     private var activeProjectIdCache: String? = null
     private var activeProjectSlugCache: String? = null
     private var activeNodeCodesCache: Set<String> = emptySet()
@@ -114,6 +124,35 @@ class PhotoViewModel @Inject constructor(
             addAll(activeNodeCodesCache)
             addAll(activeRouteCodesCache)
         }.toList().sorted()
+        val customTags = (mediaStatusTagRepository.byProject(projectId) as? AppResult.Success)?.data.orEmpty()
+            .map { it.name.trim() }
+            .filter { it.isNotBlank() }
+        _statusTagOptions.value = (MediaStatusTags.systemNames + customTags).distinctBy(MediaStatusTags::normalize)
+    }
+
+    fun setActiveStatusTag(statusTag: String?) {
+        _activeStatusTag.value = statusTag?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    fun toggleStatusTagFilter(statusTag: String) {
+        _statusTagFilter.value = if (_statusTagFilter.value == statusTag) null else statusTag
+    }
+
+    fun addCustomStatusTag(name: String) {
+        val projectId = activeProjectIdCache ?: return
+        val normalized = name.trim()
+        if (normalized.isBlank() || MediaStatusTags.isSystem(normalized)) return
+        viewModelScope.launch {
+            val result = mediaStatusTagRepository.add(
+                MediaStatusTag(
+                    id = java.util.UUID.randomUUID().toString(),
+                    projectId = projectId,
+                    name = normalized,
+                    createdAtEpochMs = System.currentTimeMillis()
+                )
+            )
+            if (result is AppResult.Success) refreshTagOptions(projectId)
+        }
     }
 
     fun selectPhotoForReview(photoId: String) {
@@ -144,6 +183,13 @@ class PhotoViewModel @Inject constructor(
                 matchedRouteCode = matchedRoute
             )
         }
+    }
+
+    fun updateSelectedPhotoStatusTag(statusTag: String?) {
+        val current = _selectedPhotoForReview.value ?: return
+        _selectedPhotoForReview.value = current.copy(
+            statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }
+        )
     }
 
     fun updateSelectedPhotoOffsetMinutes(offsetMinutes: Int) {
@@ -188,7 +234,9 @@ class PhotoViewModel @Inject constructor(
     fun saveSelectedPhotoReview() {
         val current = _selectedPhotoForReview.value ?: return
         viewModelScope.launch {
-            photoRepository.add(current)
+            val statusResult = photoRepository.updateStatusTag(current, current.statusTag)
+            val updated = (statusResult as? AppResult.Success)?.data ?: return@launch
+            photoRepository.add(updated)
             refresh()
         }
     }
@@ -207,7 +255,8 @@ class PhotoViewModel @Inject constructor(
             locationLabel = locationLabel,
             note = null,
             folderType = target.folderType,
-            objectCode = target.objectCode
+            objectCode = target.objectCode,
+            statusTag = _activeStatusTag.value
         )
     }
 
@@ -225,7 +274,8 @@ class PhotoViewModel @Inject constructor(
             locationLabel = locationLabel,
             note = null,
             folderType = target.folderType,
-            objectCode = target.objectCode
+            objectCode = target.objectCode,
+            statusTag = _activeStatusTag.value
         )
     }
 
@@ -234,10 +284,11 @@ class PhotoViewModel @Inject constructor(
             val activeId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return@launch
             val activeSlug = activeProjectSlugCache ?: activeId
             val target = resolveCaptureTarget(objectCode)
+            val statusTag = _activeStatusTag.value
             val location = locationProvider.lastKnownLocation()
             withContext(Dispatchers.IO) {
                 photoPipelineService.applyWatermark(file, target.objectCode, engineer)
-                savePhotoModel(activeId, activeSlug, target, engineer, file, location)
+                savePhotoModel(activeId, activeSlug, target, engineer, file, location, statusTag)
                 _lastAiPhotoQuality.value = aiFacade.execute<PhotoQualityResult>(
                     PhotoQualityPayload(
                         objectCode = target.objectCode,
@@ -258,9 +309,10 @@ class PhotoViewModel @Inject constructor(
             val activeId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return@launch
             val activeSlug = activeProjectSlugCache ?: activeId
             val target = resolveCaptureTarget(objectCode)
+            val statusTag = _activeStatusTag.value
             val location = locationProvider.lastKnownLocation()
             withContext(Dispatchers.IO) {
-                saveVideoModel(activeId, activeSlug, target, engineer, file, location, durationMs)
+                saveVideoModel(activeId, activeSlug, target, engineer, file, location, durationMs, statusTag)
             }
             markProjectChanged(activeId, "video_registered")
             refresh()
@@ -272,6 +324,7 @@ class PhotoViewModel @Inject constructor(
             val activeId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return@launch
             val activeSlug = activeProjectSlugCache ?: activeId
             val target = resolveCaptureTarget(objectCode)
+            val statusTag = _activeStatusTag.value
             val location = locationProvider.lastKnownLocation()
             val locationLabel = if (location.latitude != null && location.longitude != null) {
                 "${location.latitude}_${location.longitude}"
@@ -284,9 +337,10 @@ class PhotoViewModel @Inject constructor(
                     note = null,
                     objectCode = target.objectCode,
                     engineer = engineer,
-                    folderType = target.folderType
+                    folderType = target.folderType,
+                    statusTag = statusTag
                 )
-                savePhotoModel(activeId, activeSlug, target, engineer, file, location)
+                savePhotoModel(activeId, activeSlug, target, engineer, file, location, statusTag)
                 _lastAiPhotoQuality.value = aiFacade.execute<PhotoQualityResult>(
                     PhotoQualityPayload(
                         objectCode = target.objectCode,
@@ -307,6 +361,7 @@ class PhotoViewModel @Inject constructor(
             val activeId = (activeProjectRepository.getActive() as? AppResult.Success)?.data ?: return@launch
             val activeSlug = activeProjectSlugCache ?: activeId
             val target = resolveCaptureTarget(objectCode)
+            val statusTag = _activeStatusTag.value
             val location = locationProvider.lastKnownLocation()
             val locationLabel = if (location.latitude != null && location.longitude != null) {
                 "${location.latitude}_${location.longitude}"
@@ -321,7 +376,8 @@ class PhotoViewModel @Inject constructor(
                             note = null,
                             folderType = target.folderType,
                             objectCode = target.objectCode,
-                            sourceUri = uri.toString()
+                            sourceUri = uri.toString(),
+                            statusTag = statusTag
                         )
                         val mimeType = context.contentResolver.getType(uri) ?: ""
                         val isVideo = mimeType.startsWith("video/") || uri.path?.endsWith(".mp4", ignoreCase = true) == true
@@ -337,9 +393,9 @@ class PhotoViewModel @Inject constructor(
                             } finally {
                                 try { retriever.release() } catch (_: Exception) {}
                             }
-                            saveVideoModel(activeId, activeSlug, target, engineer, file, location, durationMs)
+                            saveVideoModel(activeId, activeSlug, target, engineer, file, location, durationMs, statusTag)
                         } else {
-                            savePhotoModel(activeId, activeSlug, target, engineer, file, location)
+                            savePhotoModel(activeId, activeSlug, target, engineer, file, location, statusTag)
                         }
                     }.onFailure { e ->
                         AppLogger.e(e, "photo.viewmodel.import.fail uri=$uri")
@@ -362,7 +418,8 @@ class PhotoViewModel @Inject constructor(
         target: CaptureTarget,
         engineer: String,
         file: File,
-        location: com.mapsupervision.domain.model.PhotoLocationSnapshot
+        location: com.mapsupervision.domain.model.PhotoLocationSnapshot,
+        statusTag: String?
     ) {
         storageManager.scanFile(file)
         val capturedAt = System.currentTimeMillis()
@@ -374,6 +431,7 @@ class PhotoViewModel @Inject constructor(
             projectId = projectId,
             objectCode = target.objectCode,
             tagCodesCsv = target.objectCode,
+            statusTag = statusTag,
             matchedNodeCode = target.matchedNodeCode,
             matchedRouteCode = target.matchedRouteCode,
             filePath = file.absolutePath,
@@ -404,7 +462,8 @@ class PhotoViewModel @Inject constructor(
         engineer: String,
         file: File,
         location: com.mapsupervision.domain.model.PhotoLocationSnapshot,
-        durationMs: Long
+        durationMs: Long,
+        statusTag: String?
     ) {
         storageManager.scanFile(file)
         val capturedAt = System.currentTimeMillis()
@@ -416,6 +475,7 @@ class PhotoViewModel @Inject constructor(
             projectId = projectId,
             objectCode = target.objectCode,
             tagCodesCsv = target.objectCode,
+            statusTag = statusTag,
             matchedNodeCode = target.matchedNodeCode,
             matchedRouteCode = target.matchedRouteCode,
             filePath = file.absolutePath,

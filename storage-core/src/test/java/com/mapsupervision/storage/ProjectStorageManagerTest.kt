@@ -80,6 +80,25 @@ class ProjectStorageManagerTest {
     }
 
     @Test
+    fun moveMediaFiles_moves_image_and_thumbnail_into_status_folder() {
+        val source = File(tempDir, "source/preview.jpg").apply {
+            parentFile?.mkdirs()
+            writeText("image")
+        }
+        val thumbnail = File(tempDir, "source/preview-thumb.jpg").apply { writeText("thumbnail") }
+        val target = storageManager.resolveMediaFolder("move-project", false, "NODE-01", "Thi công")
+
+        val result = storageManager.moveMediaFiles(source, thumbnail, target)
+
+        assertFalse(source.exists())
+        assertFalse(thumbnail.exists())
+        assertEquals("image", File(result.filePath).readText())
+        assertEquals("thumbnail", File(result.thumbnailPath).readText())
+        assertTrue(result.filePath.contains("Thi-công"))
+        assertTrue(result.thumbnailPath.contains("Thi-công"))
+    }
+
+    @Test
     fun buildMediaFileName_uses_time_location_note() {
         val name = storageManager.buildMediaFileName(
             capturedAt = 1710000000000L,

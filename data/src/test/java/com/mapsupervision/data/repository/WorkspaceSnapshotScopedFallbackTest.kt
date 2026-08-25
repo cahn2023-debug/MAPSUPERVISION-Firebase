@@ -176,7 +176,7 @@ class WorkspaceSnapshotScopedFallbackTest {
             workVolumeProgressRepository = WorkVolumeProgressRepositoryImpl(sharedDatabase.workVolumeProgressDao(), provider),
             dailyLogRepository = DailyLogRepositoryImpl(sharedDatabase.dailyLogDao(), provider, sharedDatabase),
             workCategoryRepository = WorkCategoryRepositoryImpl(sharedDatabase.workCategoryDao(), provider),
-            photoRepository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao()),
+            photoRepository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao(), storageManager),
             materialHandoverRepository = MaterialHandoverRepositoryImpl(sharedDatabase.materialHandoverDao(), provider),
             materialDeclarationRepository = MaterialDeclarationRepositoryImpl(sharedDatabase.materialDeclarationDao(), provider),
             workPlanRepository = WorkPlanRepositoryImpl(sharedDatabase.workPlanDao(), provider),

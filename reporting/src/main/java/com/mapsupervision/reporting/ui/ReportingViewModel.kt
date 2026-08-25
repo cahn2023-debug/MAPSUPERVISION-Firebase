@@ -9,11 +9,13 @@ import com.mapsupervision.ai.core.AIFacade
 import com.mapsupervision.ai.core.ReportDraftPayload
 import com.mapsupervision.ai.core.ReportDraftResult
 import com.mapsupervision.domain.model.DailyLog
+import com.mapsupervision.domain.model.MediaStatusTags
 import com.mapsupervision.domain.model.NodeProgress
 import com.mapsupervision.domain.model.SitePhoto
 import com.mapsupervision.domain.model.ReportWorkspaceSnapshot
 import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.DailyLogRepository
+import com.mapsupervision.domain.repository.MediaStatusTagRepository
 import com.mapsupervision.domain.repository.PhotoRepository
 import com.mapsupervision.domain.repository.ProjectRepository
 import com.mapsupervision.domain.repository.ProjectSyncRepository
@@ -41,6 +43,7 @@ class ReportingViewModel @Inject constructor(
     private val activeProjectRepository: ActiveProjectRepository,
     private val photoRepository: PhotoRepository,
     private val dailyLogRepository: DailyLogRepository,
+    private val mediaStatusTagRepository: MediaStatusTagRepository,
     private val aiFacade: AIFacade,
     private val generateReportUseCase: GenerateReportUseCase,
     private val pdfReportGenerator: PdfReportGenerator,
@@ -63,6 +66,9 @@ class ReportingViewModel @Inject constructor(
 
     private val _reportSnapshot = MutableStateFlow(ReportingSnapshot.Empty)
     val reportSnapshot: StateFlow<ReportingSnapshot> = _reportSnapshot.asStateFlow()
+
+    private val _statusTagOptions = MutableStateFlow(MediaStatusTags.systemNames)
+    val statusTagOptions: StateFlow<List<String>> = _statusTagOptions.asStateFlow()
 
     private var refreshJob: Job? = null
     private var aiReportJob: Job? = null
@@ -98,12 +104,22 @@ class ReportingViewModel @Inject constructor(
             val projectId = (activeProjectRepository.getActive() as? AppResult.Success)?.data
             if (projectId.isNullOrBlank()) {
                 clearReportingState()
+                _statusTagOptions.value = MediaStatusTags.systemNames
                 return@launch
             }
 
-        val snapshot = loadReportingSnapshot(projectId)
-        replaceReportingSnapshot(snapshot)
+            val snapshot = loadReportingSnapshot(projectId)
+            refreshStatusTagOptions(projectId)
+            replaceReportingSnapshot(snapshot)
+        }
     }
+
+    private suspend fun refreshStatusTagOptions(projectId: String) {
+        val customTags = (mediaStatusTagRepository.byProject(projectId) as? AppResult.Success)?.data.orEmpty()
+            .map { it.name.trim() }
+            .filter { it.isNotBlank() }
+        _statusTagOptions.value = (MediaStatusTags.systemNames + customTags)
+            .distinctBy(MediaStatusTags::normalize)
     }
 
     fun requestReportDraft(projectId: String, filterNodeCode: String? = null) {

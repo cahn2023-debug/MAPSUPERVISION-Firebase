@@ -18,10 +18,12 @@ import com.mapsupervision.ai.core.ReportDraftResult
 import com.mapsupervision.ai.core.TimelineSummaryPayload
 import com.mapsupervision.ai.core.TimelineSummaryResult
 import com.mapsupervision.domain.model.PhotoLocationSnapshot
+import com.mapsupervision.domain.model.MediaStatusTag
 import com.mapsupervision.domain.model.Project
 import com.mapsupervision.domain.model.SitePhoto
 import com.mapsupervision.domain.repository.ActiveProjectRepository
 import com.mapsupervision.domain.repository.GisRepository
+import com.mapsupervision.domain.repository.MediaStatusTagRepository
 import com.mapsupervision.domain.repository.PhotoRepository
 import com.mapsupervision.domain.repository.ProjectRepository
 import com.mapsupervision.domain.repository.ProjectSyncEvent
@@ -63,6 +65,7 @@ class PhotoViewModelTest {
     private lateinit var context: Context
 
     private val photoRepository = FakePhotoRepository()
+    private val mediaStatusTagRepository = FakeMediaStatusTagRepository()
     private val activeProjectRepository = FakeActiveProjectRepository("proj-1")
     private val gisRepository = FakeGisRepository()
     private val projectRepository = FakeProjectRepository()
@@ -85,7 +88,8 @@ class PhotoViewModelTest {
                 note: String?,
                 folderType: CaptureFolderType,
                 objectCode: String,
-                sourceUri: String
+                sourceUri: String,
+                statusTag: String?
             ): File {
                 println("DEBUG: PhotoPipelineService.importFromGallery overridden called!")
                 val file = File(context.cacheDir, "imported.mp4")
@@ -111,6 +115,7 @@ class PhotoViewModelTest {
         val viewModel = PhotoViewModel(
             context = context,
             photoRepository = photoRepository,
+            mediaStatusTagRepository = mediaStatusTagRepository,
             activeProjectRepository = activeProjectRepository,
             gisRepository = gisRepository,
             projectRepository = projectRepository,
@@ -159,6 +164,88 @@ class PhotoViewModelTest {
         assertEquals(scanned.absolutePath, saved.filePath)
         assertEquals(scanned.absolutePath, saved.thumbnailPath)
     }
+
+    @Test
+    fun activeStatusTag_isRetainedForMultipleCaptures() = runTest(dispatcher) {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.setActiveStatusTag(" Thi công ")
+        val firstCapture = viewModel.createCaptureFile("node-1")
+        val secondCapture = viewModel.createCaptureFile("node-1")
+
+        assertEquals("Thi công", viewModel.activeStatusTag.value)
+        assertEquals("Thi-công", firstCapture?.parentFile?.name)
+        assertEquals("Thi-công", secondCapture?.parentFile?.name)
+    }
+
+    @Test
+    fun customStatusTag_isAddedAndExposedForTheActiveProject() = runTest(dispatcher) {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.addCustomStatusTag("  Kiểm tra  ")
+        advanceUntilIdle()
+
+        assertEquals("Kiểm tra", mediaStatusTagRepository.tags.single().name)
+        assertEquals(true, viewModel.statusTagOptions.value.contains("Kiểm tra"))
+    }
+
+    @Test
+    fun statusTagFilter_togglesForTheSelectedObjectView() = runTest(dispatcher) {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleStatusTagFilter("Hiện trạng")
+        assertEquals("Hiện trạng", viewModel.statusTagFilter.value)
+        viewModel.toggleStatusTagFilter("Hiện trạng")
+        assertEquals(null, viewModel.statusTagFilter.value)
+    }
+
+    @Test
+    fun reviewStatusTag_updateIsPersisted() = runTest(dispatcher) {
+        val original = samplePhoto(statusTag = "Hiện trạng")
+        photoRepository.saved += original
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectPhotoForReview(original.id)
+        viewModel.updateSelectedPhotoStatusTag("Thi công")
+        viewModel.saveSelectedPhotoReview()
+        advanceUntilIdle()
+
+        assertEquals("Thi công", photoRepository.saved.last().statusTag)
+    }
+
+    private fun createViewModel(): PhotoViewModel = PhotoViewModel(
+        context = context,
+        photoRepository = photoRepository,
+        mediaStatusTagRepository = mediaStatusTagRepository,
+        activeProjectRepository = activeProjectRepository,
+        gisRepository = gisRepository,
+        projectRepository = projectRepository,
+        projectSyncRepository = projectSyncRepository,
+        locationProvider = locationProvider,
+        photoPipelineService = photoPipelineService,
+        aiFacade = aiFacade,
+        storageManager = storageManager
+    )
+
+    private fun samplePhoto(statusTag: String? = null): SitePhoto = SitePhoto(
+        id = "photo-1",
+        projectId = "proj-1",
+        objectCode = "node-1",
+        statusTag = statusTag,
+        filePath = File(context.cacheDir, "photo.jpg").absolutePath,
+        thumbnailPath = File(context.cacheDir, "photo.jpg").absolutePath,
+        latitude = null,
+        longitude = null,
+        locationAccuracyM = null,
+        isGpsMocked = false,
+        locationStatus = com.mapsupervision.domain.model.PhotoLocationStatus.MISSING,
+        engineer = "Engineer",
+        capturedAtEpochMs = 1L
+    )
 }
 
 private class FakePhotoRepository : PhotoRepository {
@@ -181,6 +268,23 @@ private class FakePhotoRepository : PhotoRepository {
 
     override fun observeByProject(projectId: String): Flow<List<SitePhoto>> {
         return flowOf(saved.filter { it.projectId == projectId })
+    }
+}
+
+private class FakeMediaStatusTagRepository : MediaStatusTagRepository {
+    val tags = mutableListOf<MediaStatusTag>()
+
+    override suspend fun add(tag: MediaStatusTag): AppResult<Unit> {
+        tags += tag
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun byProject(projectId: String): AppResult<List<MediaStatusTag>> {
+        return AppResult.Success(tags.filter { it.projectId == projectId })
+    }
+
+    override fun observeByProject(projectId: String): Flow<List<MediaStatusTag>> {
+        return flowOf(tags.filter { it.projectId == projectId })
     }
 }
 

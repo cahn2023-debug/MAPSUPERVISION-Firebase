@@ -14,6 +14,7 @@ import com.mapsupervision.data.db.entity.ImportedFileEntity
 import com.mapsupervision.data.db.entity.MaterialDeclarationEntity
 import com.mapsupervision.data.db.entity.MaterialHandoverEntity
 import com.mapsupervision.data.db.entity.MaterialProgressEntity
+import com.mapsupervision.data.db.entity.MediaStatusTagEntity
 import com.mapsupervision.data.db.entity.NodeProgressEntity
 import com.mapsupervision.data.db.entity.NoteEntity
 import com.mapsupervision.data.db.entity.ProjectEntity
@@ -53,6 +54,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
         "daily_log",
         "daily_log_line",
         "work_categories",
+        "media_status_tags",
         "work_plan",
         "note",
         "task",
@@ -394,6 +396,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
                         scopedDatabase.dailyLogLineDao().upsertAll(payload.dailyLogLines.map { it.normalizeForBridge(lookupAfterRoutes) })
                     }
                     for (entity in payload.workCategories) scopedDatabase.workCategoryDao().upsert(entity)
+                    for (entity in payload.mediaStatusTags) scopedDatabase.mediaStatusTagDao().insert(entity)
                     for (entity in payload.workPlans.map { it.normalizeForBridge(lookupAfterRoutes) }) {
                         scopedDatabase.workPlanDao().insert(entity)
                     }
@@ -484,6 +487,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
         val dailyLogs = database.dailyLogDao().byProject(projectId)
         val dailyLogLines = database.dailyLogLineDao().byLogIds(projectId, dailyLogs.map { it.id })
         val workCategories = database.workCategoryDao().byProject(projectId)
+        val mediaStatusTags = database.mediaStatusTagDao().byProject(projectId)
         val workPlans = database.workPlanDao().byProject(projectId)
         if (
             importedFiles.isEmpty() &&
@@ -494,6 +498,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
             dailyLogs.isEmpty() &&
             dailyLogLines.isEmpty() &&
             workCategories.isEmpty() &&
+            mediaStatusTags.isEmpty() &&
             workPlans.isEmpty()
         ) {
             return null
@@ -507,6 +512,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
             dailyLogs = dailyLogs,
             dailyLogLines = dailyLogLines,
             workCategories = workCategories,
+            mediaStatusTags = mediaStatusTags,
             workPlans = workPlans
         )
     }
@@ -576,6 +582,7 @@ class ProjectStorageMigrationServiceImpl @Inject constructor(
         val dailyLogs: List<DailyLogEntity>,
         val dailyLogLines: List<DailyLogLineEntity>,
         val workCategories: List<WorkCategoryEntity>,
+        val mediaStatusTags: List<MediaStatusTagEntity>,
         val workPlans: List<WorkPlanEntity>
     )
 
