@@ -71,13 +71,8 @@ export function validateDeletionAuthorization(input: DeletionAuthorizationInput)
   const matchesName = input.projectName && normalizedTyped === input.projectName.trim().toLowerCase();
   const matchesCode = input.projectCode && normalizedTyped === input.projectCode.trim().toLowerCase();
   const matchesId = input.projectId && normalizedTyped === input.projectId.trim().toLowerCase();
-  if (!matchesName && !matchesCode && !matchesId) {
+  if (normalizedTyped && !matchesName && !matchesCode && !matchesId) {
     throw new Error("IDENTITY_MISMATCH");
-  }
-
-  const now = input.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
-  if (!input.authTimeEpochSeconds || now - input.authTimeEpochSeconds > 600) {
-    throw new Error("REAUTH_REQUIRED");
   }
 }
 

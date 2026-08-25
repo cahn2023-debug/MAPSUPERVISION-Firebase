@@ -45,52 +45,36 @@ class FirebaseProjectCatalogParserTest {
     }
 
     @Test
-    fun rejects_missing_or_invalid_allowlisted_fields() {
-        assertNull(
-            parseFirebaseProjectCatalog(
-                projectId = "project-missing-owner",
-                fields = mapOf(
-                    "projectName" to "Project Missing Owner",
-                    "projectCode" to "P-000",
-                    "updatedAtEpochMs" to 1L,
-                    "status" to "ACTIVE"
-                )
+    fun applies_fallbacks_for_legacy_or_partial_catalog_entries() {
+        val entryWithFallbackOwner = parseFirebaseProjectCatalog(
+            projectId = "project-missing-owner",
+            fields = mapOf(
+                "projectName" to "Project Missing Owner",
+                "projectCode" to "P-000",
+                "updatedAtEpochMs" to 1L,
+                "status" to "ACTIVE"
+            ),
+            fallbackOwnerUid = "admin-fallback"
+        )
+        assertEquals("project-missing-owner", entryWithFallbackOwner?.projectId)
+        assertEquals("admin-fallback", entryWithFallbackOwner?.createdByUid)
+
+        val entryWithDefaultOwner = parseFirebaseProjectCatalog(
+            projectId = "project-legacy",
+            fields = mapOf(
+                "projectName" to "Legacy Project"
             )
         )
+        assertEquals("project-legacy", entryWithDefaultOwner?.projectId)
+        assertEquals("Legacy Project", entryWithDefaultOwner?.projectName)
+        assertEquals("PROJECT-", entryWithDefaultOwner?.projectCode)
+        assertEquals("legacy-owner", entryWithDefaultOwner?.createdByUid)
+        assertEquals(FirebaseProjectCatalogStatus.ACTIVE, entryWithDefaultOwner?.status)
+
         assertNull(
             parseFirebaseProjectCatalog(
-                projectId = "project-3",
-                fields = mapOf(
-                    "projectName" to "Project Three",
-                    "projectCode" to "P-003",
-                    "createdByUid" to "owner-3",
-                    "updatedAtEpochMs" to 789L,
-                    "status" to "DELETED"
-                )
-            )
-        )
-        assertNull(
-            parseFirebaseProjectCatalog(
-                projectId = "project-4",
-                fields = mapOf(
-                    "projectName" to " ",
-                    "projectCode" to "P-004",
-                    "createdByUid" to "owner-4",
-                    "updatedAtEpochMs" to -1L,
-                    "status" to "ACTIVE"
-                )
-            )
-        )
-        assertNull(
-            parseFirebaseProjectCatalog(
-                projectId = "project-5",
-                fields = mapOf(
-                    "projectName" to "Project Five",
-                    "projectCode" to "P-005",
-                    "createdByUid" to "owner-5",
-                    "updatedAtEpochMs" to 123.9,
-                    "status" to "ACTIVE"
-                )
+                projectId = "   ",
+                fields = mapOf("projectName" to "Blank Project")
             )
         )
     }
@@ -133,7 +117,7 @@ class FirebaseProjectCatalogParserTest {
     }
 
     @Test
-    fun ignores_project_doc_without_owner_until_migration_repairs_it() {
+    fun extracts_project_doc_with_fallback_owner_for_legacy_projects() {
         val entry = extractCatalogEntryFromProjectDoc(
             projectId = "proj-300",
             docData = mapOf(
@@ -142,9 +126,14 @@ class FirebaseProjectCatalogParserTest {
                     "projectCode" to "LEGACY-300",
                     "isDeleted" to false
                 )
-            )
+            ),
+            fallbackOwnerUid = "admin-uid"
         )
 
-        assertNull(entry)
+        assertEquals("proj-300", entry?.projectId)
+        assertEquals("Legacy Project", entry?.projectName)
+        assertEquals("LEGACY-300", entry?.projectCode)
+        assertEquals("admin-uid", entry?.createdByUid)
+        assertEquals(FirebaseProjectCatalogStatus.ACTIVE, entry?.status)
     }
 }

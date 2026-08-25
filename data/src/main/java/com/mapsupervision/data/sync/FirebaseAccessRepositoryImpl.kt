@@ -370,9 +370,10 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         if (startAfterUpdatedAtEpochMs != null && startAfterProjectId != null) {
             query = query.startAfter(startAfterUpdatedAtEpochMs, startAfterProjectId)
         }
+        val sessionOwner = _accessState.value.session?.uid ?: firebaseRuntime.auth().currentUser?.uid
         val catalogDocuments = query.get().await().documents
         val entries = catalogDocuments.mapNotNull { document ->
-            parseFirebaseProjectCatalog(document.id, document.data.orEmpty())
+            parseFirebaseProjectCatalog(document.id, document.data.orEmpty(), fallbackOwnerUid = sessionOwner)
         }.toMutableList()
 
         val isAdmin = _accessState.value.session?.isAdmin == true
@@ -383,7 +384,7 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
                 val missingEntries = mutableListOf<FirebaseProjectCatalogEntry>()
 
                 for (doc in projectDocs) {
-                    val entry = extractCatalogEntryFromProjectDoc(doc.id, doc.data.orEmpty())
+                    val entry = extractCatalogEntryFromProjectDoc(doc.id, doc.data.orEmpty(), fallbackOwnerUid = sessionOwner)
                     if (entry != null && entry.projectId !in catalogIds) {
                         missingEntries.add(entry)
                     }
@@ -722,33 +723,35 @@ private fun Any?.asStringSetOrNull(): Set<String>? =
 
 internal fun parseFirebaseProjectCatalog(
     projectId: String,
-    fields: Map<String, Any?>
+    fields: Map<String, Any?>,
+    fallbackOwnerUid: String? = null
 ): FirebaseProjectCatalogEntry? {
     val normalizedProjectId = projectId.trim()
-    val projectName = (fields["projectName"] as? String)?.trim().orEmpty()
-    val projectCode = (fields["projectCode"] as? String)?.trim().orEmpty()
-    val createdByUid = (fields["createdByUid"] as? String)?.trim()?.takeIf { it.isNotBlank() }
-    val updatedAtEpochMs = when (val value = fields["updatedAtEpochMs"]) {
+    if (normalizedProjectId.isBlank()) return null
+
+    val projectName = ((fields["projectName"] ?: fields["name"]) as? String)?.trim().orEmpty()
+        .ifBlank { normalizedProjectId }
+    val slug = (fields["slug"] as? String)?.trim().orEmpty()
+    val projectCode = ((fields["projectCode"] ?: fields["code"]) as? String)?.trim().orEmpty()
+        .ifBlank { slug.ifBlank { normalizedProjectId.take(8).uppercase(Locale.ROOT) } }
+    val createdByUid = ((fields["createdByUid"] ?: fields["ownerUid"] ?: fields["userId"]) as? String)?.trim()
+        ?.takeIf { it.isNotBlank() } ?: fallbackOwnerUid ?: "legacy-owner"
+    val updatedAtEpochMs = when (val value = fields["updatedAtEpochMs"] ?: fields["createdAtEpochMs"]) {
         is Long -> value
         is Int -> value.toLong()
-        else -> null
+        is Number -> value.toLong()
+        else -> 0L
     }
     val status = when ((fields["status"] as? String)?.trim()?.uppercase(Locale.ROOT)) {
-        "ACTIVE" -> FirebaseProjectCatalogStatus.ACTIVE
         "ARCHIVED" -> FirebaseProjectCatalogStatus.ARCHIVED
-        else -> null
+        else -> FirebaseProjectCatalogStatus.ACTIVE
     }
-    if (normalizedProjectId.isBlank() || projectName.isBlank() || projectCode.isBlank() ||
-        createdByUid == null ||
-        updatedAtEpochMs == null || updatedAtEpochMs < 0L || status == null
-    ) {
-        return null
-    }
+
     return FirebaseProjectCatalogEntry(
         projectId = normalizedProjectId,
         projectName = projectName,
         projectCode = projectCode,
-        updatedAtEpochMs = updatedAtEpochMs,
+        updatedAtEpochMs = updatedAtEpochMs.coerceAtLeast(0L),
         status = status,
         createdByUid = createdByUid
     )
@@ -756,31 +759,34 @@ internal fun parseFirebaseProjectCatalog(
 
 internal fun extractCatalogEntryFromProjectDoc(
     projectId: String,
-    docData: Map<String, Any?>
+    docData: Map<String, Any?>,
+    fallbackOwnerUid: String? = null
 ): FirebaseProjectCatalogEntry? {
     @Suppress("UNCHECKED_CAST")
     val payload = (docData["payload"] as? Map<String, Any?>) ?: docData
     val isDeleted = (payload["isDeleted"] as? Boolean) ?: (docData["isDeleted"] as? Boolean) ?: false
     if (isDeleted) return null
-    val name = ((payload["name"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim().orEmpty()
+    val name = ((payload["name"] ?: payload["projectName"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim()
+        .orEmpty().ifBlank { projectId.trim() }
     val slug = ((payload["slug"] ?: docData["slug"]) as? String)?.trim().orEmpty()
     val projectCode = ((payload["projectCode"] ?: docData["projectCode"]) as? String)?.trim().orEmpty()
         .ifBlank { slug.ifBlank { projectId.take(8).uppercase(Locale.ROOT) } }
-    val updatedAt = when (val value = payload["updatedAtEpochMs"] ?: docData["updatedAtEpochMs"]) {
+    val updatedAt = when (val value = payload["updatedAtEpochMs"] ?: docData["updatedAtEpochMs"] ?: payload["createdAtEpochMs"] ?: docData["createdAtEpochMs"]) {
         is Long -> value
         is Int -> value.toLong()
         is Number -> value.toLong()
-        else -> System.currentTimeMillis()
+        else -> 0L
     }
     val isArchived = (payload["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
-    val createdByUid = ((payload["createdByUid"] ?: docData["createdByUid"]) as? String)?.trim()?.takeIf { it.isNotBlank() }
+    val createdByUid = ((payload["createdByUid"] ?: docData["createdByUid"] ?: payload["ownerUid"] ?: docData["ownerUid"]) as? String)?.trim()
+        ?.takeIf { it.isNotBlank() } ?: fallbackOwnerUid ?: "legacy-owner"
     val status = if (isArchived) FirebaseProjectCatalogStatus.ARCHIVED else FirebaseProjectCatalogStatus.ACTIVE
-    if (name.isBlank() || projectId.isBlank() || createdByUid == null) return null
+    if (projectId.isBlank()) return null
     return FirebaseProjectCatalogEntry(
         projectId = projectId.trim(),
         projectName = name,
         projectCode = projectCode,
-        updatedAtEpochMs = updatedAt,
+        updatedAtEpochMs = updatedAt.coerceAtLeast(0L),
         status = status,
         createdByUid = createdByUid
     )

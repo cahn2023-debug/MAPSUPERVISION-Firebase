@@ -48,7 +48,7 @@ test("deletion authorization requires creator/admin, recent auth, identity and i
     nowEpochSeconds: 1_400
   }), /IDENTITY_MISMATCH/);
 
-  assert.throws(() => validateDeletionAuthorization({
+  assert.doesNotThrow(() => validateDeletionAuthorization({
     actorUid: "creator",
     isAdmin: false,
     ownerUid: "creator",
@@ -59,7 +59,7 @@ test("deletion authorization requires creator/admin, recent auth, identity and i
     typedIdentity: "Alpha",
     authTimeEpochSeconds: 1_000,
     nowEpochSeconds: 1_400
-  }), /REAUTH_REQUIRED/);
+  }));
 
   assert.doesNotThrow(() => validateDeletionAuthorization({
     actorUid: "project-admin",

@@ -101,6 +101,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "doc:doc-eb51714d7804cc9e2dd1e2a5d29ef4a4": {
+    "entityType": "doc",
+    "entityId": "doc-eb51714d7804cc9e2dd1e2a5d29ef4a4",
+    "canonicalHash": "268032ac3a9d56cd557899d661670d69674497b2cb064559e76711d0b25311bd",
+    "indexedHash": "268032ac3a9d56cd557899d661670d69674497b2cb064559e76711d0b25311bd",
+    "revision": 3,
+    "path": "docs/specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix.md",
+    "indexedRevision": 3,
+    "indexedPath": "docs/specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix.md",
+    "indexedAt": "2026-08-25T12:49:26.0394911Z"
+  },
   "doc:doc-ed69bd064dc60a78c68a15077a90884c": {
     "entityType": "doc",
     "entityId": "doc-ed69bd064dc60a78c68a15077a90884c",
@@ -194,6 +205,17 @@
     "indexedRevision": 14,
     "indexedPath": "tasks/6zebli.md",
     "indexedAt": "2026-08-25T08:56:03.1584035Z"
+  },
+  "task:7i32xc": {
+    "entityType": "task",
+    "entityId": "7i32xc",
+    "canonicalHash": "e8bda1ca8430b6a08bcefc673967c7b2508ae865e4ba425e91b8c46921490d8f",
+    "indexedHash": "e8bda1ca8430b6a08bcefc673967c7b2508ae865e4ba425e91b8c46921490d8f",
+    "revision": 3,
+    "path": "tasks/7i32xc.md",
+    "indexedRevision": 3,
+    "indexedPath": "tasks/7i32xc.md",
+    "indexedAt": "2026-08-25T12:49:11.6715409Z"
   },
   "task:7qsrje": {
     "entityType": "task",
@@ -467,6 +489,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:pykp6v": {
+    "entityType": "task",
+    "entityId": "pykp6v",
+    "canonicalHash": "941cf0468c7a0c07ffffe0a5316cd3786feecb24ebafee7cfbbdd8d11f5e04b1",
+    "indexedHash": "941cf0468c7a0c07ffffe0a5316cd3786feecb24ebafee7cfbbdd8d11f5e04b1",
+    "revision": 3,
+    "path": "tasks/pykp6v.md",
+    "indexedRevision": 3,
+    "indexedPath": "tasks/pykp6v.md",
+    "indexedAt": "2026-08-25T12:42:05.6717177Z"
+  },
   "task:q74bwe": {
     "entityType": "task",
     "entityId": "q74bwe",
@@ -608,6 +641,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:wxn6p8": {
+    "entityType": "task",
+    "entityId": "wxn6p8",
+    "canonicalHash": "8c32edd32cc5e0b8677d1e094b81bca5cb44869a819f51ac1e9fca263062024a",
+    "indexedHash": "8c32edd32cc5e0b8677d1e094b81bca5cb44869a819f51ac1e9fca263062024a",
+    "revision": 3,
+    "path": "tasks/wxn6p8.md",
+    "indexedRevision": 3,
+    "indexedPath": "tasks/wxn6p8.md",
+    "indexedAt": "2026-08-25T12:39:34.0405819Z"
+  },
   "task:xo64so": {
     "entityType": "task",
     "entityId": "xo64so",
@@ -653,6 +697,17 @@
     "indexedRevision": 7,
     "indexedPath": "tasks/yuh98l.md",
     "indexedAt": "2026-08-25T02:15:12.1597369Z"
+  },
+  "task:yums9t": {
+    "entityType": "task",
+    "entityId": "yums9t",
+    "canonicalHash": "7fc0085ec63cec886d8f1f655d1835dd75fb41cb64bc312883ee024eb693162a",
+    "indexedHash": "7fc0085ec63cec886d8f1f655d1835dd75fb41cb64bc312883ee024eb693162a",
+    "revision": 3,
+    "path": "tasks/yums9t.md",
+    "indexedRevision": 3,
+    "indexedPath": "tasks/yums9t.md",
+    "indexedAt": "2026-08-25T12:40:40.0395812Z"
   },
   "task:zfv69f": {
     "entityType": "task",

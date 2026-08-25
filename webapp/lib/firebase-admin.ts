@@ -4,19 +4,62 @@ import { cert, getApps, initializeApp, applicationDefault } from "firebase-admin
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
+export function sanitizePrivateKey(rawKey: string): string {
+  if (!rawKey) return rawKey;
+  let key = rawKey.trim();
+
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+
+  key = key.replace(/\\r/g, "").replace(/\r/g, "");
+  key = key.replace(/\\\\n/g, "\n").replace(/\\n/g, "\n");
+
+  const header = "-----BEGIN PRIVATE KEY-----";
+  const footer = "-----END PRIVATE KEY-----";
+
+  if (key.includes(header) && key.includes(footer)) {
+    const startIndex = key.indexOf(header);
+    const endIndex = key.indexOf(footer);
+    const pemContent = key.slice(startIndex + header.length, endIndex).trim();
+    const bodyLines = pemContent.split(/\s+/).filter(Boolean).join("\n");
+    key = `${header}\n${bodyLines}\n${footer}\n`;
+  }
+
+  return key;
+}
+
+export function sanitizeServiceAccount(parsed: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...parsed };
+  if (typeof result.private_key === "string") {
+    result.private_key = sanitizePrivateKey(result.private_key);
+  }
+  return result;
+}
+
+function parseServiceAccountJson(raw: string): any {
+  let clean = raw.trim();
+  if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
+    clean = clean.slice(1, -1).trim();
+  }
+  try {
+    return JSON.parse(clean);
+  } catch {
+    try {
+      const decoded = Buffer.from(clean, "base64").toString("utf8");
+      return JSON.parse(decoded);
+    } catch {
+      throw new Error("Unable to parse service account JSON string");
+    }
+  }
+}
+
 function readCredential() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (raw) {
     try {
-      let clean = raw;
-      if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
-        clean = clean.slice(1, -1).trim();
-      }
-      const parsed = JSON.parse(clean);
-      if (typeof parsed.private_key === "string") {
-        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-      }
-      return cert(parsed);
+      const parsed = sanitizeServiceAccount(parseServiceAccountJson(raw));
+      return cert(parsed as any);
     } catch (err) {
       console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
     }
@@ -36,11 +79,8 @@ function readCredential() {
     try {
       if (fs.existsSync(candidate)) {
         const content = fs.readFileSync(candidate, "utf8");
-        const parsed = JSON.parse(content);
-        if (typeof parsed.private_key === "string") {
-          parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-        }
-        return cert(parsed);
+        const parsed = sanitizeServiceAccount(JSON.parse(content));
+        return cert(parsed as any);
       }
     } catch (err) {
       console.warn(`[FirebaseAdmin] Failed reading ${candidate}:`, err);

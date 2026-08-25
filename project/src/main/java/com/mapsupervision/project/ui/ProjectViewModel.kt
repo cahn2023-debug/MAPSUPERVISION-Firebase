@@ -242,11 +242,8 @@ class ProjectViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(message = "Không tìm thấy project local")
                 return@launch
             }
-            val requestId = project.cloudDecisionRequestId ?: project.deletionRequestId
-            if (requestId.isNullOrBlank()) {
-                _uiState.value = _uiState.value.copy(message = "Thiếu mã yêu cầu quyết định Cloud")
-                return@launch
-            }
+            val requestId = (project.cloudDecisionRequestId ?: project.deletionRequestId)?.trim()?.ifBlank { null }
+                ?: java.util.UUID.randomUUID().toString()
             if (retainCloud && project.deletionState in setOf(
                     ProjectDeletionState.CLOUD_RETAINED,
                     ProjectDeletionState.RESTORE_PENDING
@@ -264,11 +261,12 @@ class ProjectViewModel @Inject constructor(
                 refresh()
                 return@launch
             }
+            val typedIdentity = project.name.ifBlank { project.slug.ifBlank { project.id } }
             when (val result = firebaseSyncRepository.decideProjectCloudDeletion(
                 projectId = projectId,
                 requestId = requestId,
                 decision = if (retainCloud) "RETAIN" else "DELETE",
-                typedIdentity = project.name
+                typedIdentity = typedIdentity
             )) {
                 is AppResult.Error -> _uiState.value = _uiState.value.copy(
                     message = "Không thể ghi quyết định Cloud: ${result.throwable.message}"

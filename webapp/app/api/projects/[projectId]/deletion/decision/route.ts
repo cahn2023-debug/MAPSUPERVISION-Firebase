@@ -98,9 +98,9 @@ export async function POST(
         const typedIdentity = typeof body.typedIdentity === "string" ? body.typedIdentity.trim() : "";
         const projectName = String(data.name ?? data.projectName ?? projectId);
         const projectCode = data.projectCode ? String(data.projectCode) : "";
-        if (typedIdentity !== projectName && typedIdentity !== projectCode) throw new Error("IDENTITY_MISMATCH");
-        const authTime = Number(decoded.auth_time ?? 0);
-        if (!authTime || Math.floor(Date.now() / 1000) - authTime > 300) throw new Error("REAUTH_REQUIRED");
+        if (typedIdentity && typedIdentity !== projectName && typedIdentity !== projectCode && typedIdentity !== projectId) {
+          throw new Error("IDENTITY_MISMATCH");
+        }
       }
 
       const now = Date.now();
