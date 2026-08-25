@@ -161,6 +161,29 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "doc:doc-fadbccd43ac27e01177e2c9c022bd7d8": {
+    "entityType": "doc",
+    "entityId": "doc-fadbccd43ac27e01177e2c9c022bd7d8",
+    "canonicalHash": "bb9496f760e7cbbc7b13df9546ee3deb04d6088caa46b6278d8c8b64d6fa635d",
+    "indexedHash": "82233a56002a631162d8fc633fda3fcaf127446ab0a4110313b73bd3089a23cb",
+    "revision": 5,
+    "path": "docs/specs/2026-08-25/webapp-ui-firebase-sync-editing-v-ghi-ch.md",
+    "indexedRevision": 3,
+    "indexedPath": "docs/specs/2026-08-25/webapp-ui-firebase-sync-editing-v-ghi-ch.md",
+    "indexedAt": "2026-08-25T17:01:00.4773956Z",
+    "stale": true
+  },
+  "doc:doc-fec02adeef516c7bd59bd355876f6bd7": {
+    "entityType": "doc",
+    "entityId": "doc-fec02adeef516c7bd59bd355876f6bd7",
+    "canonicalHash": "2b6b135fc13446f493492e6457cac270c70fbd143af2a849767ef773a4e50c10",
+    "indexedHash": "2b6b135fc13446f493492e6457cac270c70fbd143af2a849767ef773a4e50c10",
+    "revision": 3,
+    "path": "docs/specs/2026-08-25/deploy-webapp-ln-vercel.md",
+    "indexedRevision": 3,
+    "indexedPath": "docs/specs/2026-08-25/deploy-webapp-ln-vercel.md",
+    "indexedAt": "2026-08-25T16:43:35.7042865Z"
+  },
   "task:0ri7hn": {
     "entityType": "task",
     "entityId": "0ri7hn",
@@ -168,6 +191,18 @@
     "revision": 10,
     "path": "tasks/0ri7hn.md",
     "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
+  "task:1czvxh": {
+    "entityType": "task",
+    "entityId": "1czvxh",
+    "canonicalHash": "d15993da4dd8012a839fae3e6ae6c2a4143bb5464ea3910cb16666a20223461b",
+    "indexedHash": "1f46be9ee0620e534fe7d0d5ad8c1ca6fe1b51f7fda850e941bfe8d77d0a6aab",
+    "revision": 9,
+    "path": "tasks/1czvxh.md",
+    "indexedRevision": 6,
+    "indexedPath": "tasks/1czvxh.md",
+    "indexedAt": "2026-08-25T17:13:54.2495517Z",
     "stale": true
   },
   "task:1st54w": {
@@ -206,6 +241,18 @@
     "revision": 9,
     "path": "tasks/4hpjy5.md",
     "indexedAt": "0001-01-01T00:00:00Z",
+    "stale": true
+  },
+  "task:58omyz": {
+    "entityType": "task",
+    "entityId": "58omyz",
+    "canonicalHash": "eec43ab2405b0d4045a8926e6b77bbabf40b197ff31aa4ab32dc925e69c91a56",
+    "indexedHash": "e3f1118c529b68c9d208ff1cd25180d6c39d3dcf21cad829dcfb4110e202fcfa",
+    "revision": 7,
+    "path": "tasks/58omyz.md",
+    "indexedRevision": 1,
+    "indexedPath": "tasks/58omyz.md",
+    "indexedAt": "2026-08-25T17:00:56.7212194Z",
     "stale": true
   },
   "task:5lh0mh": {
@@ -351,6 +398,18 @@
     "indexedRevision": 5,
     "indexedPath": "tasks/eihjjs.md",
     "indexedAt": "2026-08-25T12:16:33.0970703Z",
+    "stale": true
+  },
+  "task:exnegn": {
+    "entityType": "task",
+    "entityId": "exnegn",
+    "canonicalHash": "36baf672a70c8a4d061f6ae798417c664da3d41a261b316b536257ed18f4e34a",
+    "indexedHash": "2ee8f73ccfe36ebdbccdf9e146d1353262f092b4ecac2b238a4cf35247331d64",
+    "revision": 9,
+    "path": "tasks/exnegn.md",
+    "indexedRevision": 6,
+    "indexedPath": "tasks/exnegn.md",
+    "indexedAt": "2026-08-25T17:20:55.8846861Z",
     "stale": true
   },
   "task:f6csl2": {
@@ -722,6 +781,18 @@
     "indexedAt": "2026-08-25T14:33:55.0917603Z",
     "stale": true
   },
+  "task:x1frpv": {
+    "entityType": "task",
+    "entityId": "x1frpv",
+    "canonicalHash": "d67a35b881696c06e7039a93bb929a35946e91fdf52a6b5f425a7206228f56cf",
+    "indexedHash": "d55f11c7546a1c6bed2587c6d64be311c339bd517658e92d5b8d1caf34ba8b64",
+    "revision": 9,
+    "path": "tasks/x1frpv.md",
+    "indexedRevision": 6,
+    "indexedPath": "tasks/x1frpv.md",
+    "indexedAt": "2026-08-25T17:15:19.0106889Z",
+    "stale": true
+  },
   "task:x85rvu": {
     "entityType": "task",
     "entityId": "x85rvu",
@@ -732,6 +803,18 @@
     "indexedRevision": 9,
     "indexedPath": "tasks/x85rvu.md",
     "indexedAt": "2026-08-25T15:21:54.0722787Z"
+  },
+  "task:xc48oq": {
+    "entityType": "task",
+    "entityId": "xc48oq",
+    "canonicalHash": "f0c8860be034945e21ab432c4ee17f5aad6f79f6b0dc6db1db6799ceb8c9c4e5",
+    "indexedHash": "12706cd22aec5abf148d0ddeb418703fade154b8377d792d514fb6a102ee0e0a",
+    "revision": 10,
+    "path": "tasks/xc48oq.md",
+    "indexedRevision": 7,
+    "indexedPath": "tasks/xc48oq.md",
+    "indexedAt": "2026-08-25T17:07:46.2740186Z",
+    "stale": true
   },
   "task:xo64so": {
     "entityType": "task",

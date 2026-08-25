@@ -36,6 +36,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -208,9 +209,11 @@ internal fun buildCaptureStamp(
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     markerScale: Float = 1.0f,
+    fovAngleDeg: Float = 30.0f,
+    fovLengthScale: Float = 1.0f,
     statusTag: String? = null
 ): CaptureStamp {
-    val mapScene = if (mapNodes.isNotEmpty() || mapRoutes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null || markerScale != 1.0f) {
+    val mapScene = if (mapNodes.isNotEmpty() || mapRoutes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null || markerScale != 1.0f || fovAngleDeg != 30.0f || fovLengthScale != 1.0f) {
         CaptureStampMapScene(
             centerLatitude = location?.latitude,
             centerLongitude = location?.longitude,
@@ -221,7 +224,9 @@ internal fun buildCaptureStamp(
             routes = mapRoutes,
             movementPath = movementPath,
             minimapZoom = minimapZoom,
-            markerScale = markerScale
+            markerScale = markerScale,
+            fovAngleDeg = fovAngleDeg,
+            fovLengthScale = fovLengthScale
         )
     } else null
 
@@ -249,6 +254,8 @@ internal fun buildCaptureStamp(
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     markerScale: Float = 1.0f,
+    fovAngleDeg: Float = 30.0f,
+    fovLengthScale: Float = 1.0f,
     statusTag: String? = null
 ): CaptureStamp = buildCaptureStamp(
     timestampMs = timestampMs,
@@ -261,6 +268,8 @@ internal fun buildCaptureStamp(
     movementPath = movementPath,
     minimapZoom = minimapZoom,
     markerScale = markerScale,
+    fovAngleDeg = fovAngleDeg,
+    fovLengthScale = fovLengthScale,
     statusTag = statusTag
 )
 
@@ -425,6 +434,8 @@ internal fun buildVideoStampTimelineSample(
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     markerScale: Float = 1.0f,
+    fovAngleDeg: Float = 30.0f,
+    fovLengthScale: Float = 1.0f,
     tileBitmap: Any? = null,
     statusTag: String? = null
 ): VideoStampTimelineSample {
@@ -441,6 +452,8 @@ internal fun buildVideoStampTimelineSample(
             movementPath = movementPath,
             minimapZoom = minimapZoom,
             markerScale = markerScale,
+            fovAngleDeg = fovAngleDeg,
+            fovLengthScale = fovLengthScale,
             statusTag = statusTag
         ),
         tileBitmap = tileBitmap
@@ -460,6 +473,8 @@ internal fun buildVideoStampTimelineSample(
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
     markerScale: Float = 1.0f,
+    fovAngleDeg: Float = 30.0f,
+    fovLengthScale: Float = 1.0f,
     tileBitmap: Any? = null,
     statusTag: String? = null
 ): VideoStampTimelineSample = buildVideoStampTimelineSample(
@@ -474,6 +489,8 @@ internal fun buildVideoStampTimelineSample(
     movementPath = movementPath,
     minimapZoom = minimapZoom,
     markerScale = markerScale,
+    fovAngleDeg = fovAngleDeg,
+    fovLengthScale = fovLengthScale,
     tileBitmap = tileBitmap,
     statusTag = statusTag
 )
@@ -582,13 +599,22 @@ fun CameraOverlay(
     var customMarkerScale by remember {
         mutableStateOf(cameraPrefs.getFloat("minimap_marker_scale", 1.0f))
     }
+    var customFovAngle by remember {
+        mutableStateOf(cameraPrefs.getFloat("minimap_fov_angle", 30.0f))
+    }
+    var customFovLength by remember {
+        mutableStateOf(cameraPrefs.getFloat("minimap_fov_length", 1.0f))
+    }
     var liveMinimapZoom by remember { mutableStateOf(customMinimapZoom) }
+    var settingsSheetHeightPx by remember { mutableStateOf(0) }
     val photoCaptureSession = remember { PhotoCaptureSession() }
 
-    LaunchedEffect(customMinimapZoom, customMarkerScale) {
+    LaunchedEffect(customMinimapZoom, customMarkerScale, customFovAngle, customFovLength) {
         cameraPrefs.edit()
             .putInt("minimap_custom_zoom", customMinimapZoom)
             .putFloat("minimap_marker_scale", customMarkerScale)
+            .putFloat("minimap_fov_angle", customFovAngle)
+            .putFloat("minimap_fov_length", customFovLength)
             .apply()
     }
 
@@ -749,6 +775,8 @@ fun CameraOverlay(
                         movementPath = liveMovementPath,
                         minimapZoom = liveMinimapZoom,
                         markerScale = customMarkerScale,
+                        fovAngleDeg = customFovAngle,
+                        fovLengthScale = customFovLength,
                         tileBitmap = tileBitmap,
                         statusTag = selectedStatusTag
                     )
@@ -813,7 +841,9 @@ fun CameraOverlay(
                     mapRoutes = captureMapRoutes,
                     movementPath = liveMovementPath,
                     minimapZoom = customMinimapZoom,
-                    markerScale = customMarkerScale
+                    markerScale = customMarkerScale,
+                    fovAngleDeg = customFovAngle,
+                    fovLengthScale = customFovLength
                 ).mapScene
                 val candidateZoom = PhotoStampRenderer.resolveMinimapZoom(
                     latitude = safeLat,
@@ -1088,11 +1118,19 @@ fun CameraOverlay(
             )
             val viewport = previewViewport
             if (stampEnabled && viewport != null) {
+                val elevatedOffsetYPx by animateIntAsState(
+                    targetValue = if (showSettingsSheet && settingsSheetHeightPx > 0) {
+                        (-settingsSheetHeightPx).coerceAtLeast(-viewport.height / 2)
+                    } else 0,
+                    label = "elevatedOffsetY"
+                )
                 val previewStamp = remember(
                     liveLocation,
                     liveMovementPath,
                     liveMinimapZoom,
                     customMarkerScale,
+                    customFovAngle,
+                    customFovLength,
                     liveAddress,
                     noteText,
                     bearing,
@@ -1111,12 +1149,14 @@ fun CameraOverlay(
                         movementPath = liveMovementPath,
                         minimapZoom = liveMinimapZoom,
                         markerScale = customMarkerScale,
+                        fovAngleDeg = customFovAngle,
+                        fovLengthScale = customFovLength,
                         statusTag = selectedStatusTag
                     )
                 }
                 Canvas(
                     modifier = Modifier
-                        .offset { IntOffset(viewport.left, viewport.top) }
+                        .offset { IntOffset(viewport.left, viewport.top + elevatedOffsetYPx) }
                         .width(with(density) { viewport.width.toDp() })
                         .height(with(density) { viewport.height.toDp() })
                 ) {
@@ -1299,6 +1339,8 @@ fun CameraOverlay(
                                             movementPath = liveMovementPath,
                                             minimapZoom = liveMinimapZoom,
                                             markerScale = customMarkerScale,
+                                            fovAngleDeg = customFovAngle,
+                                            fovLengthScale = customFovLength,
                                             tileBitmap = tileBitmap,
                                             statusTag = selectedStatusTag
                                         )
@@ -1606,6 +1648,8 @@ fun CameraOverlay(
                                                         movementPath = liveMovementPath,
                                                         minimapZoom = liveMinimapZoom,
                                                         markerScale = customMarkerScale,
+                                                        fovAngleDeg = customFovAngle,
+                                                        fovLengthScale = customFovLength,
                                                         tileBitmap = tileBitmap,
                                                         statusTag = selectedStatusTag
                                                     )
@@ -1629,6 +1673,8 @@ fun CameraOverlay(
                                             movementPath = liveMovementPath,
                                             minimapZoom = liveMinimapZoom,
                                             markerScale = customMarkerScale,
+                                            fovAngleDeg = customFovAngle,
+                                            fovLengthScale = customFovLength,
                                             statusTag = selectedStatusTag
                                         )
                                         val recordingTileBitmap = snapshotBitmap(currentTileBitmap)
@@ -1643,21 +1689,23 @@ fun CameraOverlay(
                                         recordingTimelineSamples.clear()
                                         if (stampEnabled && recordingTileBitmap != null) {
                                             recordingTimelineSamples.appendVideoStampTimelineSample(
-                                                buildVideoStampTimelineSample(
-                                                    recordingStartElapsedMs = nextRecordingStartElapsedMs,
-                                                    nowElapsedMs = nextRecordingStartElapsedMs,
-                                                    location = liveLocation,
-                                                    address = liveAddress,
-                                                    note = noteText,
-                                                    bearingDeg = bearing,
-                                                    mapNodes = captureMapNodes,
-                                                    mapRoutes = captureMapRoutes,
-                                                    movementPath = liveMovementPath,
-                                                    minimapZoom = liveMinimapZoom,
-                                                    markerScale = customMarkerScale,
-                                                    statusTag = selectedStatusTag,
-                                                    tileBitmap = recordingTileBitmap
-                                                )
+                                                 buildVideoStampTimelineSample(
+                                                     recordingStartElapsedMs = nextRecordingStartElapsedMs,
+                                                     nowElapsedMs = nextRecordingStartElapsedMs,
+                                                     location = liveLocation,
+                                                     address = liveAddress,
+                                                     note = noteText,
+                                                     bearingDeg = bearing,
+                                                     mapNodes = captureMapNodes,
+                                                     mapRoutes = captureMapRoutes,
+                                                     movementPath = liveMovementPath,
+                                                     minimapZoom = liveMinimapZoom,
+                                                     markerScale = customMarkerScale,
+                                                     fovAngleDeg = customFovAngle,
+                                                     fovLengthScale = customFovLength,
+                                                     statusTag = selectedStatusTag,
+                                                     tileBitmap = recordingTileBitmap
+                                                 )
                                             )
                                         }
                                         val loc = liveLocation
@@ -1756,6 +1804,8 @@ fun CameraOverlay(
                                         movementPath = liveMovementPath,
                                         minimapZoom = liveMinimapZoom,
                                         markerScale = customMarkerScale,
+                                        fovAngleDeg = customFovAngle,
+                                        fovLengthScale = customFovLength,
                                         statusTag = capturedStatusTag
                                     )
                                     val capturedStampEnabled = stampEnabled
@@ -1891,6 +1941,7 @@ fun CameraOverlay(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .onSizeChanged { settingsSheetHeightPx = it.height }
                         .background(
                             Color(0xDD0A0D1A),
                             RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -2008,11 +2059,13 @@ fun CameraOverlay(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        if (customMinimapZoom != PhotoStampRenderer.MINIMAP_MAX_ZOOM || customMarkerScale != 1.0f) {
+                        if (customMinimapZoom != PhotoStampRenderer.MINIMAP_MAX_ZOOM || customMarkerScale != 1.0f || customFovAngle != 30.0f || customFovLength != 1.0f) {
                             TextButton(
                                 onClick = {
                                     customMinimapZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
                                     customMarkerScale = 1.0f
+                                    customFovAngle = 30.0f
+                                    customFovLength = 1.0f
                                 }
                             ) {
                                 Text("Khôi phục mặc định", color = Color(0xFF00E5FF), fontSize = 11.sp)
@@ -2046,6 +2099,48 @@ fun CameraOverlay(
                         onValueChange = { customMarkerScale = ((it * 20).roundToInt() / 20f).coerceIn(0.5f, 1.5f) },
                         valueRange = 0.5f..1.5f,
                         steps = 19,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF00E5FF),
+                            activeTrackColor = Color(0xFF00E5FF),
+                            inactiveTrackColor = Color(0x33FFFFFF)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Chiều rộng góc quét hướng nhìn (${customFovAngle.toInt()}°)",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Slider(
+                        value = customFovAngle,
+                        onValueChange = { customFovAngle = ((it / 5).roundToInt() * 5f).coerceIn(15f, 90f) },
+                        valueRange = 15f..90f,
+                        steps = 14,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF00E5FF),
+                            activeTrackColor = Color(0xFF00E5FF),
+                            inactiveTrackColor = Color(0x33FFFFFF)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Chiều dài tia nhìn hướng nhìn (${(customFovLength * 100).toInt()}%)",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Slider(
+                        value = customFovLength,
+                        onValueChange = { customFovLength = ((it * 20).roundToInt() / 20f).coerceIn(0.3f, 1.5f) },
+                        valueRange = 0.3f..1.5f,
+                        steps = 23,
                         colors = SliderDefaults.colors(
                             thumbColor = Color(0xFF00E5FF),
                             activeTrackColor = Color(0xFF00E5FF),

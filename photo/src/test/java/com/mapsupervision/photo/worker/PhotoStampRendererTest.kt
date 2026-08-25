@@ -341,8 +341,10 @@ class PhotoStampRendererTest {
             cameraLatitude = 21.0280,
             cameraLongitude = 105.8340,
             bearingDeg = 0f,
-            minimapZoom = 16,
-            markerScale = 1.2f
+            minimapZoom = 20,
+            markerScale = 1.2f,
+            fovAngleDeg = 60f,
+            fovLengthScale = 1.2f
         )
 
         val viewport = PhotoStampRenderer.resolveMinimapViewport(
@@ -355,6 +357,50 @@ class PhotoStampRendererTest {
             mapScene = scene
         )
 
-        assertEquals(16, viewport.zoom)
+        assertEquals(20, viewport.zoom)
+    }
+
+    @Test
+    fun `resolveMinimapViewport adapts with wider FOV angle and longer FOV length`() {
+        val rect = RectF(0f, 0f, 270f, 270f)
+        val standardScene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            bearingDeg = 45f,
+            markerScale = 1.0f,
+            fovAngleDeg = 30f,
+            fovLengthScale = 1.0f
+        )
+        val wideLongScene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            bearingDeg = 45f,
+            markerScale = 1.5f,
+            fovAngleDeg = 90f,
+            fovLengthScale = 1.5f
+        )
+
+        val standardViewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 45f,
+            borderWidth = 6f,
+            outerDotRadius = 20f,
+            mapScene = standardScene
+        )
+        val wideLongViewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 45f,
+            borderWidth = 6f,
+            outerDotRadius = 30f,
+            mapScene = wideLongScene
+        )
+
+        assertTrue(standardViewport.zoom in PhotoStampRenderer.MINIMAP_MIN_ZOOM..PhotoStampRenderer.MINIMAP_MAX_ZOOM)
+        assertTrue(wideLongViewport.zoom in PhotoStampRenderer.MINIMAP_MIN_ZOOM..PhotoStampRenderer.MINIMAP_MAX_ZOOM)
     }
 }
+

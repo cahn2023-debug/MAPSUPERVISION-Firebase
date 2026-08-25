@@ -67,7 +67,7 @@ fun calculateAspectCropRect(
 
 object PhotoStampRenderer {
     const val MINIMAP_MIN_ZOOM = 14
-    const val MINIMAP_MAX_ZOOM = 19
+    const val MINIMAP_MAX_ZOOM = 20
     internal const val MINIMAP_TILE_ALPHA = 204
 
     fun resolveMinimapZoom(
@@ -637,11 +637,14 @@ object PhotoStampRenderer {
         val availableWidthPx = (rect.width() - fitPaddingPx * 2f).coerceAtLeast(24f)
         val availableHeightPx = (rect.height() - fitPaddingPx * 2f).coerceAtLeast(24f)
         val markerScale = (mapScene?.markerScale ?: 1.0f).coerceIn(0.4f, 2.5f)
-        val coneMeters = 35.0 * markerScale
+        val fovAngleDeg = (mapScene?.fovAngleDeg ?: 30.0f).coerceIn(10.0f, 120.0f)
+        val fovLengthScale = (mapScene?.fovLengthScale ?: 1.0f).coerceIn(0.2f, 2.0f)
+        val coneMeters = 35.0 * markerScale * fovLengthScale
+        val halfFov = fovAngleDeg / 2f
         val mapPoints = mutableListOf<Pair<Double, Double>>()
         mapPoints += cameraLat to cameraLng
-        mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg - 22.5f, coneMeters)
-        mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg + 22.5f, coneMeters)
+        mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg - halfFov, coneMeters)
+        mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg + halfFov, coneMeters)
         scopedNodes.forEach { mapPoints += it.latitude to it.longitude }
         scopedRoutes.forEach { route -> mapPoints += route.points }
         mapPoints += movementPath
@@ -852,9 +855,11 @@ object PhotoStampRenderer {
         val cameraLat = mapScene?.cameraLatitude ?: lat
         val cameraLng = mapScene?.cameraLongitude ?: lng
         val (cx, cy) = getCanvasCoords(cameraLat, cameraLng, frame, rect, tileBitmap?.width ?: 512, viewport.zoom)
+        val fovAngleDeg = (mapScene?.fovAngleDeg ?: 30.0f).coerceIn(10.0f, 120.0f)
+        val fovLengthScale = (mapScene?.fovLengthScale ?: 1.0f).coerceIn(0.2f, 2.0f)
         val bearingRad = Math.toRadians(bearingDeg.toDouble()).toFloat()
-        val coneAngle = Math.toRadians(30.0).toFloat()
-        val coneLen = rect.width() * 0.42f * 0.8f * markerScale
+        val coneAngle = Math.toRadians(fovAngleDeg.toDouble()).toFloat()
+        val coneLen = rect.width() * 0.42f * 0.8f * markerScale * fovLengthScale
 
         val coneFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(90, 255, 200, 0)

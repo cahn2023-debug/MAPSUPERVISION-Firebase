@@ -8,6 +8,7 @@ import com.mapsupervision.domain.service.CaptureFolderType
 import com.mapsupervision.domain.service.IPhotoPipelineService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,13 +40,14 @@ class CameraOverlayHelpersTest {
 
     @Test
     fun `minimap zoom stays within bounds`() {
+        assertEquals(20, resolveLatchedMinimapZoom(20, 20))
         assertEquals(19, resolveLatchedMinimapZoom(19, 19))
         assertEquals(17, resolveLatchedMinimapZoom(17, 19))
         assertEquals(18, resolveLatchedMinimapZoom(18, 17))
         assertEquals(15, resolveLatchedMinimapZoom(15, 17))
         assertEquals(14, resolveLatchedMinimapZoom(14, 17))
         assertEquals(14, resolveLatchedMinimapZoom(13, 17))
-        assertEquals(19, resolveLatchedMinimapZoom(20, 17))
+        assertEquals(20, resolveLatchedMinimapZoom(21, 17))
     }
 
     @Test
@@ -660,5 +662,42 @@ class CameraOverlayHelpersTest {
         assertEquals(250L, sample.elapsedMs)
         assertEquals("Thi công", sample.stamp.statusTag)
         assertEquals(1, sample.stamp.mapScene?.nodes?.size)
+    }
+
+    @Test
+    fun `buildCaptureStamp and buildVideoStampTimelineSample pass custom fovAngleDeg and fovLengthScale`() {
+        val location = PhotoLocationSnapshot(latitude = 21.0, longitude = 105.0)
+        val stamp = buildCaptureStamp(
+            timestampMs = 1000L,
+            location = location,
+            bearingDeg = 45f,
+            minimapZoom = 18,
+            markerScale = 1.3f,
+            fovAngleDeg = 60f,
+            fovLengthScale = 1.2f
+        )
+
+        assertNotNull(stamp.mapScene)
+        assertEquals(18, stamp.mapScene?.minimapZoom)
+        assertEquals(1.3f, stamp.mapScene?.markerScale ?: 0f, 0.001f)
+        assertEquals(60f, stamp.mapScene?.fovAngleDeg ?: 0f, 0.001f)
+        assertEquals(1.2f, stamp.mapScene?.fovLengthScale ?: 0f, 0.001f)
+
+        val sample = buildVideoStampTimelineSample(
+            recordingStartElapsedMs = 1000L,
+            nowElapsedMs = 2000L,
+            location = location,
+            address = "Street 1",
+            note = "",
+            bearingDeg = 45f,
+            minimapZoom = 18,
+            markerScale = 1.3f,
+            fovAngleDeg = 60f,
+            fovLengthScale = 1.2f
+        )
+
+        assertNotNull(sample.stamp.mapScene)
+        assertEquals(60f, sample.stamp.mapScene?.fovAngleDeg ?: 0f, 0.001f)
+        assertEquals(1.2f, sample.stamp.mapScene?.fovLengthScale ?: 0f, 0.001f)
     }
 }
