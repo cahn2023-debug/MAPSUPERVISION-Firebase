@@ -54,19 +54,9 @@ function parseServiceAccountJson(raw: string): any {
   }
 }
 
-function readCredential() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
-  if (raw) {
-    try {
-      const parsed = sanitizeServiceAccount(parseServiceAccountJson(raw));
-      return cert(parsed as any);
-    } catch (err) {
-      console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
-    }
-  }
-
+function serviceAccountCandidatePaths(): string[] {
   const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE?.trim();
-  const candidatePaths = [
+  return [
     filePath ? path.resolve(process.cwd(), filePath) : null,
     filePath ? path.resolve(filePath) : null,
     path.resolve(process.cwd(), "../mapsupervision-3d985eee34f0.json"),
@@ -74,8 +64,21 @@ function readCredential() {
     path.resolve(__dirname, "../../mapsupervision-3d985eee34f0.json"),
     path.resolve(__dirname, "../mapsupervision-3d985eee34f0.json")
   ].filter((p): p is string => typeof p === "string" && p.length > 0);
+}
 
-  for (const candidate of candidatePaths) {
+function readCredential() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  let jsonError: unknown = null;
+  if (raw) {
+    try {
+      const parsed = sanitizeServiceAccount(parseServiceAccountJson(raw));
+      return cert(parsed as any);
+    } catch (err) {
+      jsonError = err;
+    }
+  }
+
+  for (const candidate of serviceAccountCandidatePaths()) {
     try {
       if (fs.existsSync(candidate)) {
         const content = fs.readFileSync(candidate, "utf8");
@@ -85,6 +88,10 @@ function readCredential() {
     } catch (err) {
       console.warn(`[FirebaseAdmin] Failed reading ${candidate}:`, err);
     }
+  }
+
+  if (jsonError) {
+    console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON:", jsonError);
   }
 
   return applicationDefault();
