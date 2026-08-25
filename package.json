@@ -1,0 +1,12 @@
+{
+  "name": "mapsupervision-root",
+  "private": true,
+  "description": "MAPSUPERVISION-Firebase project root orchestration and release scripts",
+  "scripts": {
+    "release": "node scripts/release.mjs",
+    "release:android": "node scripts/release.mjs --target=android",
+    "release:webapp": "node scripts/release.mjs --target=webapp",
+    "release:dry-run": "node scripts/release.mjs --dry-run",
+    "test:release": "node --test tests/release-automation.test.mjs"
+  }
+}

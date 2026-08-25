@@ -25,6 +25,22 @@
       "revision": 3,
       "headHash": "a9ce7373ca5b494ae77f5642e2b5923530e884ccf9719aa231c9425e84174aa2"
     },
+    "doc:doc-3b9e3c4c2e90c727a7e931f9495bb64f": {
+      "entityType": "doc",
+      "entityId": "doc-3b9e3c4c2e90c727a7e931f9495bb64f",
+      "path": "docs/specs/2026-08-25/camera-overlay-lifecycle-perf-fix.md",
+      "hash": "2a6aad53b51baa3baa4b2100182291f5eec87f38377fe3cf7d876549993d11a1",
+      "revision": 1,
+      "headHash": "2a6aad53b51baa3baa4b2100182291f5eec87f38377fe3cf7d876549993d11a1"
+    },
+    "doc:doc-40cf3c5cb473d6ca07849423c76192b4": {
+      "entityType": "doc",
+      "entityId": "doc-40cf3c5cb473d6ca07849423c76192b4",
+      "path": "docs/specs/2026-08-25/google-drive-image-url-display.md",
+      "hash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5",
+      "revision": 3,
+      "headHash": "67a5b0121908e8dc379c8a545d46c258b32fc6c032cea476b5dce2e79912a7b5"
+    },
     "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
       "entityType": "doc",
       "entityId": "doc-5552a2952ff80ae71093bbd4647e5d1f",
@@ -40,6 +56,14 @@
       "hash": "bac9e454479789e09a0edd1d7b8f32506e36dbe3822e61b43e05953c4ed466e0",
       "revision": 3,
       "headHash": "bac9e454479789e09a0edd1d7b8f32506e36dbe3822e61b43e05953c4ed466e0"
+    },
+    "doc:doc-7bf2f675cdfc7734b2d85d86d100322d": {
+      "entityType": "doc",
+      "entityId": "doc-7bf2f675cdfc7734b2d85d86d100322d",
+      "path": "docs/specs/2026-08-25/versioning-and-changelog-automation.md",
+      "hash": "2b6684a3a210ad3eb2508f65919329f0662b073da51ab0b099a9b99d1e935ff3",
+      "revision": 4,
+      "headHash": "2b6684a3a210ad3eb2508f65919329f0662b073da51ab0b099a9b99d1e935ff3"
     },
     "doc:doc-7caf63657d28fbda63878b564dd31929": {
       "entityType": "doc",
@@ -88,6 +112,14 @@
       "hash": "174ad98e1ff6cf5d319378cdb2e7d0000c50da413df5acfe9892e9c38158be4c",
       "revision": 2,
       "headHash": "174ad98e1ff6cf5d319378cdb2e7d0000c50da413df5acfe9892e9c38158be4c"
+    },
+    "doc:doc-eb51714d7804cc9e2dd1e2a5d29ef4a4": {
+      "entityType": "doc",
+      "entityId": "doc-eb51714d7804cc9e2dd1e2a5d29ef4a4",
+      "path": "docs/specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix.md",
+      "hash": "dfef87d8f830389bd680597e77676c939e81e7bcd8fb5c6615065c721be9c29f",
+      "revision": 12,
+      "headHash": "dfef87d8f830389bd680597e77676c939e81e7bcd8fb5c6615065c721be9c29f"
     },
     "doc:doc-ed69bd064dc60a78c68a15077a90884c": {
       "entityType": "doc",
@@ -165,9 +197,25 @@
       "entityType": "task",
       "entityId": "6zebli",
       "path": "tasks/task-6zebli - web-backend-performance-optimization-01-Establish.md",
-      "hash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53",
-      "revision": 14,
-      "headHash": "58ba384dbda8d8a29284d047c8dbfc4b49d88811770a5d21992811d0c566bd53"
+      "hash": "0759dc35314be7b9d63d93514299abbd2de38c32d2420f8f0a4788e178170365",
+      "revision": 18,
+      "headHash": "0759dc35314be7b9d63d93514299abbd2de38c32d2420f8f0a4788e178170365"
+    },
+    "task:74bpkj": {
+      "entityType": "task",
+      "entityId": "74bpkj",
+      "path": "tasks/task-74bpkj - release-tooling-01-Implement-core-release-automat.md",
+      "hash": "ff78a9e5a4301242e134bbb5b864b6260beb18472c844045abe2a4ec7eaac079",
+      "revision": 3,
+      "headHash": "ff78a9e5a4301242e134bbb5b864b6260beb18472c844045abe2a4ec7eaac079"
+    },
+    "task:7i32xc": {
+      "entityType": "task",
+      "entityId": "7i32xc",
+      "path": "tasks/task-7i32xc - fac-04-Kiểm-thử-tự-động-và-xác-minh-toàn-diện.md",
+      "hash": "a4f7b9dfb94977785b550a65af0bc76031a09ea222b67739b9802f8692fc84ec",
+      "revision": 5,
+      "headHash": "a4f7b9dfb94977785b550a65af0bc76031a09ea222b67739b9802f8692fc84ec"
     },
     "task:7qsrje": {
       "entityType": "task",
@@ -217,6 +265,14 @@
       "revision": 4,
       "headHash": "a7c949157648bcc41ee08f18e61e61631d82846224ab38302a5183011bb102c5"
     },
+    "task:brr3pk": {
+      "entityType": "task",
+      "entityId": "brr3pk",
+      "path": "tasks/task-brr3pk - camera-fix-02-Decouple-CameraX-binding-from-zoom.md",
+      "hash": "57206e6a074708a851b4a3efd6756748bde7e263d84edb9c7082e8625a218c85",
+      "revision": 6,
+      "headHash": "57206e6a074708a851b4a3efd6756748bde7e263d84edb9c7082e8625a218c85"
+    },
     "task:cfhjsv": {
       "entityType": "task",
       "entityId": "cfhjsv",
@@ -232,6 +288,14 @@
       "hash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949",
       "revision": 4,
       "headHash": "dac963d359c0631e79603534f7269fd77904d65e19f7a1d5d49761f29d30b949"
+    },
+    "task:eihjjs": {
+      "entityType": "task",
+      "entityId": "eihjjs",
+      "path": "tasks/task-eihjjs - camera-fix-04-Unit-tests-and-regression-verificat.md",
+      "hash": "3c098bd1d58a8a6752fc078de0c55886df21cf246aa0bbbb79f9a9ecaef78d30",
+      "revision": 6,
+      "headHash": "3c098bd1d58a8a6752fc078de0c55886df21cf246aa0bbbb79f9a9ecaef78d30"
     },
     "task:f6csl2": {
       "entityType": "task",
@@ -361,6 +425,14 @@
       "revision": 11,
       "headHash": "7ff482b55d1a660ada9d3dc7573a7bcbde741257641054b9e5ce3c770c8e6019"
     },
+    "task:o6r10r": {
+      "entityType": "task",
+      "entityId": "o6r10r",
+      "path": "tasks/task-o6r10r - release-tooling-04-Add-tests-and-verify-release-a.md",
+      "hash": "eec161851d95786d10bfd929d3bea0ba033780f233bb6501d9569b3fcb778baa",
+      "revision": 3,
+      "headHash": "eec161851d95786d10bfd929d3bea0ba033780f233bb6501d9569b3fcb778baa"
+    },
     "task:ole2i0": {
       "entityType": "task",
       "entityId": "ole2i0",
@@ -376,6 +448,14 @@
       "hash": "81dfe4b05ba4c807b77aa8367057b29831eb8b1101e65e8b57aa81315a486f56",
       "revision": 10,
       "headHash": "81dfe4b05ba4c807b77aa8367057b29831eb8b1101e65e8b57aa81315a486f56"
+    },
+    "task:pykp6v": {
+      "entityType": "task",
+      "entityId": "pykp6v",
+      "path": "tasks/task-pykp6v - fac-03-Nới-lỏng-auth-time-check-và-hoàn-thiện-xóa.md",
+      "hash": "9fb8dd7d472307c348462daceb7ec6ee6ba0468e95458ee1853cee4771bf86b3",
+      "revision": 7,
+      "headHash": "9fb8dd7d472307c348462daceb7ec6ee6ba0468e95458ee1853cee4771bf86b3"
     },
     "task:q74bwe": {
       "entityType": "task",
@@ -433,6 +513,14 @@
       "revision": 6,
       "headHash": "ed81b0ba58523713c899d7130b90a64d2f0106837a9d0330934868fe5196d79b"
     },
+    "task:tusgs7": {
+      "entityType": "task",
+      "entityId": "tusgs7",
+      "path": "tasks/task-tusgs7 - release-tooling-02-Setup-release-docs-directories.md",
+      "hash": "5bdc60e70ab6c9c5732cc1b55e817e0cfd61c5bb76ba2d03993e1d6ae7adf912",
+      "revision": 3,
+      "headHash": "5bdc60e70ab6c9c5732cc1b55e817e0cfd61c5bb76ba2d03993e1d6ae7adf912"
+    },
     "task:tvtytn": {
       "entityType": "task",
       "entityId": "tvtytn",
@@ -481,6 +569,14 @@
       "revision": 14,
       "headHash": "77acd78db3351b0f3c8013c809c2a9cf1735b26515540b7651ff71606616f200"
     },
+    "task:vtdoe0": {
+      "entityType": "task",
+      "entityId": "vtdoe0",
+      "path": "tasks/task-vtdoe0 - fac-05-Hiển-thị-tên-dự-án-và-ẩn-mã-code-trên-Andr.md",
+      "hash": "b14f5f9732529430f4e97669d309bb067deda624503be46166574a68bde70979",
+      "revision": 8,
+      "headHash": "b14f5f9732529430f4e97669d309bb067deda624503be46166574a68bde70979"
+    },
     "task:vy4got": {
       "entityType": "task",
       "entityId": "vy4got",
@@ -497,6 +593,38 @@
       "revision": 4,
       "headHash": "a1003b06be99e422415eb7617006f0ae33734eda7f79494f46af4986f65bf720"
     },
+    "task:wxn6p8": {
+      "entityType": "task",
+      "entityId": "wxn6p8",
+      "path": "tasks/task-wxn6p8 - fac-01-Sửa-bộ-giải-mã-Private-Key-trong-webapp-li.md",
+      "hash": "cc5eb509dd7b736a7c8866c7d057a535155d6489c160634287e0775cbe6c1862",
+      "revision": 7,
+      "headHash": "cc5eb509dd7b736a7c8866c7d057a535155d6489c160634287e0775cbe6c1862"
+    },
+    "task:x85rvu": {
+      "entityType": "task",
+      "entityId": "x85rvu",
+      "path": "tasks/task-x85rvu - google-drive-image-url-display-01-Standardize-Goo.md",
+      "hash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3",
+      "revision": 3,
+      "headHash": "0bbc1eb8dd9a1d8083a6b6b9178ce665be81a48703a9df5029fa6a8acc52b1d3"
+    },
+    "task:xo64so": {
+      "entityType": "task",
+      "entityId": "xo64so",
+      "path": "tasks/task-xo64so - camera-fix-01-Fix-video-recording-lifecycle-final.md",
+      "hash": "cfc4afea89c55bf0a87d13620afd6b9df735b24859775fd61656cabfc1340486",
+      "revision": 6,
+      "headHash": "cfc4afea89c55bf0a87d13620afd6b9df735b24859775fd61656cabfc1340486"
+    },
+    "task:y5nh55": {
+      "entityType": "task",
+      "entityId": "y5nh55",
+      "path": "tasks/task-y5nh55 - camera-fix-03-Precompute-GIS-geometry-optimize-OS.md",
+      "hash": "65fd19578149e181b7894453e9ee9997d10558382576f809b1853ae4932b161a",
+      "revision": 6,
+      "headHash": "65fd19578149e181b7894453e9ee9997d10558382576f809b1853ae4932b161a"
+    },
     "task:y5uqki": {
       "entityType": "task",
       "entityId": "y5uqki",
@@ -512,6 +640,22 @@
       "hash": "d9ff41e93bcc2c5429faabe5c43c10e23a5b43f7b13a2aa61925f1be5b9eaca7",
       "revision": 7,
       "headHash": "d9ff41e93bcc2c5429faabe5c43c10e23a5b43f7b13a2aa61925f1be5b9eaca7"
+    },
+    "task:yums9t": {
+      "entityType": "task",
+      "entityId": "yums9t",
+      "path": "tasks/task-yums9t - fac-02-Bổ-sung-fallback-an-toàn-cho-Android-Catal.md",
+      "hash": "232ffde9d9df1ffcf18efdc9987f3e6c300e5ad0c4ac5665fe502b38140ff5ab",
+      "revision": 7,
+      "headHash": "232ffde9d9df1ffcf18efdc9987f3e6c300e5ad0c4ac5665fe502b38140ff5ab"
+    },
+    "task:yysfgk": {
+      "entityType": "task",
+      "entityId": "yysfgk",
+      "path": "tasks/task-yysfgk - release-tooling-03-Integrate-version-display-in-W.md",
+      "hash": "103796af480e40c302b04e74fad8317c9c9a913b93eef28a17c704c66d513e40",
+      "revision": 3,
+      "headHash": "103796af480e40c302b04e74fad8317c9c9a913b93eef28a17c704c66d513e40"
     },
     "task:zfv69f": {
       "entityType": "task",

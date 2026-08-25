@@ -6,8 +6,8 @@ import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
 import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
+import { imageSourceUrl } from "@/lib/google-drive-image";
 import {
-  buildProjectMediaPreviewUrl,
   createDailyLogDocument,
   deleteProjectMemberRecord,
   createProjectDocument,
@@ -113,9 +113,8 @@ function driveLinkForPhoto(photo: Record<string, unknown>): string | undefined {
   return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
 }
 
-function previewUrlForPhoto(projectId: string, photoId: string): string | undefined {
-  if (!projectId.trim() || !photoId.trim()) return undefined;
-  return buildProjectMediaPreviewUrl(projectId, photoId);
+function imageUrlForPhoto(photo: Record<string, unknown>, width: number): string | undefined {
+  return imageSourceUrl(String(photo.remoteUrl || photo.url || ""), width);
 }
 
 function syncLabelForPhoto(photo: SitePhotoRow, driveUrl?: string): string {
@@ -125,56 +124,21 @@ function syncLabelForPhoto(photo: SitePhotoRow, driveUrl?: string): string {
 }
 
 function SitePhotoPreview({
-  projectId,
-  photoId,
-  user,
+  src,
   alt,
   className
 }: {
-  projectId: string;
-  photoId: string;
-  user: FirebaseUser | null;
+  src?: string;
   alt?: string;
   className?: string;
 }) {
-  const [src, setSrc] = useState<string>("");
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user || !projectId || !photoId) return;
-    let active = true;
-    let objectUrl = "";
-
-    async function load() {
-      try {
-        const token = await user!.getIdToken();
-        const url = buildProjectMediaPreviewUrl(projectId, photoId);
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!response.ok) return;
-        const blob = await response.blob();
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      } catch (e) {
-        console.error("Failed to load photo preview:", e);
-      }
-    }
-
-    void load();
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [projectId, photoId, user]);
-
-  if (!src) {
+  if (!src || failedSrc === src) {
     return <div className="photo-placeholder animate-pulse" />;
   }
 
-  return <img src={src} alt={alt} className={className} />;
+  return <img src={src} alt={alt} className={className} onError={() => setFailedSrc(src)} />;
 }
 
 function formatDateTime(value: unknown): string {
@@ -416,29 +380,22 @@ function groupPhotosByNodeAndTag(
 
 function PhotoCardItem({
   photo,
-  projectId,
-  user,
   onClick
 }: {
   photo: SitePhotoRow;
-  projectId: string;
-  user: FirebaseUser | null;
   onClick: () => void;
 }) {
-  const photoId = text(photo, "id");
   const driveUrl = driveLinkForPhoto(photo);
-  const previewUrl = previewUrlForPhoto(projectId, photoId);
+  const imageUrl = imageUrlForPhoto(photo, 600);
   const tags = extractPhotoTags(photo);
   const isDone = photo.syncStatus === "DONE" || Boolean(driveUrl);
 
   return (
     <div className="photo-card-mini" onClick={onClick}>
       <div className="photo-card-thumb-wrap">
-        {previewUrl ? (
+        {imageUrl ? (
           <SitePhotoPreview
-            projectId={projectId}
-            photoId={photoId}
-            user={user}
+            src={imageUrl}
             alt={text(photo, "objectCode") || "Ảnh thực địa"}
           />
         ) : (
@@ -472,13 +429,11 @@ function PhotoCardItem({
 function PhotoLightboxModal({
   photo,
   allPhotos,
-  user,
   onClose,
   onSelectPhoto
 }: {
   photo: SitePhotoRow | null;
   allPhotos: SitePhotoRow[];
-  user: FirebaseUser | null;
   onClose: () => void;
   onSelectPhoto: (nextPhoto: SitePhotoRow) => void;
 }) {
@@ -507,9 +462,7 @@ function PhotoLightboxModal({
   }, [currentIndex, hasPrev, hasNext, onClose]);
 
   const driveUrl = driveLinkForPhoto(photo);
-  const photoId = text(photo, "id");
-  const projectId = text(photo, "projectId");
-  const previewUrl = previewUrlForPhoto(projectId, photoId);
+  const imageUrl = imageUrlForPhoto(photo, 1000);
   const tags = extractPhotoTags(photo);
 
   return (
@@ -543,11 +496,9 @@ function PhotoLightboxModal({
               </button>
             )}
             <div className="photo-lightbox-img-wrapper">
-              {previewUrl ? (
+              {imageUrl ? (
                 <SitePhotoPreview
-                  projectId={projectId}
-                  photoId={photoId}
-                  user={user}
+                  src={imageUrl}
                   alt={text(photo, "objectCode") || "Ảnh thực địa"}
                   className="photo-lightbox-img"
                 />
@@ -721,6 +672,16 @@ export default function HomePage() {
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<SitePhotoRow | null>(null);
   const [activeLightboxPlaylist, setActiveLightboxPlaylist] = useState<SitePhotoRow[]>([]);
+  const [appVersion, setAppVersion] = useState("v0.1.0");
+
+  useEffect(() => {
+    fetch("/version.json")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.version) setAppVersion(`v${data.version}`);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     return observeAuth((nextUser) => {
@@ -1327,7 +1288,22 @@ export default function HomePage() {
       <aside className="sidebar-panel">
         <div className="sidebar-header">
           <div className="sidebar-title-wrapper">
-            <p className="eyebrow">Android x Firebase Bridge</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <p className="eyebrow" style={{ margin: 0 }}>Android x Firebase Bridge</p>
+              <span style={{
+                fontSize: "10px",
+                fontFamily: "var(--font-mono)",
+                fontWeight: 600,
+                color: "var(--accent)",
+                background: "var(--accent-soft)",
+                border: "1px solid var(--accent-border)",
+                padding: "1px 6px",
+                borderRadius: "4px",
+                letterSpacing: "0.02em"
+              }}>
+                {appVersion}
+              </span>
+            </div>
             <h1>MapSupervision</h1>
           </div>
           <button
@@ -1832,8 +1808,6 @@ export default function HomePage() {
                                           <PhotoCardItem
                                             key={photo.id}
                                             photo={photo}
-                                            projectId={photo.projectId || projectId}
-                                            user={user}
                                             onClick={() => {
                                               setActiveLightboxPhoto(photo);
                                               setActiveLightboxPlaylist(group.allPhotos);
@@ -1859,8 +1833,6 @@ export default function HomePage() {
                                         <PhotoCardItem
                                           key={photo.id}
                                           photo={photo}
-                                          projectId={photo.projectId || projectId}
-                                          user={user}
                                           onClick={() => {
                                             setActiveLightboxPhoto(photo);
                                             setActiveLightboxPlaylist(group.allPhotos);
@@ -1878,8 +1850,6 @@ export default function HomePage() {
                                   <PhotoCardItem
                                     key={photo.id}
                                     photo={photo}
-                                    projectId={photo.projectId || projectId}
-                                    user={user}
                                     onClick={() => {
                                       setActiveLightboxPhoto(photo);
                                       setActiveLightboxPlaylist(group.allPhotos);
@@ -1922,7 +1892,6 @@ export default function HomePage() {
           <PhotoLightboxModal
             photo={activeLightboxPhoto}
             allPhotos={activeLightboxPlaylist}
-            user={user}
             onClose={() => setActiveLightboxPhoto(null)}
             onSelectPhoto={(next) => setActiveLightboxPhoto(next)}
           />

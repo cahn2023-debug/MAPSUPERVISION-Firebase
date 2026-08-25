@@ -1,11 +1,11 @@
 {
   "active": [
     {
-      "taskId": "6zebli",
-      "taskTitle": "[web-backend-performance-optimization-01] Establish reproducible performance baseline",
-      "startedAt": "2026-08-25T06:52:12.590Z",
-      "pausedAt": "2026-08-25T08:35:54.768Z",
-      "totalPausedMs": 1975651
+      "taskId": "x85rvu",
+      "taskTitle": "[google-drive-image-url-display-01] Standardize Google Drive image URLs across web app",
+      "startedAt": "2026-08-25T15:12:09.392Z",
+      "pausedAt": null,
+      "totalPausedMs": 0
     }
   ]
 }

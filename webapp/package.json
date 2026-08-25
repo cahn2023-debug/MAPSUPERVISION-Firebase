@@ -7,15 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test tests/access-approval.test.ts tests/media-route.test.ts tests/project-deletion.test.ts tests/project-catalog-migration.test.ts tests/performance-benchmark.test.ts",
+    "test": "tsx --test tests/access-approval.test.ts tests/google-drive-image.test.ts tests/media-route.test.ts tests/project-deletion.test.ts tests/project-catalog-migration.test.ts tests/performance-benchmark.test.ts",
     "test:performance": "tsx --test tests/performance-benchmark.test.ts",
     "test:performance:integration": "firebase emulators:exec --only firestore --project performance-benchmark-test \"tsx --test tests/performance-benchmark.test.ts\"",
     "benchmark:backend": "tsx scripts/benchmark-web-backend.ts",
     "migrate:project-catalog": "tsx scripts/migrate-project-catalog.ts",
     "test:access": "tsx --test tests/access-approval.test.ts",
-    "test:media": "tsx --test tests/media-route.test.ts",
+    "test:media": "tsx --test tests/google-drive-image.test.ts tests/media-route.test.ts",
     "bootstrap:admins": "node scripts/bootstrap-admin-claims.cjs",
-    "migrate:drive-media": "node scripts/migrate-drive-media-names.cjs"
+    "migrate:drive-media": "node scripts/migrate-drive-media-names.cjs",
+    "release": "node ../scripts/release.mjs --target=webapp",
+    "release:dry-run": "node ../scripts/release.mjs --target=webapp --dry-run"
   },
   "dependencies": {
     "firebase": "^11.10.0",

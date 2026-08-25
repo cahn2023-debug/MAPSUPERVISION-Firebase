@@ -5,7 +5,7 @@ status: done
 priority: high
 labels: []
 createdAt: '2026-08-25T12:37:57.986Z'
-updatedAt: '2026-08-25T13:24:26.999Z'
+updatedAt: '2026-08-25T14:34:20.987Z'
 completedAt: '2026-08-25T12:39:27.004Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -30,7 +30,7 @@ Chuẩn hóa và sanitize chuỗi private_key trong webapp/lib/firebase-admin.ts
 
 <!-- SECTION:NOTES:BEGIN -->
 Đã bổ sung hàm sanitizePrivateKey và sanitizeServiceAccount trong webapp/lib/firebase-admin.ts để xử lý CRLF, escaped newlines, Windows line endings, unescaped PEM headers và base64 JSON string. Unit test tests/firebase-admin.test.ts pass 100%.
-Spec Decision Compliance: D1=pass
+Spec Decision Compliance: D1=pass, D2=pass
 System Decision Impact: none — credential decoding utility improvement
 <!-- SECTION:NOTES:END -->
 

@@ -5,7 +5,7 @@ status: done
 priority: high
 labels: []
 createdAt: '2026-08-25T12:38:04.001Z'
-updatedAt: '2026-08-25T13:24:29.014Z'
+updatedAt: '2026-08-25T14:34:30.989Z'
 completedAt: '2026-08-25T12:40:33.084Z'
 timeSpent: 0
 spec: specs/2026-08-25/firebase-admin-catalog-visibility-cloud-deletion-fix
@@ -30,7 +30,7 @@ Cập nhật parseFirebaseProjectCatalog và extractCatalogEntryFromProjectDoc t
 
 <!-- SECTION:NOTES:BEGIN -->
 Đã bổ sung cơ chế fallback toàn diện cho parseFirebaseProjectCatalog và extractCatalogEntryFromProjectDoc (mặc định owner từ session/doc, auto-gen projectCode từ slug/id, status mặc định ACTIVE). Cập nhật FirebaseProjectCatalogParserTest.
-Spec Decision Compliance: D2=pass
+Spec Decision Compliance: D1=pass, D2=pass
 System Decision Impact: none — safe catalog parsing fallback
 <!-- SECTION:NOTES:END -->
 

@@ -1,0 +1,10 @@
+{
+  "version": "0.1.0",
+  "platform": "webapp",
+  "releaseDate": "2026-08-25",
+  "commitHash": "latest",
+  "highlights": [
+    "Web dashboard đồng bộ dữ liệu Android qua Firebase",
+    "Bản đồ MapLibre GL và quản lý duyệt quyền truy cập dự án"
+  ]
+}
