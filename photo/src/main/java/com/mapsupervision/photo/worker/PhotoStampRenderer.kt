@@ -351,13 +351,15 @@ object PhotoStampRenderer {
         tileBitmap: Bitmap? = null,
         mapScene: com.mapsupervision.domain.model.CaptureStampMapScene? = null
     ) {
+        val markerScale = (mapScene?.markerScale ?: 1.0f).coerceIn(0.4f, 2.5f)
         val layout = PhotoStampLayoutCalculator.calculate(
             frameWidth = frameWidth,
             frameHeight = frameHeight,
             rows = content.rows,
             textWidth = { 0f },
             iconWidth = { 0f },
-            showMap = content.coordinateText != null
+            showMap = content.coordinateText != null,
+            markerScale = markerScale
         )
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -377,7 +379,8 @@ object PhotoStampRenderer {
             rows = content.rows,
             textWidth = { textPaint.measureText(it) },
             iconWidth = { iconPaint.measureText(it) },
-            showMap = content.coordinateText != null
+            showMap = content.coordinateText != null,
+            markerScale = markerScale
         )
 
         val maxIconWidth = content.rows.maxOfOrNull { iconPaint.measureText(it.icon) } ?: 0f
@@ -633,7 +636,8 @@ object PhotoStampRenderer {
         val fitPaddingPx = minimapFitPaddingPx(rect, borderWidth, outerDotRadius)
         val availableWidthPx = (rect.width() - fitPaddingPx * 2f).coerceAtLeast(24f)
         val availableHeightPx = (rect.height() - fitPaddingPx * 2f).coerceAtLeast(24f)
-        val coneMeters = 35.0
+        val markerScale = (mapScene?.markerScale ?: 1.0f).coerceIn(0.4f, 2.5f)
+        val coneMeters = 35.0 * markerScale
         val mapPoints = mutableListOf<Pair<Double, Double>>()
         mapPoints += cameraLat to cameraLng
         mapPoints += offsetCoordinate(cameraLat, cameraLng, bearingDeg - 22.5f, coneMeters)
@@ -797,22 +801,24 @@ object PhotoStampRenderer {
             }
         }
 
+        val markerScale = (mapScene?.markerScale ?: 1.0f).coerceIn(0.4f, 2.5f)
+
         // Draw GIS nodes
         mapScene?.nodes?.forEach { node ->
             val (cxNode, cyNode) = getCanvasCoords(node.latitude, node.longitude, frame, rect, tileBitmap?.width ?: 512, viewport.zoom)
             val nodeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
-                strokeWidth = 1.5f * scale
+                strokeWidth = 1.5f * scale * markerScale
             }
             if (!node.label.isNullOrBlank()) {
                 val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.WHITE
-                    textSize = 8f * scale
+                    textSize = 8f * scale * markerScale
                     typeface = Typeface.DEFAULT_BOLD
                     textAlign = Paint.Align.CENTER
                 }
-                val radius = 9f * scale
+                val radius = 9f * scale * markerScale
                 val nodeLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     val hex = node.colorHex
                     color = if (!hex.isNullOrBlank()) {
@@ -837,18 +843,18 @@ object PhotoStampRenderer {
                     }
                     style = Paint.Style.FILL
                 }
-                val radius = if (node.highlighted) 6f * scale else 4f * scale
+                val radius = if (node.highlighted) 6f * scale * markerScale else 4f * scale * markerScale
                 canvas.drawCircle(cxNode, cyNode, radius, nodePaint)
                 canvas.drawCircle(cxNode, cyNode, radius, nodeStroke)
             }
         }
 
-            val cameraLat = mapScene?.cameraLatitude ?: lat
+        val cameraLat = mapScene?.cameraLatitude ?: lat
         val cameraLng = mapScene?.cameraLongitude ?: lng
         val (cx, cy) = getCanvasCoords(cameraLat, cameraLng, frame, rect, tileBitmap?.width ?: 512, viewport.zoom)
         val bearingRad = Math.toRadians(bearingDeg.toDouble()).toFloat()
         val coneAngle = Math.toRadians(30.0).toFloat()
-        val coneLen = rect.width() * 0.42f * 0.8f
+        val coneLen = rect.width() * 0.42f * 0.8f * markerScale
 
         val coneFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(90, 255, 200, 0)
@@ -857,7 +863,7 @@ object PhotoStampRenderer {
         val coneStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(180, 220, 160, 0)
             style = Paint.Style.STROKE
-            strokeWidth = 6f * scale
+            strokeWidth = 6f * scale * markerScale
         }
         val conePath = Path().apply {
             moveTo(cx, cy)

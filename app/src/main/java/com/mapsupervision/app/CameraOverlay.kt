@@ -2,6 +2,7 @@ package com.mapsupervision.app
 
 import android.Manifest
 import android.content.Context
+import kotlin.math.roundToInt
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.hardware.Sensor
@@ -97,6 +98,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -205,9 +207,10 @@ internal fun buildCaptureStamp(
     mapRoutes: List<CaptureStampMapRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
+    markerScale: Float = 1.0f,
     statusTag: String? = null
 ): CaptureStamp {
-    val mapScene = if (mapNodes.isNotEmpty() || mapRoutes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null) {
+    val mapScene = if (mapNodes.isNotEmpty() || mapRoutes.isNotEmpty() || movementPath.isNotEmpty() || minimapZoom != null || markerScale != 1.0f) {
         CaptureStampMapScene(
             centerLatitude = location?.latitude,
             centerLongitude = location?.longitude,
@@ -217,7 +220,8 @@ internal fun buildCaptureStamp(
             nodes = mapNodes,
             routes = mapRoutes,
             movementPath = movementPath,
-            minimapZoom = minimapZoom
+            minimapZoom = minimapZoom,
+            markerScale = markerScale
         )
     } else null
 
@@ -244,6 +248,7 @@ internal fun buildCaptureStamp(
     routes: List<GisRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
+    markerScale: Float = 1.0f,
     statusTag: String? = null
 ): CaptureStamp = buildCaptureStamp(
     timestampMs = timestampMs,
@@ -255,6 +260,7 @@ internal fun buildCaptureStamp(
     mapRoutes = convertToCaptureMapRoutes(routes),
     movementPath = movementPath,
     minimapZoom = minimapZoom,
+    markerScale = markerScale,
     statusTag = statusTag
 )
 
@@ -418,6 +424,7 @@ internal fun buildVideoStampTimelineSample(
     mapRoutes: List<CaptureStampMapRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
+    markerScale: Float = 1.0f,
     tileBitmap: Any? = null,
     statusTag: String? = null
 ): VideoStampTimelineSample {
@@ -433,6 +440,7 @@ internal fun buildVideoStampTimelineSample(
             mapRoutes = mapRoutes,
             movementPath = movementPath,
             minimapZoom = minimapZoom,
+            markerScale = markerScale,
             statusTag = statusTag
         ),
         tileBitmap = tileBitmap
@@ -451,6 +459,7 @@ internal fun buildVideoStampTimelineSample(
     routes: List<GisRoute> = emptyList(),
     movementPath: List<Pair<Double, Double>> = emptyList(),
     minimapZoom: Int? = null,
+    markerScale: Float = 1.0f,
     tileBitmap: Any? = null,
     statusTag: String? = null
 ): VideoStampTimelineSample = buildVideoStampTimelineSample(
@@ -464,6 +473,7 @@ internal fun buildVideoStampTimelineSample(
     mapRoutes = convertToCaptureMapRoutes(routes),
     movementPath = movementPath,
     minimapZoom = minimapZoom,
+    markerScale = markerScale,
     tileBitmap = tileBitmap,
     statusTag = statusTag
 )
@@ -565,8 +575,22 @@ fun CameraOverlay(
     var liveAddress by remember { mutableStateOf("") }
     val cameraMovementPath = remember { CameraMovementPath() }
     var liveMovementPath by remember { mutableStateOf(emptyList<Pair<Double, Double>>()) }
-    var liveMinimapZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
+    val cameraPrefs = remember(context) { context.getSharedPreferences("camera_prefs", Context.MODE_PRIVATE) }
+    var customMinimapZoom by remember {
+        mutableStateOf(cameraPrefs.getInt("minimap_custom_zoom", PhotoStampRenderer.MINIMAP_MAX_ZOOM))
+    }
+    var customMarkerScale by remember {
+        mutableStateOf(cameraPrefs.getFloat("minimap_marker_scale", 1.0f))
+    }
+    var liveMinimapZoom by remember { mutableStateOf(customMinimapZoom) }
     val photoCaptureSession = remember { PhotoCaptureSession() }
+
+    LaunchedEffect(customMinimapZoom, customMarkerScale) {
+        cameraPrefs.edit()
+            .putInt("minimap_custom_zoom", customMinimapZoom)
+            .putFloat("minimap_marker_scale", customMarkerScale)
+            .apply()
+    }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia()
@@ -724,6 +748,7 @@ fun CameraOverlay(
                         mapRoutes = captureMapRoutes,
                         movementPath = liveMovementPath,
                         minimapZoom = liveMinimapZoom,
+                        markerScale = customMarkerScale,
                         tileBitmap = tileBitmap,
                         statusTag = selectedStatusTag
                     )
@@ -741,6 +766,28 @@ fun CameraOverlay(
             currentTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
             oldTile?.recycle()
             addressCache.clear()
+        }
+    }
+
+    LaunchedEffect(customMinimapZoom) {
+        liveMinimapZoom = customMinimapZoom
+        val loc = liveLocation
+        val safeLat = loc?.latitude
+        val safeLng = loc?.longitude
+        if (safeLat != null && safeLng != null && stampEnabled) {
+            val locationKey = roundedLocationKey(safeLat, safeLng)
+            withContext(Dispatchers.IO) {
+                val nextTileBitmap = PhotoStampRenderer.fetchOsmTile(safeLat, safeLng, zoom = customMinimapZoom)
+                if (nextTileBitmap != null) {
+                    val oldTile = currentTileBitmap
+                    currentTileBitmap = nextTileBitmap
+                    currentTileKey = locationKey
+                    currentTileZoom = customMinimapZoom
+                    if (oldTile != null && oldTile !== nextTileBitmap) {
+                        oldTile.recycle()
+                    }
+                }
+            }
         }
     }
 
@@ -764,7 +811,9 @@ fun CameraOverlay(
                     bearingDeg = bearing,
                     mapNodes = captureMapNodes,
                     mapRoutes = captureMapRoutes,
-                    movementPath = liveMovementPath
+                    movementPath = liveMovementPath,
+                    minimapZoom = customMinimapZoom,
+                    markerScale = customMarkerScale
                 ).mapScene
                 val candidateZoom = PhotoStampRenderer.resolveMinimapZoom(
                     latitude = safeLat,
@@ -1043,6 +1092,7 @@ fun CameraOverlay(
                     liveLocation,
                     liveMovementPath,
                     liveMinimapZoom,
+                    customMarkerScale,
                     liveAddress,
                     noteText,
                     bearing,
@@ -1060,6 +1110,7 @@ fun CameraOverlay(
                         mapRoutes = captureMapRoutes,
                         movementPath = liveMovementPath,
                         minimapZoom = liveMinimapZoom,
+                        markerScale = customMarkerScale,
                         statusTag = selectedStatusTag
                     )
                 }
@@ -1247,6 +1298,7 @@ fun CameraOverlay(
                                             mapRoutes = captureMapRoutes,
                                             movementPath = liveMovementPath,
                                             minimapZoom = liveMinimapZoom,
+                                            markerScale = customMarkerScale,
                                             tileBitmap = tileBitmap,
                                             statusTag = selectedStatusTag
                                         )
@@ -1553,6 +1605,7 @@ fun CameraOverlay(
                                                         mapRoutes = captureMapRoutes,
                                                         movementPath = liveMovementPath,
                                                         minimapZoom = liveMinimapZoom,
+                                                        markerScale = customMarkerScale,
                                                         tileBitmap = tileBitmap,
                                                         statusTag = selectedStatusTag
                                                     )
@@ -1575,6 +1628,7 @@ fun CameraOverlay(
                                             mapRoutes = captureMapRoutes,
                                             movementPath = liveMovementPath,
                                             minimapZoom = liveMinimapZoom,
+                                            markerScale = customMarkerScale,
                                             statusTag = selectedStatusTag
                                         )
                                         val recordingTileBitmap = snapshotBitmap(currentTileBitmap)
@@ -1600,6 +1654,7 @@ fun CameraOverlay(
                                                     mapRoutes = captureMapRoutes,
                                                     movementPath = liveMovementPath,
                                                     minimapZoom = liveMinimapZoom,
+                                                    markerScale = customMarkerScale,
                                                     statusTag = selectedStatusTag,
                                                     tileBitmap = recordingTileBitmap
                                                 )
@@ -1700,6 +1755,7 @@ fun CameraOverlay(
                                         mapRoutes = captureMapRoutes,
                                         movementPath = liveMovementPath,
                                         minimapZoom = liveMinimapZoom,
+                                        markerScale = customMarkerScale,
                                         statusTag = capturedStatusTag
                                     )
                                     val capturedStampEnabled = stampEnabled
@@ -1938,6 +1994,65 @@ fun CameraOverlay(
                             fontSize = 11.sp
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Mức thu phóng Minimap (Zoom: $customMinimapZoom)",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (customMinimapZoom != PhotoStampRenderer.MINIMAP_MAX_ZOOM || customMarkerScale != 1.0f) {
+                            TextButton(
+                                onClick = {
+                                    customMinimapZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                    customMarkerScale = 1.0f
+                                }
+                            ) {
+                                Text("Khôi phục mặc định", color = Color(0xFF00E5FF), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Slider(
+                        value = customMinimapZoom.toFloat(),
+                        onValueChange = { customMinimapZoom = it.toInt() },
+                        valueRange = 14f..20f,
+                        steps = 5,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF00E5FF),
+                            activeTrackColor = Color(0xFF00E5FF),
+                            inactiveTrackColor = Color(0x33FFFFFF)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Kích thước Marker GPS & Điểm GIS (${(customMarkerScale * 100).toInt()}%)",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Slider(
+                        value = customMarkerScale,
+                        onValueChange = { customMarkerScale = ((it * 20).roundToInt() / 20f).coerceIn(0.5f, 1.5f) },
+                        valueRange = 0.5f..1.5f,
+                        steps = 19,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF00E5FF),
+                            activeTrackColor = Color(0xFF00E5FF),
+                            inactiveTrackColor = Color(0x33FFFFFF)
+                        )
+                    )
+
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }

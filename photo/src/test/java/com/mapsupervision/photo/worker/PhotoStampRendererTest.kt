@@ -307,4 +307,54 @@ class PhotoStampRendererTest {
         assertNotNull(tagRow)
         assertEquals("Hiện trạng", tagRow!!.lines.first())
     }
+
+    @Test
+    fun `PhotoStampLayoutCalculator scales dot radiuses by markerScale`() {
+        val baseLayout = PhotoStampLayoutCalculator.calculate(
+            frameWidth = 1080f,
+            frameHeight = 1920f,
+            rows = emptyList(),
+            textWidth = { 0f },
+            iconWidth = { 0f },
+            showMap = true,
+            markerScale = 1.0f
+        )
+        val scaledLayout = PhotoStampLayoutCalculator.calculate(
+            frameWidth = 1080f,
+            frameHeight = 1920f,
+            rows = emptyList(),
+            textWidth = { 0f },
+            iconWidth = { 0f },
+            showMap = true,
+            markerScale = 1.5f
+        )
+
+        assertEquals(baseLayout.mapDotOuterRadius * 1.5f, scaledLayout.mapDotOuterRadius, 0.001f)
+        assertEquals(baseLayout.mapDotInnerRadius * 1.5f, scaledLayout.mapDotInnerRadius, 0.001f)
+        assertEquals(baseLayout.mapDotCoreRadius * 1.5f, scaledLayout.mapDotCoreRadius, 0.001f)
+    }
+
+    @Test
+    fun `resolveMinimapViewport respects custom minimap zoom limit`() {
+        val rect = RectF(0f, 0f, 270f, 270f)
+        val scene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            bearingDeg = 0f,
+            minimapZoom = 16,
+            markerScale = 1.2f
+        )
+
+        val viewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 0f,
+            borderWidth = 6f,
+            outerDotRadius = 20f,
+            mapScene = scene
+        )
+
+        assertEquals(16, viewport.zoom)
+    }
 }

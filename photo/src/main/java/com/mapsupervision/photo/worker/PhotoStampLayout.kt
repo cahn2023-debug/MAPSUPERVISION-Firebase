@@ -132,7 +132,8 @@ internal object PhotoStampLayoutCalculator {
         rows: List<PhotoStampRow>,
         textWidth: (String) -> Float,
         iconWidth: (String) -> Float,
-        showMap: Boolean
+        showMap: Boolean,
+        markerScale: Float = 1.0f
     ): PhotoStampLayout {
         val scale = (frameWidth / 3000f) * 1.4f
         val textScale = 1.5f * 1.2f
@@ -147,9 +148,10 @@ internal object PhotoStampLayoutCalculator {
         val coordinateTextSize = 19f * scale * textScale
         val mapBorderWidth = 3.5f * scale * mapScale
         val mapCoordinateOffsetY = 16f * scale * mapScale
-        val mapDotOuterRadius = 26f * scale * 2.0f
-        val mapDotInnerRadius = 16f * scale * 2.0f
-        val mapDotCoreRadius = 7f * scale * 2.0f
+        val effectiveMarkerScale = markerScale.coerceIn(0.4f, 2.5f)
+        val mapDotOuterRadius = 26f * scale * 2.0f * effectiveMarkerScale
+        val mapDotInnerRadius = 16f * scale * 2.0f * effectiveMarkerScale
+        val mapDotCoreRadius = 7f * scale * 2.0f * effectiveMarkerScale
         val bottomInset = 28f * scale
 
         fun rowHeight(row: PhotoStampRow): Float {

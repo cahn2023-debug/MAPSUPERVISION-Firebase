@@ -24,5 +24,6 @@ data class CaptureStampMapScene(
     val nodes: List<CaptureStampMapNode> = emptyList(),
     val routes: List<CaptureStampMapRoute> = emptyList(),
     val movementPath: List<Pair<Double, Double>> = emptyList(),
-    val minimapZoom: Int? = null
+    val minimapZoom: Int? = null,
+    val markerScale: Float = 1.0f
 )
