@@ -245,6 +245,428 @@ function filterCollectionsForMember(
   };
 }
 
+export type PhotoNodeGroup = {
+  nodeKey: string;
+  nodeName: string;
+  nodeCode: string;
+  contractor?: string;
+  hasTags: boolean;
+  tags: string[];
+  photosByTag: Record<string, SitePhotoRow[]>;
+  untaggedPhotos: SitePhotoRow[];
+  allPhotos: SitePhotoRow[];
+};
+
+function extractPhotoTags(photo: Record<string, unknown> | SitePhotoRow): string[] {
+  const tagsSet = new Set<string>();
+  const csv = text(photo, "tagCodesCsv");
+  if (csv) {
+    csv.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((t) => tagsSet.add(t));
+  }
+  const statusTag = text(photo, "statusTag");
+  if (statusTag) {
+    tagsSet.add(statusTag);
+  }
+  return Array.from(tagsSet);
+}
+
+function groupPhotosByNodeAndTag(
+  photos: Array<Record<string, unknown>> | SitePhotoRow[],
+  gisNodes: Array<Record<string, unknown>>,
+  searchKeyword: string,
+  selectedTagFilter: string
+): PhotoNodeGroup[] {
+  const nodeMap = new Map<string, Record<string, unknown>>();
+  for (const node of gisNodes) {
+    const id = text(node, "id");
+    const code = text(node, "code", "nodeCode");
+    const name = text(node, "name");
+    if (id) nodeMap.set(id, node);
+    if (code) nodeMap.set(code, node);
+    if (name) nodeMap.set(name, node);
+  }
+
+  const groupsByKey = new Map<string, {
+    nodeKey: string;
+    nodeName: string;
+    nodeCode: string;
+    contractor?: string;
+    photos: SitePhotoRow[];
+  }>();
+
+  for (const rawPhoto of photos) {
+    const photo = rawPhoto as SitePhotoRow;
+    const photoId = text(photo, "id");
+    if (!photoId && !photo.capturedAtEpochMs) continue;
+
+    const matchedNodeId = text(photo, "matchedNodeId");
+    const objectCode = text(photo, "objectCode", "nodeCode");
+
+    const matchedNode = (matchedNodeId && nodeMap.get(matchedNodeId)) ||
+                        (objectCode && nodeMap.get(objectCode));
+
+    const nodeCode = matchedNode ? text(matchedNode, "code", "nodeCode") || objectCode : (objectCode || "UNASSIGNED");
+    const nodeName = matchedNode ? text(matchedNode, "name") || nodeCode : (objectCode ? `Mục ${objectCode}` : "Ảnh chưa phân loại Node");
+    const contractor = matchedNode ? text(matchedNode, "contractor", "contractorName") : undefined;
+    const nodeKey = nodeCode || matchedNodeId || "UNASSIGNED";
+
+    if (!groupsByKey.has(nodeKey)) {
+      groupsByKey.set(nodeKey, {
+        nodeKey,
+        nodeName,
+        nodeCode,
+        contractor,
+        photos: []
+      });
+    }
+    groupsByKey.get(nodeKey)!.photos.push(photo);
+  }
+
+  const result: PhotoNodeGroup[] = [];
+
+  for (const group of groupsByKey.values()) {
+    group.photos.sort((a, b) => Number(b.capturedAtEpochMs ?? b.updatedAtEpochMs ?? 0) - Number(a.capturedAtEpochMs ?? a.updatedAtEpochMs ?? 0));
+
+    const tagSet = new Set<string>();
+    const photosByTag: Record<string, SitePhotoRow[]> = {};
+    const untaggedPhotos: SitePhotoRow[] = [];
+
+    for (const photo of group.photos) {
+      const tags = extractPhotoTags(photo);
+      if (tags.length === 0) {
+        untaggedPhotos.push(photo);
+      } else {
+        for (const tag of tags) {
+          tagSet.add(tag);
+          if (!photosByTag[tag]) {
+            photosByTag[tag] = [];
+          }
+          photosByTag[tag].push(photo);
+        }
+      }
+    }
+
+    const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b, "vi"));
+    const hasTags = tags.length > 0;
+
+    let filteredAllPhotos = group.photos;
+    if (searchKeyword.trim()) {
+      const q = searchKeyword.toLowerCase();
+      filteredAllPhotos = filteredAllPhotos.filter((p) => {
+        const oCode = text(p, "objectCode").toLowerCase();
+        const eng = text(p, "engineer").toLowerCase();
+        const note = text(p, "captureNote").toLowerCase();
+        const nName = group.nodeName.toLowerCase();
+        const nCode = group.nodeCode.toLowerCase();
+        const pTags = extractPhotoTags(p).join(" ").toLowerCase();
+        return oCode.includes(q) || eng.includes(q) || note.includes(q) || nName.includes(q) || nCode.includes(q) || pTags.includes(q);
+      });
+    }
+
+    if (selectedTagFilter) {
+      if (selectedTagFilter === "__UNTAGGED__") {
+        filteredAllPhotos = filteredAllPhotos.filter((p) => extractPhotoTags(p).length === 0);
+      } else {
+        filteredAllPhotos = filteredAllPhotos.filter((p) => extractPhotoTags(p).includes(selectedTagFilter));
+      }
+    }
+
+    if (filteredAllPhotos.length === 0 && (searchKeyword.trim() || selectedTagFilter)) {
+      continue;
+    }
+
+    const filteredPhotosByTag: Record<string, SitePhotoRow[]> = {};
+    const filteredUntagged: SitePhotoRow[] = [];
+
+    for (const tag of tags) {
+      if (selectedTagFilter && selectedTagFilter !== tag) continue;
+      const list = (photosByTag[tag] || []).filter((p) => filteredAllPhotos.includes(p));
+      if (list.length > 0 || !selectedTagFilter) {
+        filteredPhotosByTag[tag] = list;
+      }
+    }
+
+    const unList = untaggedPhotos.filter((p) => filteredAllPhotos.includes(p));
+    if (unList.length > 0) {
+      filteredUntagged.push(...unList);
+    }
+
+    const finalTags = selectedTagFilter && selectedTagFilter !== "__UNTAGGED__"
+      ? (tags.includes(selectedTagFilter) ? [selectedTagFilter] : [])
+      : tags;
+
+    result.push({
+      nodeKey: group.nodeKey,
+      nodeName: group.nodeName,
+      nodeCode: group.nodeCode,
+      contractor: group.contractor,
+      hasTags: hasTags && (!selectedTagFilter || selectedTagFilter !== "__UNTAGGED__"),
+      tags: finalTags,
+      photosByTag: filteredPhotosByTag,
+      untaggedPhotos: filteredUntagged,
+      allPhotos: filteredAllPhotos
+    });
+  }
+
+  return result.sort((a, b) => a.nodeCode.localeCompare(b.nodeCode, "vi"));
+}
+
+function PhotoCardItem({
+  photo,
+  projectId,
+  user,
+  onClick
+}: {
+  photo: SitePhotoRow;
+  projectId: string;
+  user: FirebaseUser | null;
+  onClick: () => void;
+}) {
+  const photoId = text(photo, "id");
+  const driveUrl = driveLinkForPhoto(photo);
+  const previewUrl = previewUrlForPhoto(projectId, photoId);
+  const tags = extractPhotoTags(photo);
+  const isDone = photo.syncStatus === "DONE" || Boolean(driveUrl);
+
+  return (
+    <div className="photo-card-mini" onClick={onClick}>
+      <div className="photo-card-thumb-wrap">
+        {previewUrl ? (
+          <SitePhotoPreview
+            projectId={projectId}
+            photoId={photoId}
+            user={user}
+            alt={text(photo, "objectCode") || "Ảnh thực địa"}
+          />
+        ) : (
+          <div className="photo-placeholder" />
+        )}
+        <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
+          {isDone ? "SYNCED" : "PENDING"}
+        </span>
+      </div>
+      <div className="photo-card-info">
+        {tags.length > 0 && (
+          <div className="photo-card-tags-row">
+            {tags.map((t) => (
+              <span key={t} className="photo-badge-tag">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="photo-card-engineer">
+          👷 {text(photo, "engineer") || "Chưa rõ kỹ sư"}
+        </div>
+        <div className="photo-card-time">
+          🕒 {formatDateTime(photo.capturedAtEpochMs ?? photo.updatedAtEpochMs)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhotoLightboxModal({
+  photo,
+  allPhotos,
+  user,
+  onClose,
+  onSelectPhoto
+}: {
+  photo: SitePhotoRow | null;
+  allPhotos: SitePhotoRow[];
+  user: FirebaseUser | null;
+  onClose: () => void;
+  onSelectPhoto: (nextPhoto: SitePhotoRow) => void;
+}) {
+  if (!photo) return null;
+
+  const currentIndex = allPhotos.findIndex((p) => p.id === photo.id);
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < allPhotos.length - 1;
+
+  const handlePrev = () => {
+    if (hasPrev) onSelectPhoto(allPhotos[currentIndex - 1]);
+  };
+
+  const handleNext = () => {
+    if (hasNext) onSelectPhoto(allPhotos[currentIndex + 1]);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasPrev) handlePrev();
+      if (e.key === "ArrowRight" && hasNext) handleNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentIndex, hasPrev, hasNext, onClose]);
+
+  const driveUrl = driveLinkForPhoto(photo);
+  const photoId = text(photo, "id");
+  const projectId = text(photo, "projectId");
+  const previewUrl = previewUrlForPhoto(projectId, photoId);
+  const tags = extractPhotoTags(photo);
+
+  return (
+    <div className="photo-lightbox-backdrop" onClick={onClose}>
+      <div className="photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="photo-lightbox-header">
+          <div className="photo-lightbox-title-area">
+            <span className="photo-lightbox-badge">ẢNH THỰC ĐỊA</span>
+            <h3>{text(photo, "objectCode", "nodeCode") || "Ảnh không gắn mã"}</h3>
+            {currentIndex >= 0 && (
+              <span className="photo-lightbox-counter">
+                {currentIndex + 1} / {allPhotos.length}
+              </span>
+            )}
+          </div>
+          <button type="button" className="photo-lightbox-close" onClick={onClose} title="Đóng (Esc)">
+            ✕
+          </button>
+        </div>
+
+        <div className="photo-lightbox-body">
+          <div className="photo-lightbox-stage">
+            {hasPrev && (
+              <button
+                type="button"
+                className="photo-lightbox-nav prev"
+                onClick={handlePrev}
+                title="Ảnh trước (←)"
+              >
+                ‹
+              </button>
+            )}
+            <div className="photo-lightbox-img-wrapper">
+              {previewUrl ? (
+                <SitePhotoPreview
+                  projectId={projectId}
+                  photoId={photoId}
+                  user={user}
+                  alt={text(photo, "objectCode") || "Ảnh thực địa"}
+                  className="photo-lightbox-img"
+                />
+              ) : (
+                <div className="photo-placeholder" style={{ height: "100%", minHeight: "360px" }} />
+              )}
+            </div>
+            {hasNext && (
+              <button
+                type="button"
+                className="photo-lightbox-nav next"
+                onClick={handleNext}
+                title="Ảnh tiếp theo (→)"
+              >
+                ›
+              </button>
+            )}
+          </div>
+
+          <aside className="photo-lightbox-details">
+            <div className="photo-detail-section">
+              <h4>Thông tin chụp</h4>
+              <div className="photo-detail-grid">
+                <div className="detail-item">
+                  <span className="detail-label">Kỹ sư chụp</span>
+                  <strong className="detail-value">{text(photo, "engineer") || "Không rõ"}</strong>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Thời gian</span>
+                  <strong className="detail-value">{formatDateTime(photo.capturedAtEpochMs ?? photo.updatedAtEpochMs)}</strong>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Mã đối tượng (Node)</span>
+                  <strong className="detail-value text-accent">{text(photo, "objectCode") || "—"}</strong>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Trạng thái đồng bộ</span>
+                  <span className={`sync-status-badge ${photo.syncStatus === "DONE" || driveUrl ? "success" : "pending"}`}>
+                    {syncLabelForPhoto(photo, driveUrl)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="photo-detail-section">
+              <h4>Thẻ phân loại (Tags)</h4>
+              {tags.length > 0 ? (
+                <div className="photo-tags-container">
+                  {tags.map((tag) => (
+                    <span key={tag} className="photo-tag-pill">
+                      🏷️ {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="detail-empty">Chưa gắn thẻ tag</p>
+              )}
+            </div>
+
+            <div className="photo-detail-section">
+              <h4>Vị trí GPS & Địa chỉ</h4>
+              <div className="photo-detail-grid">
+                <div className="detail-item">
+                  <span className="detail-label">Tọa độ GPS</span>
+                  <strong className="detail-value font-mono">
+                    {photo.latitude && photo.longitude
+                      ? `${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)}`
+                      : "Không có dữ liệu GPS"}
+                  </strong>
+                </div>
+                {photo.locationAccuracyM !== undefined && photo.locationAccuracyM !== null && (
+                  <div className="detail-item">
+                    <span className="detail-label">Độ chính xác</span>
+                    <strong className="detail-value">±{photo.locationAccuracyM}m</strong>
+                  </div>
+                )}
+                {photo.address && (
+                  <div className="detail-item full-width">
+                    <span className="detail-label">Địa chỉ</span>
+                    <strong className="detail-value">{photo.address}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {photo.captureNote && (
+              <div className="photo-detail-section">
+                <h4>Ghi chú hiện trường</h4>
+                <div className="photo-note-box">{photo.captureNote}</div>
+              </div>
+            )}
+
+            <div className="photo-lightbox-actions">
+              {driveUrl && (
+                <a
+                  href={driveUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="primary-button"
+                  style={{ textDecoration: "none", textAlign: "center" }}
+                >
+                  📁 Mở trên Google Drive
+                </a>
+              )}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onClose}
+              >
+                Đóng
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -294,6 +716,11 @@ export default function HomePage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
+  const [photoSearchKeyword, setPhotoSearchKeyword] = useState("");
+  const [selectedTagFilter, setSelectedTagFilter] = useState("");
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
+  const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<SitePhotoRow | null>(null);
+  const [activeLightboxPlaylist, setActiveLightboxPlaylist] = useState<SitePhotoRow[]>([]);
 
   useEffect(() => {
     return observeAuth((nextUser) => {
@@ -549,6 +976,28 @@ export default function HomePage() {
       materialPercent: plannedQty > 0 ? Math.min(100, (actualQty / plannedQty) * 100) : 0
     };
   }, [visibleCollections]);
+
+  const photoNodeGroups = useMemo(() => {
+    return groupPhotosByNodeAndTag(
+      visibleCollections.site_photos,
+      visibleCollections.gis_node,
+      photoSearchKeyword,
+      selectedTagFilter
+    );
+  }, [visibleCollections.site_photos, visibleCollections.gis_node, photoSearchKeyword, selectedTagFilter]);
+
+  const allAvailableTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of visibleCollections.site_photos) {
+      extractPhotoTags(p).forEach((t) => set.add(t));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [visibleCollections.site_photos]);
+
+  const totalPhotosCount = visibleCollections.site_photos.length;
+  const syncedPhotosCount = useMemo(() => {
+    return visibleCollections.site_photos.filter((p) => text(p, "syncStatus") === "DONE" || Boolean(p.remoteUrl)).length;
+  }, [visibleCollections.site_photos]);
 
   async function handleAuthSubmit() {
     if (authMode === "register" && password !== confirmPassword) {
@@ -1244,46 +1693,217 @@ export default function HomePage() {
               </p>
             </section>
           ) : (
-            <section className="media-grid">
-              <Panel title="Thư viện hình ảnh thực địa" subtitle="Đồng bộ từ Google Drive nếu thiết bị đã tải lên">
-                {visibleCollections.site_photos.length ? (
-                  <div className="photo-grid">
-                    {visibleCollections.site_photos.slice(0, 9).map((rawPhoto, index) => {
-                      const photo = rawPhoto as SitePhotoRow;
-                      const driveUrl = driveLinkForPhoto(photo);
-                      const photoId = text(photo, "id");
-                      const projectId = text(photo, "projectId") || selectedProjectId;
-                      const previewUrl = previewUrlForPhoto(projectId, photoId);
+            <section className="media-gallery-section">
+              {/* Media Toolbar */}
+              <div className="media-toolbar">
+                <div className="media-toolbar-top">
+                  <div className="media-search-box">
+                    <span className="media-search-icon">🔍</span>
+                    <input
+                      type="text"
+                      className="media-search-input"
+                      placeholder="Tìm kiếm theo Tên Node, Mã Node, Kỹ sư, Thẻ tag, Ghi chú..."
+                      value={photoSearchKeyword}
+                      onChange={(e) => setPhotoSearchKeyword(e.target.value)}
+                    />
+                  </div>
+                  <div className="media-toolbar-actions">
+                    <div className="media-stat-pill">
+                      <span>Thư mục (Node):</span>
+                      <strong>{photoNodeGroups.length}</strong>
+                    </div>
+                    <div className="media-stat-pill">
+                      <span>Tổng ảnh:</span>
+                      <strong>{totalPhotosCount}</strong>
+                    </div>
+                    <div className="media-stat-pill">
+                      <span>Đã sync Drive:</span>
+                      <strong style={{ color: "var(--success)" }}>{syncedPhotosCount}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="tiny-button"
+                      onClick={() => {
+                        const allKeys: Record<string, boolean> = {};
+                        const isAnyExpanded = photoNodeGroups.some((g) => !collapsedNodes[g.nodeKey]);
+                        photoNodeGroups.forEach((g) => {
+                          allKeys[g.nodeKey] = isAnyExpanded;
+                        });
+                        setCollapsedNodes(allKeys);
+                      }}
+                    >
+                      {photoNodeGroups.some((g) => !collapsedNodes[g.nodeKey]) ? "Thu gọn tất cả" : "Mở rộng tất cả"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tag Filter Pills */}
+                {allAvailableTags.length > 0 && (
+                  <div className="media-tag-pills-wrapper">
+                    <span className="media-tag-pills-label">Lọc theo Tag:</span>
+                    <button
+                      type="button"
+                      className={`media-tag-pill ${!selectedTagFilter ? "active" : ""}`}
+                      onClick={() => setSelectedTagFilter("")}
+                    >
+                      Tất cả tag
+                      <span className="pill-count">{totalPhotosCount}</span>
+                    </button>
+                    {allAvailableTags.map((tag) => {
+                      const count = visibleCollections.site_photos.filter((p) => extractPhotoTags(p).includes(tag)).length;
                       return (
-                        <a
-                          key={photoId || index}
-                          href={driveUrl}
-                          target={driveUrl ? "_blank" : undefined}
-                          rel="noreferrer"
-                          className="photo-tile"
-                          data-photo-id={photoId}
-                          data-project-id={projectId}
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`media-tag-pill ${selectedTagFilter === tag ? "active" : ""}`}
+                          onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? "" : tag)}
                         >
-                          {previewUrl ? (
-                            <SitePhotoPreview
-                              projectId={projectId}
-                              photoId={photoId}
-                              user={user}
-                              alt={text(photo, "objectCode", "caption") || "Ảnh hiện trường"}
-                            />
-                          ) : <div className="photo-placeholder" />}
-                          <strong>{text(photo, "objectCode", "nodeCode", "routeCode") || "Ảnh chưa phân loại"}</strong>
-                          <span>Kỹ sư: {text(photo, "engineer", "capturedBy") || "Không rõ"} · {formatDateTime(photo.capturedAtEpochMs ?? photo.updatedAtEpochMs)}</span>
-                          <span>{syncLabelForPhoto(photo, driveUrl)}</span>
-                        </a>
+                          🏷️ {tag}
+                          <span className="pill-count">{count}</span>
+                        </button>
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="empty-state">Chưa có hình ảnh nào được tải lên từ thực địa.</div>
                 )}
-              </Panel>
-              <Panel title="Ghi chú nhanh">
+              </div>
+
+              {/* Node Folders List */}
+              {photoNodeGroups.length > 0 ? (
+                <div className="node-folder-list">
+                  {photoNodeGroups.map((group) => {
+                    const isCollapsed = Boolean(collapsedNodes[group.nodeKey]);
+                    const projectId = selectedProjectId;
+
+                    return (
+                      <div key={group.nodeKey} className="node-folder-card">
+                        {/* Folder Header */}
+                        <div
+                          className="node-folder-header"
+                          onClick={() => {
+                            setCollapsedNodes((prev) => ({
+                              ...prev,
+                              [group.nodeKey]: !prev[group.nodeKey]
+                            }));
+                          }}
+                        >
+                          <div className="node-folder-title-left">
+                            <span className="node-folder-icon">📂</span>
+                            <div className="node-folder-meta">
+                              <div className="node-folder-title">
+                                <span>{group.nodeName}</span>
+                                {group.nodeCode && group.nodeCode !== group.nodeName && (
+                                  <span className="node-folder-code-badge">{group.nodeCode}</span>
+                                )}
+                              </div>
+                              {group.contractor && (
+                                <span className="node-folder-sub">Nhà thầu: {group.contractor}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="node-folder-header-right">
+                            <span className="node-folder-count-badge">
+                              {group.allPhotos.length} ảnh {group.hasTags ? `· ${group.tags.length} cột tag` : ""}
+                            </span>
+                            <span className={`node-folder-chevron ${isCollapsed ? "collapsed" : ""}`}>
+                              ▼
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Folder Body */}
+                        {!isCollapsed && (
+                          <div className="node-folder-body">
+                            {group.hasTags ? (
+                              /* Case A: Node has tags -> Split into Tag Columns (Kanban) */
+                              <div className="tag-columns-container">
+                                {group.tags.map((tag) => {
+                                  const tagPhotos = group.photosByTag[tag] || [];
+                                  if (tagPhotos.length === 0) return null;
+                                  return (
+                                    <div key={tag} className="tag-column">
+                                      <div className="tag-column-header">
+                                        <span className="tag-column-title" title={tag}>
+                                          🏷️ {tag}
+                                        </span>
+                                        <span className="tag-column-count">{tagPhotos.length}</span>
+                                      </div>
+                                      <div className="tag-column-body">
+                                        {tagPhotos.map((photo) => (
+                                          <PhotoCardItem
+                                            key={photo.id}
+                                            photo={photo}
+                                            projectId={photo.projectId || projectId}
+                                            user={user}
+                                            onClick={() => {
+                                              setActiveLightboxPhoto(photo);
+                                              setActiveLightboxPlaylist(group.allPhotos);
+                                            }}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* Untagged photos column if any */}
+                                {group.untaggedPhotos.length > 0 && (
+                                  <div className="tag-column untagged">
+                                    <div className="tag-column-header">
+                                      <span className="tag-column-title">
+                                        📁 Chưa gắn tag
+                                      </span>
+                                      <span className="tag-column-count">{group.untaggedPhotos.length}</span>
+                                    </div>
+                                    <div className="tag-column-body">
+                                      {group.untaggedPhotos.map((photo) => (
+                                        <PhotoCardItem
+                                          key={photo.id}
+                                          photo={photo}
+                                          projectId={photo.projectId || projectId}
+                                          user={user}
+                                          onClick={() => {
+                                            setActiveLightboxPhoto(photo);
+                                            setActiveLightboxPlaylist(group.allPhotos);
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              /* Case B: Node has no tags -> Standard Grid View (No column split) */
+                              <div className="photo-grid">
+                                {group.allPhotos.map((photo) => (
+                                  <PhotoCardItem
+                                    key={photo.id}
+                                    photo={photo}
+                                    projectId={photo.projectId || projectId}
+                                    user={user}
+                                    onClick={() => {
+                                      setActiveLightboxPhoto(photo);
+                                      setActiveLightboxPlaylist(group.allPhotos);
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state" style={{ padding: "40px" }}>
+                  {photoSearchKeyword || selectedTagFilter
+                    ? "Không tìm thấy hình ảnh nào phù hợp với bộ lọc."
+                    : "Chưa có hình ảnh nào được tải lên từ thực địa cho dự án này."}
+                </div>
+              )}
+
+              {/* Quick Notes */}
+              <Panel title="Ghi chú nhanh thực địa" subtitle="Đồng bộ ghi chú từ hiện trường">
                 <List
                   rows={visibleCollections.note}
                   empty="Chưa có ghi chú nhanh nào."
@@ -1297,6 +1917,15 @@ export default function HomePage() {
               </Panel>
             </section>
           )}
+
+          {/* Lightbox Modal */}
+          <PhotoLightboxModal
+            photo={activeLightboxPhoto}
+            allPhotos={activeLightboxPlaylist}
+            user={user}
+            onClose={() => setActiveLightboxPhoto(null)}
+            onSelectPhoto={(next) => setActiveLightboxPhoto(next)}
+          />
         </>
       )}
 
