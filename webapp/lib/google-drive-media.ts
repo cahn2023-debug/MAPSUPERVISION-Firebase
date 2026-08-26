@@ -100,19 +100,53 @@ export function configuredRootFolderId(): string {
 }
 
 function serviceAccountCredentials() {
-  const filePath = stripWrappingQuotes(process.env.GOOGLE_SERVICE_ACCOUNT_FILE || "");
-  if (filePath) {
+  const filePath = stripWrappingQuotes(process.env.GOOGLE_SERVICE_ACCOUNT_FILE || process.env.FIREBASE_SERVICE_ACCOUNT_FILE || "");
+  if (filePath && fs.existsSync(filePath)) {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
     if (typeof parsed.private_key === "string") {
       parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
     }
     return parsed;
   }
-  const parsed = JSON.parse(requiredEnv("GOOGLE_SERVICE_ACCOUNT_JSON"));
-  if (typeof parsed.private_key === "string") {
-    parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+
+  const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (rawJson) {
+    let clean = stripWrappingQuotes(rawJson);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(clean);
+    } catch {
+      try {
+        const decoded = Buffer.from(clean, "base64").toString("utf8");
+        parsed = JSON.parse(decoded);
+      } catch {
+        // fallback
+      }
+    }
+    if (parsed) {
+      if (typeof parsed.private_key === "string") {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+      }
+      return parsed;
+    }
   }
-  return parsed;
+
+  const clientEmail = stripWrappingQuotes(process.env.FIREBASE_ADMIN_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL || "");
+  const privateKey = stripWrappingQuotes(process.env.FIREBASE_ADMIN_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY || "");
+  const projectId = stripWrappingQuotes(process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "");
+
+  if (clientEmail && privateKey) {
+    return {
+      client_email: clientEmail,
+      private_key: privateKey.replace(/\\n/g, "\n"),
+      project_id: projectId
+    };
+  }
+
+  throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not configured.");
 }
 
 // ponytail: mock drive client for testing

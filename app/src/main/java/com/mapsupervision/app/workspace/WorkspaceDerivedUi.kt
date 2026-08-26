@@ -389,16 +389,16 @@ internal fun resolveMaterialActualText(
         ?: ""
 }
 
-private fun parseworkVolumeSummary(summary: String): List<PreparedMaterialLine> {
+internal fun parseworkVolumeSummary(summary: String): List<PreparedMaterialLine> {
     if (summary.isBlank()) return emptyList()
     return summary
         .lineSequence()
         .map { it.trim() }
-        .filter { it.isNotBlank() }
+        .filter { it.isNotBlank() && !it.equals("ExtendedData", ignoreCase = true) && !it.equals("ExtendedData:", ignoreCase = true) }
         .mapNotNull { line ->
             val parts = line.split(":", limit = 2)
             val itemName = parts.getOrNull(0)?.trim().orEmpty()
-            if (itemName.isBlank()) {
+            if (itemName.isBlank() || itemName.equals("ExtendedData", ignoreCase = true)) {
                 null
             } else {
                 val plannedText = parts.getOrNull(1)?.trim().orEmpty()

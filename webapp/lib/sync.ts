@@ -37,6 +37,8 @@ export type ProjectDoc = {
   name: string;
   slug: string;
   projectCode: string | null;
+  createdByUid?: string | null;
+  ownerUid?: string | null;
   mediaStorageProvider: "GOOGLE_DRIVE";
   mediaStorageFolderId: string;
   mediaStorageFolderUrl: string;
@@ -112,7 +114,7 @@ export type ProjectMemberRow = {
   uid: string;
   email: string;
   displayName: string | null;
-  role: "MEMBER";
+  role: "MEMBER" | "ADMIN" | "OWNER";
   isActive: boolean;
   contractorScope: ContractorScope;
   allowedContractors: string[];
@@ -364,6 +366,8 @@ function projectDocFromRaw(id: string, raw: Record<string, unknown>): ProjectDoc
     name: String(raw.name ?? id),
     slug: String(raw.slug ?? ""),
     projectCode: raw.projectCode ? String(raw.projectCode) : null,
+    createdByUid: raw.createdByUid ? String(raw.createdByUid) : raw.ownerUid ? String(raw.ownerUid) : null,
+    ownerUid: raw.ownerUid ? String(raw.ownerUid) : raw.createdByUid ? String(raw.createdByUid) : null,
     mediaStorageProvider: "GOOGLE_DRIVE",
     mediaStorageFolderId: raw.mediaStorageFolderId ? String(raw.mediaStorageFolderId) : "",
     mediaStorageFolderUrl: raw.mediaStorageFolderUrl ? String(raw.mediaStorageFolderUrl) : "",
@@ -660,7 +664,7 @@ export function subscribeProjectMembers(
           uid: memberDoc.id,
           email: String(raw.email ?? ""),
           displayName: raw.displayName ? String(raw.displayName) : null,
-          role: "MEMBER",
+          role: raw.role === "ADMIN" ? "ADMIN" : raw.role === "OWNER" ? "OWNER" : "MEMBER",
           isActive: Boolean(raw.isActive ?? true),
           contractorScope: raw.contractorScope === "SCOPED" ? "SCOPED" : "ALL",
           allowedContractors: Array.isArray(raw.allowedContractors) ? raw.allowedContractors.map((value) => String(value)) : [],
@@ -694,7 +698,7 @@ export function subscribeCurrentProjectMember(
         uid: snapshot.id,
         email: String(raw.email ?? ""),
         displayName: raw.displayName ? String(raw.displayName) : null,
-        role: "MEMBER",
+        role: raw.role === "ADMIN" ? "ADMIN" : raw.role === "OWNER" ? "OWNER" : "MEMBER",
         isActive: Boolean(raw.isActive ?? true),
         contractorScope: raw.contractorScope === "SCOPED" ? "SCOPED" : "ALL",
         allowedContractors: Array.isArray(raw.allowedContractors) ? raw.allowedContractors.map((value) => String(value)) : [],
@@ -824,12 +828,32 @@ export function subscribeProjectTable(
     (snapshot: QuerySnapshot<DocumentData>) => {
       const rows = snapshot.docs
         .map((rowDoc) => unpackEnvelope<Record<string, unknown>>(rowDoc.id, rowDoc.data()))
-        .filter((row) => !Boolean(row.isDeleted) || (tableName === "site_photos" && ["PENDING", "KEPT"].includes(String(row.androidDeletionStatus ?? ""))))
+        .filter((row) => !Boolean(row.isDeleted) || (tableName === "site_photos" && String(row.androidDeletionStatus ?? "") === "PENDING"))
         .sort((left, right) => Number(right.updatedAtEpochMs ?? 0) - Number(left.updatedAtEpochMs ?? 0));
       onRows(tableName, rows);
     },
     (error) => onError(tableName, error)
   );
+}
+
+export async function removeProjectPhotoDocument(
+  firestore: Firestore,
+  projectId: string,
+  photo: Record<string, unknown>
+): Promise<void> {
+  const id = String(photo.id ?? "").trim();
+  if (!id) throw new Error("Ảnh không có mã định danh.");
+  const now = Date.now();
+  const nextData = {
+    ...photo,
+    id,
+    projectId,
+    isDeleted: true,
+    deletedAtEpochMs: photo.deletedAtEpochMs ?? now,
+    updatedAtEpochMs: now,
+    androidDeletionStatus: "PROJECT_REMOVED"
+  };
+  await setDoc(doc(firestore, "projects", projectId, "site_photos", id), createEnvelope("site_photos", projectId, id, nextData, now), { merge: true });
 }
 
 export async function decideAndroidDeletedPhoto(

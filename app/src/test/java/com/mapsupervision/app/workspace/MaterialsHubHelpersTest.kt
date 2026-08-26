@@ -450,4 +450,28 @@ class MaterialsHubHelpersTest {
         // Sum for contractor 208: Node N01 (2f) + Node N02 (3f) = 5f (ignoring N03 since it belongs to contractor "other")
         assertEquals(5f, plannedQty, 0.001f)
     }
+
+    @Test
+    fun `parseworkVolumeSummary filters out ExtendedData header marker and preserves valid items`() {
+        val rawSummary = """
+            Cáp quang 24FO: 150m
+            Hộp nối quang: 2
+            ExtendedData:
+            GhiChu: Lắp đặt trên cột điện
+            MaCot: C12
+        """.trimIndent()
+
+        val parsed = parseworkVolumeSummary(rawSummary)
+
+        assertEquals(4, parsed.size)
+        assertEquals("Cáp quang 24FO", parsed[0].itemName)
+        assertEquals("150m", parsed[0].plannedText)
+        assertEquals("Hộp nối quang", parsed[1].itemName)
+        assertEquals("2", parsed[1].plannedText)
+        assertEquals("GhiChu", parsed[2].itemName)
+        assertEquals("Lắp đặt trên cột điện", parsed[2].plannedText)
+        assertEquals("MaCot", parsed[3].itemName)
+        assertEquals("C12", parsed[3].plannedText)
+        assertTrue(parsed.none { it.itemName.equals("ExtendedData", ignoreCase = true) })
+    }
 }

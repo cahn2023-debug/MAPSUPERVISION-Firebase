@@ -22,6 +22,7 @@ type ErrorCode =
 
 type ProjectAccess = {
   hasAccess: boolean;
+  isAdmin: boolean;
   mediaStorageFolderId: string;
   projectName: string;
 };
@@ -66,15 +67,23 @@ async function verifyProjectAccess(projectId: string, token: string): Promise<Pr
   const decoded = await getAdminAuth().verifyIdToken(token);
   const projectRef = getAdminDb().collection("projects").doc(projectId);
   const accessRef = getAdminDb().collection("accessRequests").doc(`${projectId}__${decoded.uid}`);
-  const [project, accessRequest] = await Promise.all([
+  const memberRef = projectRef.collection("members").doc(decoded.uid);
+  const [project, accessRequest, member] = await Promise.all([
     projectRef.get(),
-    accessRef.get()
+    accessRef.get(),
+    memberRef.get()
   ]);
   const projectData = unpackProjectData(project.data());
   const accessData = accessRequest.data();
-  const hasApprovedAccess = accessData?.status === "APPROVED";
+  const memberData = member.data();
+  const hasApprovedAccess = accessData?.status === "APPROVED" || memberData?.isActive === true;
+  const isCustomAdmin = decoded.admin === true || decoded.superAdmin === true || decoded.role === "super-admin";
+  const isOwner = Boolean(projectData.createdByUid && projectData.createdByUid === decoded.uid);
+  const isMemberAdmin = memberData?.role === "ADMIN" || memberData?.role === "OWNER";
+  const isAdmin = isCustomAdmin || isOwner || isMemberAdmin;
   return {
-    hasAccess: decoded.admin === true || hasApprovedAccess,
+    hasAccess: isAdmin || hasApprovedAccess,
+    isAdmin,
     mediaStorageFolderId: projectData.mediaStorageFolderId ? String(projectData.mediaStorageFolderId) : "",
     projectName: projectData.name ? String(projectData.name).trim() : projectId
   };
@@ -237,6 +246,7 @@ export async function DELETE(
     return apiError(401, "UNAUTHORIZED", "Invalid Firebase ID token.");
   }
   if (!access.hasAccess) return apiError(403, "FORBIDDEN", "User does not have access to this project.");
+  if (!access.isAdmin) return apiError(403, "FORBIDDEN", "Chỉ Quản trị viên (Admin) mới có quyền xóa ảnh dự án.");
 
   const photoId = new URL(request.url).searchParams.get("photoId")?.trim() || "";
   if (!photoId) return apiError(400, "BAD_REQUEST", "photoId is required.");
@@ -245,17 +255,39 @@ export async function DELETE(
   const snapshot = await ref.get();
   if (!snapshot.exists) return apiError(404, "BAD_REQUEST", "Media record not found.");
   const photoData = unpackProjectData(snapshot.data() as Record<string, unknown> | undefined);
-  if (photoData.androidDeletionStatus !== "PENDING") {
-    return apiError(409, "BAD_REQUEST", "Ảnh chưa được đánh dấu đã xóa trên Android.");
-  }
+
   const fileId = driveFileIdFromUrl(String(photoData.remoteUrl ?? "").trim());
-  if (!fileId) return apiError(404, "BAD_REQUEST", "Media file is not available.");
 
   try {
-    await deleteDriveFile(fileId);
+    if (fileId) {
+      try {
+        await deleteDriveFile(fileId);
+      } catch (driveError) {
+        console.warn("Drive deletion failed or file already absent:", driveError);
+      }
+    }
     const now = Date.now();
-    const nextData = { ...photoData, id: photoId, projectId, isDeleted: true, deletedAtEpochMs: now, androidDeletionStatus: "DRIVE_DELETED", updatedAtEpochMs: now };
-    await ref.set({ data: nextData, id: photoId, projectId, tableName: "site_photos", updatedAtEpochMs: now, isDeleted: true, lastSyncedAtEpochMs: now }, { merge: true });
+    const nextData = {
+      ...photoData,
+      id: photoId,
+      projectId,
+      isDeleted: true,
+      deletedAtEpochMs: now,
+      androidDeletionStatus: "DRIVE_DELETED",
+      updatedAtEpochMs: now
+    };
+    await ref.set(
+      {
+        data: nextData,
+        id: photoId,
+        projectId,
+        tableName: "site_photos",
+        updatedAtEpochMs: now,
+        isDeleted: true,
+        lastSyncedAtEpochMs: now
+      },
+      { merge: true }
+    );
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete Google Drive media.";

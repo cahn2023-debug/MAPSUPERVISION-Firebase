@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getAdminDb } from "./firebase-admin";
+import { seedSnapshot269 } from "./seed-snapshot-269";
 
 export const PUBLIC_PROJECT_SLUG = "269-2026";
 export const KNOWN_PUBLIC_PROJECT_ID = "6874375a-3366-4457-a978-b8ee71c4e461";
@@ -32,7 +33,7 @@ export interface PublicProjectPayload {
 
 // In-Memory Cache (Global across warm serverless invocations)
 let inMemoryCache: { payload: PublicProjectPayload; timestamp: number } | null = null;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds cache for near real-time sync with Firestore
 
 function getCacheFilePath(): string {
   const tmpDir = process.env.TMPDIR || process.env.TEMP || "/tmp";
@@ -149,7 +150,7 @@ export async function readPublicProject(): Promise<PublicProjectPayload | null> 
       if (inMemoryCache) return { ...inMemoryCache.payload, isCached: true };
       const disk = loadDiskCache();
       if (disk) return { ...disk, isCached: true };
-      return null;
+      return { ...seedSnapshot269, updatedAtEpochMs: now, isCached: true, quotaExceeded: true };
     }
 
     const entries = await Promise.all(publicProjectTables.map(async (tableName) => {
@@ -174,7 +175,7 @@ export async function readPublicProject(): Promise<PublicProjectPayload | null> 
   } catch (error) {
     console.error("[readPublicProject] Firestore query error / Quota Exceeded:", error);
 
-    // Fallback gracefully to memory cache or disk cache
+    // Fallback gracefully to memory cache, disk cache, or seed snapshot
     if (inMemoryCache) {
       console.warn("[readPublicProject] Serving stale memory cache due to Firestore error.");
       return { ...inMemoryCache.payload, isCached: true, quotaExceeded: true };
@@ -187,6 +188,7 @@ export async function readPublicProject(): Promise<PublicProjectPayload | null> 
       return { ...disk, isCached: true, quotaExceeded: true };
     }
 
-    throw error;
+    console.warn("[readPublicProject] Serving seed snapshot due to Firestore error.");
+    return { ...seedSnapshot269, updatedAtEpochMs: now, isCached: true, quotaExceeded: true };
   }
 }

@@ -18,7 +18,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[api/public/269-2026] Error fetching public project:", error);
-    const msg = error instanceof Error ? error.message : "Đã xảy ra lỗi khi tải dữ liệu dự án công khai.";
+    const msg = error instanceof Error ? error.message : "Đã xảy ra lỗi khi tải dữ liệu dự án từ Firestore.";
     return NextResponse.json(
       { error: msg },
       { status: 500 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.TextStyle
@@ -1125,28 +1126,28 @@ fun MapHubScreen(
                             }
                         }
                         IconButton(onClick = onToggleMeasure) {
-                                Icon(
-                                    Icons.Outlined.Straighten,
-                                    contentDescription = "Measure",
-                                    tint = if (mapUi.measureEnabled) dangerColor else onSurfaceColor
-                                )
-                            }
-                        IconButton(onClick = { onToggleConfigDialog(true) }) {
-                                Icon(
-                                    Icons.Outlined.Settings,
-                                    contentDescription = "Cấu hình bản đồ",
-                                    tint = onSurfaceColor
-                                )
-                            }
+                            Icon(
+                                Icons.Outlined.Straighten,
+                                contentDescription = "Measure",
+                                tint = if (mapUi.measureEnabled) dangerColor else onSurfaceColor
+                            )
                         }
+                        IconButton(onClick = { onToggleConfigDialog(true) }) {
+                            Icon(
+                                Icons.Outlined.Settings,
+                                contentDescription = "Cấu hình bản đồ",
+                                tint = onSurfaceColor
+                            )
+                        }
+                    }
                 }
             }
 
-            // Popup for selected route � floats over map, no overlay so map touch still works
+            // Popup for selected route — floats over map with adaptive height and sticky controls
             val selectedRoute = mapUi.selectedRoute
             if (selectedRoute != null) {
                 BackHandler { onCloseRouteCard() }
-                // Transparent overlay � click outside the card to dismiss
+                // Transparent overlay — click outside the card to dismiss
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1155,14 +1156,16 @@ fun MapHubScreen(
                             interactionSource = remember { MutableInteractionSource() }
                         ) { onCloseRouteCard() }
                 )
+                val screenHeightDp = LocalConfiguration.current.screenHeightDp
+                val routeMaxBodyHeight = (screenHeightDp * 0.52f).coerceIn(200f, 480f).dp
+
                 ElevatedCard(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 80.dp, start = 12.dp, end = 12.dp)
+                        .padding(top = 76.dp, start = 10.dp, end = 10.dp)
                         .widthIn(max = 720.dp)
                         .wrapContentHeight()
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }
@@ -1171,50 +1174,65 @@ fun MapHubScreen(
                 ) {
                     Column(
                         modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(12.dp)
                             .fillMaxWidth()
                     ) {
-                        // Header
+                        // 1. STICKY HEADER
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Thông tin tuyến", fontWeight = FontWeight.Bold)
-                            IconButton(onClick = onCloseRouteCard) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Close")
+                            Text(
+                                text = "Tuyến: ${selectedRoute.code}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            IconButton(onClick = onCloseRouteCard, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
                             }
                         }
-                        // Properties list
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // 2. SCROLLABLE BODY
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 260.dp)
+                                .heightIn(max = routeMaxBodyHeight)
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             val fiberProperties = routeProperties.filter { it.first == "Số core quang" || it.first == "Sợi kết nối" }
                             val generalProperties = routeProperties.filterNot { it.first == "Số core quang" || it.first == "Sợi kết nối" }
                             RouteInfoSection("Thông tin tuyến", generalProperties)
                             RouteFiberSection(fiberProperties)
+
+                            // Note input
+                            val focusManager = LocalFocusManager.current
+                            Spacer(modifier = Modifier.padding(top = 2.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = mapUi.routeNote,
+                                onValueChange = onAddRouteNote,
+                                placeholder = { Text("Thêm ghi chú tuyến...", fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                            )
                         }
-                        // Note input
-                        val focusManager = LocalFocusManager.current
-                        Spacer(modifier = Modifier.padding(top = 4.dp))
-                        androidx.compose.material3.OutlinedTextField(
-                            value = mapUi.routeNote,
-                            onValueChange = onAddRouteNote,
-                            placeholder = { Text("Thêm ghi chú...", fontSize = 12.sp) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
-                        )
-                        // Action buttons
-                        Spacer(modifier = Modifier.padding(top = 6.dp))
+
+                        // 3. STICKY FOOTER
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             OutlinedButton(
@@ -1224,8 +1242,8 @@ fun MapHubScreen(
                                 },
                                 modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface)
-                            ) { Text("Xem ảnh", fontSize = 10.sp) }
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            ) { Text("Xem ảnh", fontSize = 11.sp) }
                             Button(
                                 onClick = onCapturePicture,
                                 modifier = Modifier.weight(1f),
@@ -1233,8 +1251,8 @@ fun MapHubScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(12.dp))
-                                    Text("Chụp ảnh", fontSize = 10.sp)
+                                    Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(13.dp))
+                                    Text("Chụp ảnh", fontSize = 11.sp)
                                 }
                             }
                             Button(
@@ -1242,7 +1260,7 @@ fun MapHubScreen(
                                 modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                            ) { Text("Báo cáo", fontSize = 10.sp) }
+                            ) { Text("Báo cáo", fontSize = 11.sp) }
                             Button(
                                 onClick = {
                                     notesAndTasksObjectCode = selectedRoute.code
@@ -1254,8 +1272,8 @@ fun MapHubScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Icon(Icons.AutoMirrored.Outlined.Assignment, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(12.dp))
-                                    Text("Ghi chú & CV", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.AutoMirrored.Outlined.Assignment, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(13.dp))
+                                    Text("Ghi chú & CV", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -1266,7 +1284,7 @@ fun MapHubScreen(
             val selectedNode = mapUi.selectedNode
             if (selectedNode != null) {
                 BackHandler { onCloseNodeCard() }
-                // Transparent overlay � click outside the card to dismiss
+                // Transparent overlay — click outside the card to dismiss
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1275,10 +1293,13 @@ fun MapHubScreen(
                             interactionSource = remember { MutableInteractionSource() }
                         ) { onCloseNodeCard() }
                 )
+                val screenHeightDp = LocalConfiguration.current.screenHeightDp
+                val cardMaxBodyHeight = (screenHeightDp * 0.58f).coerceIn(240f, 520f).dp
+
                 ElevatedCard(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 90.dp, start = 12.dp, end = 12.dp)
+                        .padding(top = 76.dp, start = 10.dp, end = 10.dp)
                         .widthIn(max = 760.dp)
                         .wrapContentHeight()
                         .fillMaxWidth()
@@ -1291,115 +1312,205 @@ fun MapHubScreen(
                     Column(
                         modifier = Modifier.padding(12.dp).fillMaxWidth()
                     ) {
-                      Column(
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .heightIn(max = 360.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                      ) {
-                        NodeIdentitySection(
+                        // 1. STICKY HEADER (Fixed on top of card)
+                        NodeIdentityHeader(
                             node = selectedNode,
                             mapUi = mapUi,
                             onSetCenterNode = onSetCenterNode,
                             onCloseNodeCard = onCloseNodeCard
                         )
 
-                        NodeNetworkSection(node = selectedNode, onUpdateNodeSignalStatus = onUpdateNodeSignalStatus)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                        NodeRoutingSection(
-                            node = selectedNode,
-                            isCenter = mapUi.centerNodeCode == selectedNode.code,
-                            centerPathSummary = mapUi.centerPathSummary
-                        )
+                        // 2. SCROLLABLE BODY (Adaptive height)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .heightIn(max = cardMaxBodyHeight)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            NodeIdentityBody(node = selectedNode, mapUi = mapUi)
 
-                        // Only show completion/inspection row if data is meaningful
-                        if (mapUi.expectedCompletion.isNotBlank() || mapUi.lastInspection.isNotBlank()) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                if (mapUi.expectedCompletion.isNotBlank()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("DỰ KIẾN HOÀN THÀNH", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                        Text(mapUi.expectedCompletion, fontSize = 13.sp, color = if (mapUi.status.contains("Chậm")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                            NodeNetworkSection(node = selectedNode, onUpdateNodeSignalStatus = onUpdateNodeSignalStatus)
+
+                            NodeRoutingSection(
+                                node = selectedNode,
+                                isCenter = mapUi.centerNodeCode == selectedNode.code,
+                                centerPathSummary = mapUi.centerPathSummary
+                            )
+
+                            // Only show completion/inspection row if data is meaningful
+                            if (mapUi.expectedCompletion.isNotBlank() || mapUi.lastInspection.isNotBlank()) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    if (mapUi.expectedCompletion.isNotBlank()) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("DỰ KIẾN HOÀN THÀNH", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text(mapUi.expectedCompletion, fontSize = 13.sp, color = if (mapUi.status.contains("Chậm")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                        }
                                     }
-                                }
-                                if (mapUi.lastInspection.isNotBlank()) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("KIỂM TRA GẦN NHẤT", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                        Text(mapUi.lastInspection, fontSize = 13.sp)
+                                    if (mapUi.lastInspection.isNotBlank()) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("KIỂM TRA GẦN NHẤT", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text(mapUi.lastInspection, fontSize = 13.sp)
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        Text("Vật tư / khối lượng", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        if (selectedNodeMaterialLines.isEmpty()) {
-                            Text("Không có dữ liệu vật tư", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))) {
-                                Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
-                                    Text("Nội dung", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("KL thiết kế", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center)
-                                    Text("KL thi công", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Vật tư / khối lượng thi công", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                if (selectedNodeMaterialLines.isNotEmpty()) {
+                                    Text("${selectedNodeMaterialLines.size} hạng mục", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 }
-                                selectedNodeMaterialLines.forEach { materialLine ->
-                                    val itemName = materialLine.itemName
-                                    val itemCount = materialLine.plannedText
-                                    val currentValue = materialLine.actualText
-                                    
-                                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(itemName, modifier = Modifier.weight(0.5f), fontSize = 12.sp)
-                                        Text(itemCount, modifier = Modifier.weight(0.25f), fontSize = 12.sp, textAlign = TextAlign.Center)
-                                        Box(
-                                            modifier = Modifier.weight(0.25f).border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)).padding(vertical = 4.dp),
-                                            contentAlignment = Alignment.Center
+                            }
+
+                            if (selectedNodeMaterialLines.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                        .padding(12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Không có dữ liệu vật tư / hạng mục thi công", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(8.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Nội dung", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("KL thiết kế", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("KL thi công", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 1.dp)
+
+                                    selectedNodeMaterialLines.forEachIndexed { index, materialLine ->
+                                        val itemName = materialLine.itemName
+                                        val itemCount = materialLine.plannedText
+                                        val currentValue = materialLine.actualText
+
+                                        if (index > 0) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f), thickness = 0.5.dp)
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(if (index % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f) else Color.Transparent)
+                                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            val focusManager = LocalFocusManager.current
-                                            BasicTextField(
-                                                value = currentValue,
-                                                onValueChange = { newValue ->
-                                                    if (newValue.all { it.isDigit() } && newValue.length <= 4) {
-                                                        onUpdateMaterialProgress(selectedNode.id, itemName, newValue)
-                                                    }
-                                                },
-                                                textStyle = TextStyle(color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth()
+                                            Text(
+                                                text = itemName,
+                                                modifier = Modifier.weight(0.5f),
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                lineHeight = 16.sp
                                             )
+                                            Text(
+                                                text = itemCount.ifBlank { "-" },
+                                                modifier = Modifier.weight(0.25f),
+                                                fontSize = 12.sp,
+                                                textAlign = TextAlign.Center,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(0.25f)
+                                                    .heightIn(min = 34.dp)
+                                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                val focusManager = LocalFocusManager.current
+                                                BasicTextField(
+                                                    value = currentValue,
+                                                    onValueChange = { newValue ->
+                                                        if (newValue.all { it.isDigit() || it == '.' || it == ',' } && newValue.length <= 8) {
+                                                            onUpdateMaterialProgress(selectedNode.id, itemName, newValue)
+                                                        }
+                                                    },
+                                                    textStyle = TextStyle(
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        textAlign = TextAlign.Center
+                                                    ),
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                                                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                      } // End scrollable column
-                      
-                      Spacer(modifier = Modifier.padding(top = 8.dp))
-                      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                          OutlinedButton(onClick = { onViewPhotos(); showPhotoPopup = true }, modifier = Modifier.weight(1f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Xem ảnh", fontSize = 11.sp) }
-                          Button(onClick = onCapturePicture, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), contentPadding = PaddingValues(horizontal = 4.dp)) {
-                              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                  Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(14.dp))
-                                  Text("Chụp ảnh", fontSize = 11.sp)
-                              }
-                          }
-                          Button(onClick = { onFileReport(selectedNode.code) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Báo cáo", fontSize = 11.sp) }
-                          Button(
-                              onClick = {
-                                  notesAndTasksObjectCode = selectedNode.code
-                                  onLoadNotesAndTasks(selectedNode.code)
-                                  showNotesAndTasksSheet = true
-                              },
-                              modifier = Modifier.weight(1.2f),
-                              colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor),
-                              contentPadding = PaddingValues(horizontal = 4.dp)
-                          ) {
-                              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                  Icon(Icons.AutoMirrored.Outlined.Assignment, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(14.dp))
-                                  Text("Ghi chú & CV", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                              }
-                          }
-                      }
+
+                        // 3. STICKY FOOTER (Fixed at bottom of card)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { onViewPhotos(); showPhotoPopup = true },
+                                modifier = Modifier.weight(1f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                            ) { Text("Xem ảnh", fontSize = 11.sp) }
+                            Button(
+                                onClick = onCapturePicture,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(13.dp))
+                                    Text("Chụp ảnh", fontSize = 11.sp)
+                                }
+                            }
+                            Button(
+                                onClick = { onFileReport(selectedNode.code) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                            ) { Text("Báo cáo", fontSize = 11.sp) }
+                            Button(
+                                onClick = {
+                                    notesAndTasksObjectCode = selectedNode.code
+                                    onLoadNotesAndTasks(selectedNode.code)
+                                    showNotesAndTasksSheet = true
+                                },
+                                modifier = Modifier.weight(1.2f),
+                                colors = ButtonDefaults.buttonColors(containerColor = orangeColor, contentColor = onPrimaryColor),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Icon(Icons.AutoMirrored.Outlined.Assignment, contentDescription = null, tint = onPrimaryColor, modifier = Modifier.size(13.dp))
+                                    Text("Ghi chú & CV", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2032,66 +2143,102 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun NodeIdentitySection(
+private fun NodeIdentityHeader(
     node: GisNode,
     mapUi: MapUiState,
     onSetCenterNode: (GisNode?) -> Unit,
     onCloseNodeCard: () -> Unit
 ) {
     val isCenter = mapUi.centerNodeCode == node.code
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Text("Mã: ${node.code}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                if (isCenter) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .background(Color(0xFFF97316), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("Điểm trung tâm", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
+            Text(
+                text = "Mã: ${node.code}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (node.mapNumberLabel.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Số hiệu: ${node.mapNumberLabel}",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
-            if (mapUi.status.isNotBlank()) {
-                Text(mapUi.status, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = if (isCenter) "Bỏ chọn trung tâm" else "Đặt làm trung tâm",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
+            if (isCenter) {
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable {
-                            if (isCenter) onSetCenterNode(null) else onSetCenterNode(node)
-                        }
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                )
-                IconButton(onClick = onCloseNodeCard, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                        .background(Color(0xFFF97316), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Điểm trung tâm",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
+        if (mapUi.status.isNotBlank()) {
+            Text(
+                text = mapUi.status,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 4.dp)
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = if (isCenter) "Bỏ trung tâm" else "Đặt trung tâm",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable {
+                        if (isCenter) onSetCenterNode(null) else onSetCenterNode(node)
+                    }
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            )
+            IconButton(onClick = onCloseNodeCard, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
 
-        Text(describeNodeByField(node, mapUi.labelField), color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        SectionHeader("Thông tin nút")
+@Composable
+private fun NodeIdentityBody(
+    node: GisNode,
+    mapUi: MapUiState
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (node.contractor.isNotBlank()) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("NHÀ THẦU", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    Text(node.contractor, fontSize = 13.sp)
+                    Text(node.contractor, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("TỌA ĐỘ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Text("TỌA ĐỘ GPS", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Text(
                     "%.6f, %.6f".format(node.latitude, node.longitude),
                     color = MaterialTheme.colorScheme.primary,

@@ -263,13 +263,13 @@ test("GET /api/projects/[projectId]/media - Valid request streams image bytes", 
   assert.strictEqual(body, "image-content");
 });
 
-test("DELETE /api/projects/[projectId]/media - deletes Android-deleted Drive media and writes tombstone", async () => {
-  setAdminAuthMock({ verifyIdToken: async () => ({ uid: "user-member" }) });
+test("DELETE /api/projects/[projectId]/media - deletes Drive media and writes tombstone when user is admin", async () => {
+  setAdminAuthMock({ verifyIdToken: async () => ({ uid: "user-admin", admin: true }) });
   setAdminDbMock(projectDbMock(
     true,
     { mediaStorageFolderId: "project-folder-123" },
     { isActive: true },
-    { "photo-delete": { remoteUrl: "https://drive.google.com/uc?export=view&id=file-delete", androidDeletionStatus: "PENDING" } }
+    { "photo-delete": { remoteUrl: "https://drive.google.com/uc?export=view&id=file-delete", androidDeletionStatus: "SYNCED" } }
   ));
   const mockDrive = new MockDrive();
   setDriveClientMock(mockDrive);
@@ -281,6 +281,28 @@ test("DELETE /api/projects/[projectId]/media - deletes Android-deleted Drive med
   );
   assert.strictEqual(res.status, 200);
   assert.strictEqual(mockDrive.db.has("file-delete"), false);
+});
+
+test("DELETE /api/projects/[projectId]/media - returns 403 FORBIDDEN when user is not admin", async () => {
+  setAdminAuthMock({ verifyIdToken: async () => ({ uid: "user-member", admin: false }) });
+  setAdminDbMock(projectDbMock(
+    true,
+    { mediaStorageFolderId: "project-folder-123" },
+    { isActive: true },
+    { "photo-delete": { remoteUrl: "https://drive.google.com/uc?export=view&id=file-delete" } }
+  ));
+  const mockDrive = new MockDrive();
+  setDriveClientMock(mockDrive);
+  mockDrive.db.set("file-delete", { id: "file-delete", name: "photo.jpg", mimeType: "image/jpeg", parents: [] });
+
+  const res = await DELETE(
+    new Request("http://localhost/api/projects/proj-1/media?photoId=photo-delete", { method: "DELETE", headers: { Authorization: "Bearer valid-token" } }) as any,
+    { params: Promise.resolve({ projectId: "proj-1" }) }
+  );
+  assert.strictEqual(res.status, 403);
+  const data = await res.json();
+  assert.strictEqual(data?.error?.code, "FORBIDDEN");
+  assert.strictEqual(mockDrive.db.has("file-delete"), true);
 });
 
 class MockDrive {

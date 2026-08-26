@@ -311,29 +311,8 @@ function PublicPhotoThumbnail({
 }
 
 export default function PublicProjectPage() {
-  const [data, setData] = useState<PublicData | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("mapsupervision_public_269_2026_cache");
-        if (cached) return JSON.parse(cached);
-      } catch {
-        // ignore
-      }
-    }
-    return null;
-  });
-
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return !localStorage.getItem("mapsupervision_public_269_2026_cache");
-      } catch {
-        return true;
-      }
-    }
-    return true;
-  });
-
+  const [data, setData] = useState<PublicData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("map");
@@ -357,13 +336,24 @@ export default function PublicProjectPage() {
   const [lightboxZoom, setLightboxZoom] = useState(1);
   const lightboxRef = useRef<HTMLDivElement | null>(null);
 
-  // Initialize theme
+  // Initialize theme and local cache after hydration
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("mapsupervision_public_theme") as ThemeMode | null;
       const initial = savedTheme || "dark";
       setTheme(initial);
       document.documentElement.dataset.theme = initial;
+
+      try {
+        const cached = localStorage.getItem("mapsupervision_public_269_2026_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setData(parsed);
+          setLoading(false);
+        }
+      } catch {
+        // ignore
+      }
     }
   }, []);
 
@@ -380,7 +370,9 @@ export default function PublicProjectPage() {
   const loadData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const response = await fetch("/api/public/269-2026");
+      const response = await fetch("/api/public/269-2026", {
+        headers: { "Pragma": "no-cache" }
+      });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Không thể tải dữ liệu dự án.");
       setData(body);
@@ -415,7 +407,7 @@ export default function PublicProjectPage() {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
         void loadData(false);
       }
-    }, 120_000); // 2 minutes interval
+    }, 60_000); // 1 minute auto refresh
     return () => window.clearInterval(timer);
   }, [loadData]);
 

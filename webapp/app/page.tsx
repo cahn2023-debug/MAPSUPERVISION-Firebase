@@ -15,6 +15,7 @@ import {
   createProjectDocument,
   createTaskDocument,
   decideAndroidDeletedPhoto,
+  removeProjectPhotoDocument,
   emptyProjectCollections,
   requestDeleteProjectApi,
   saveProjectMember,
@@ -397,12 +398,14 @@ function PhotoCardItem({
   photo,
   onClick,
   onDelete,
-  deleteBusy = false
+  deleteBusy = false,
+  isAdmin = false
 }: {
   photo: SitePhotoRow;
   onClick: () => void;
   onDelete?: () => void;
   deleteBusy?: boolean;
+  isAdmin?: boolean;
 }) {
   const driveUrl = driveLinkForPhoto(photo);
   const imageUrl = imageUrlForPhoto(photo, 600);
@@ -423,18 +426,19 @@ function PhotoCardItem({
         <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
           {isDone ? "SYNCED" : "PENDING"}
         </span>
-        {photo.androidDeletionStatus === "PENDING" && onDelete ? (
+        {(isAdmin || photo.androidDeletionStatus === "PENDING") && onDelete ? (
           <button
             type="button"
             className="photo-card-delete-button"
             disabled={deleteBusy}
-            aria-label="Delete ảnh trên Google Drive"
+            aria-label="Gỡ ảnh khỏi dự án"
+            title="Gỡ ảnh khỏi dự án (vẫn giữ file gốc trên Google Drive)"
             onClick={(event) => {
               event.stopPropagation();
               onDelete();
             }}
           >
-            Delete
+            Gỡ ảnh
           </button>
         ) : null}
       </div>
@@ -462,6 +466,7 @@ function PhotoCardItem({
 function PhotoLightboxModal({
   photo,
   allPhotos,
+  isAdmin = false,
   onClose,
   onSelectPhoto,
   onPhotoDecision,
@@ -470,9 +475,10 @@ function PhotoLightboxModal({
 }: {
   photo: SitePhotoRow | null;
   allPhotos: SitePhotoRow[];
+  isAdmin?: boolean;
   onClose: () => void;
   onSelectPhoto: (nextPhoto: SitePhotoRow) => void;
-  onPhotoDecision: (photo: SitePhotoRow, decision: "KEEP" | "DELETE_DRIVE") => void;
+  onPhotoDecision: (photo: SitePhotoRow, decision: "KEEP" | "REMOVE_PROJECT" | "DELETE_DRIVE") => void;
   photoActionBusy: boolean;
   photoActionError: string;
 }) {
@@ -631,11 +637,11 @@ function PhotoLightboxModal({
             )}
 
             <div className="photo-lightbox-actions">
+              {photoActionError && <p className="detail-empty" style={{ color: "#ef4444", marginBottom: "8px" }}>{photoActionError}</p>}
               {photo.androidDeletionStatus === "PENDING" && (
                 <div className="photo-detail-section">
                   <strong className="detail-value">Ảnh đã được xóa trên Android</strong>
                   <p className="detail-empty">Bạn có thể giữ ảnh trên Drive hoặc xóa file thật trên Drive.</p>
-                  {photoActionError && <p className="detail-empty">{photoActionError}</p>}
                   <button type="button" className="secondary-button" disabled={photoActionBusy} onClick={() => onPhotoDecision(photo, "KEEP")}>
                     {photoActionBusy ? "Đang xử lý..." : "Giữ lại ảnh trên Drive"}
                   </button>
@@ -654,6 +660,17 @@ function PhotoLightboxModal({
                 >
                   📁 Mở trên Google Drive
                 </a>
+              )}
+              {isAdmin && photo.androidDeletionStatus !== "PENDING" && (
+                <button
+                  type="button"
+                  className="primary-button danger"
+                  disabled={photoActionBusy}
+                  onClick={() => onPhotoDecision(photo, "REMOVE_PROJECT")}
+                  title="Gỡ ảnh khỏi dự án trên Web và Android (bảo lưu file gốc trên Google Drive)"
+                >
+                  {photoActionBusy ? "Đang gỡ ảnh..." : "🗑️ Gỡ khỏi dự án"}
+                </button>
               )}
               <button
                 type="button"
@@ -737,14 +754,20 @@ export default function HomePage() {
   const [photoActionError, setPhotoActionError] = useState("");
   const [appVersion, setAppVersion] = useState("v0.1.0");
 
-  async function handleAndroidPhotoDecision(photo: SitePhotoRow, decision: "KEEP" | "DELETE_DRIVE") {
+  async function handleAndroidPhotoDecision(photo: SitePhotoRow, decision: "KEEP" | "REMOVE_PROJECT" | "DELETE_DRIVE") {
     if (!db || !user || !selectedProjectId || photoActionBusy) return;
-    if (decision === "DELETE_DRIVE" && !window.confirm("Ảnh sẽ bị xóa khỏi Google Drive. Bạn có chắc chắn muốn tiếp tục?")) return;
+    if (decision === "REMOVE_PROJECT") {
+      if (!window.confirm("Ảnh này sẽ được gỡ bỏ khỏi dự án trên Web và các thiết bị Android (tệp gốc trên Google Drive vẫn được bảo lưu an toàn). Bạn có chắc chắn muốn tiếp tục?")) return;
+    } else if (decision === "DELETE_DRIVE") {
+      if (!window.confirm("Bạn có chắc chắn muốn xóa vĩnh viễn ảnh này khỏi Google Drive và dự án không? Thao tác này không thể hoàn tác.")) return;
+    }
     setPhotoActionBusy(true);
     setPhotoActionError("");
     try {
       if (decision === "KEEP") {
         await decideAndroidDeletedPhoto(db, selectedProjectId, photo, "KEEP");
+      } else if (decision === "REMOVE_PROJECT") {
+        await removeProjectPhotoDocument(db, selectedProjectId, photo);
       } else {
         const token = await user.getIdToken();
         const response = await fetch(`/api/projects/${encodeURIComponent(selectedProjectId)}/media?photoId=${encodeURIComponent(photo.id)}`, {
@@ -752,7 +775,9 @@ export default function HomePage() {
           headers: { Authorization: `Bearer ${token}` }
         });
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body?.error?.message || "Không thể xóa ảnh trên Google Drive.");
+        if (!response.ok) {
+          await removeProjectPhotoDocument(db, selectedProjectId, photo);
+        }
       }
       setActiveLightboxPhoto(null);
     } catch (error) {
@@ -1027,6 +1052,9 @@ export default function HomePage() {
     );
   const canEditTasks = hasApprovedGroup(["TASKS", "DEFAULT", "task", "daily_log"]);
   const canEditNotes = hasApprovedGroup(["NOTES", "DEFAULT", "note"]);
+  const isProjectOwner = Boolean(project?.createdByUid && user?.uid && project.createdByUid === user.uid);
+  const isMemberAdmin = currentMember?.role === "ADMIN" || currentMember?.role === "OWNER";
+  const canManagePhotos = isAdmin || isProjectOwner || isMemberAdmin || hasApprovedGroup(["ADMIN", "ALL", "DEFAULT", "MEDIA"]);
 
   const contractorOptions = useMemo(
     () => collectContractorOptions(collections),
@@ -2155,11 +2183,12 @@ export default function HomePage() {
                                           <PhotoCardItem
                                             key={photo.id}
                                             photo={photo}
+                                            isAdmin={canManagePhotos}
                                             onClick={() => {
                                               setActiveLightboxPhoto(photo);
                                               setActiveLightboxPlaylist(group.allPhotos);
                                             }}
-                                            onDelete={() => void handleAndroidPhotoDecision(photo, "DELETE_DRIVE")}
+                                            onDelete={() => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
                                             deleteBusy={photoActionBusy}
                                           />
                                         ))}
@@ -2182,11 +2211,12 @@ export default function HomePage() {
                                         <PhotoCardItem
                                           key={photo.id}
                                           photo={photo}
+                                          isAdmin={canManagePhotos}
                                           onClick={() => {
                                             setActiveLightboxPhoto(photo);
                                             setActiveLightboxPlaylist(group.allPhotos);
                                           }}
-                                          onDelete={() => void handleAndroidPhotoDecision(photo, "DELETE_DRIVE")}
+                                          onDelete={() => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
                                           deleteBusy={photoActionBusy}
                                         />
                                       ))}
@@ -2201,11 +2231,12 @@ export default function HomePage() {
                                   <PhotoCardItem
                                     key={photo.id}
                                     photo={photo}
+                                    isAdmin={canManagePhotos}
                                     onClick={() => {
                                       setActiveLightboxPhoto(photo);
                                       setActiveLightboxPlaylist(group.allPhotos);
                                     }}
-                                    onDelete={() => void handleAndroidPhotoDecision(photo, "DELETE_DRIVE")}
+                                    onDelete={() => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
                                     deleteBusy={photoActionBusy}
                                   />
                                 ))}
@@ -2269,6 +2300,7 @@ export default function HomePage() {
           <PhotoLightboxModal
             photo={activeLightboxPhoto}
             allPhotos={activeLightboxPlaylist}
+            isAdmin={canManagePhotos}
             onClose={() => setActiveLightboxPhoto(null)}
             onSelectPhoto={(next) => setActiveLightboxPhoto(next)}
             onPhotoDecision={handleAndroidPhotoDecision}

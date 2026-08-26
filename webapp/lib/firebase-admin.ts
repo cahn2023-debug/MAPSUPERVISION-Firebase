@@ -112,12 +112,12 @@ let authMock: any = null;
 let dbMock: any = null;
 
 export function getAdminAuth() {
-  if (process.env.NODE_ENV === "test" && authMock) return authMock;
+  if (authMock) return authMock;
   return getAuth(adminApp());
 }
 
 export function getAdminDb() {
-  if (process.env.NODE_ENV === "test" && dbMock) return dbMock;
+  if (dbMock) return dbMock;
   return getFirestore(adminApp());
 }
 
