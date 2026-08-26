@@ -6,6 +6,7 @@ import {
   driveClient,
   configuredRootFolderId,
   ensureProjectFolder,
+  findProjectFolderIdByNameOrId,
   getLatestDriveSnapshot,
   pruneOldDriveSnapshots,
   findSnapshotsFolder
@@ -160,7 +161,8 @@ export async function readDriveSnapshot269(): Promise<PublicProjectPayload | nul
   try {
     const drive = driveClient();
     const rootFolderId = configuredRootFolderId();
-    const projectFolderId = await ensureProjectFolder(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
+    const projectFolderId = await findProjectFolderIdByNameOrId(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026")
+      || await ensureProjectFolder(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
     const snapshotRes = await getLatestDriveSnapshot(drive, projectFolderId);
     if (snapshotRes && snapshotRes.payload && snapshotRes.payload.project) {
       const payload = snapshotRes.payload as PublicProjectPayload;
@@ -176,11 +178,11 @@ export async function readDriveSnapshot269(): Promise<PublicProjectPayload | nul
   return null;
 }
 
-export async function readPublicProject(): Promise<PublicProjectPayload | null> {
+export async function readPublicProject(bypassCache = false): Promise<PublicProjectPayload | null> {
   const now = Date.now();
 
   // Return fresh in-memory cache if valid (0 reads!)
-  if (inMemoryCache && now - inMemoryCache.timestamp < CACHE_TTL_MS) {
+  if (!bypassCache && inMemoryCache && now - inMemoryCache.timestamp < CACHE_TTL_MS) {
     return inMemoryCache.payload;
   }
 

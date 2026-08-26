@@ -589,6 +589,82 @@ export async function ensureSnapshotsFolder(
   return ensureChildFolder(drive, projectFolderId, SNAPSHOTS_FOLDER_NAME);
 }
 
+export async function findProjectFolderIdByNameOrId(
+  drive: drive_v3.Drive,
+  rootFolderId: string,
+  projectId: string,
+  projectName: string
+): Promise<string | null> {
+  // 1. By appProperties
+  try {
+    const listRes = await drive.files.list({
+      q: [
+        `'${escapeDriveQuery(rootFolderId)}' in parents`,
+        `appProperties has { key='mapsupervisionProjectId' and value='${escapeDriveQuery(projectId)}' }`,
+        `mimeType = '${folderMimeType}'`,
+        "trashed = false"
+      ].join(" and "),
+      fields: "files(id,name)",
+      pageSize: 1,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    if (listRes.data.files?.[0]?.id) return listRes.data.files[0].id;
+  } catch (err) {
+    console.warn("[findProjectFolderIdByNameOrId] appProperties query error:", err);
+  }
+
+  // 2. By exact sanitized folder name
+  const folderName = sanitizeSegment(projectName);
+  const byName = await findChildFolder(drive, rootFolderId, folderName);
+  if (byName) return byName;
+
+  // 3. Fallback: Scan root folder child folders for keyword matching
+  try {
+    const scanRes = await drive.files.list({
+      q: [
+        `'${escapeDriveQuery(rootFolderId)}' in parents`,
+        `mimeType = '${folderMimeType}'`,
+        "trashed = false"
+      ].join(" and "),
+      fields: "files(id,name)",
+      pageSize: 50,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    const matched = scanRes.data.files?.find(f => {
+      const n = (f.name || "").toLowerCase();
+      return n.includes("269") && n.includes("2026");
+    });
+    if (matched?.id) return matched.id;
+  } catch (scanErr) {
+    console.warn("[findProjectFolderIdByNameOrId] scan error:", scanErr);
+  }
+
+  return null;
+}
+
+async function parseDriveFileStreamOrString(data: any): Promise<any> {
+  if (typeof data === "string") {
+    return JSON.parse(data);
+  }
+  if (Buffer.isBuffer(data)) {
+    return JSON.parse(data.toString("utf8"));
+  }
+  if (data && typeof data === "object") {
+    if (typeof (data as any)[Symbol.asyncIterator] === "function" || typeof (data as any).on === "function") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of (data as any)) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const text = Buffer.concat(chunks).toString("utf8");
+      return JSON.parse(text);
+    }
+    return data;
+  }
+  return data;
+}
+
 export async function getLatestDriveSnapshot(
   drive: drive_v3.Drive,
   projectFolderId: string
@@ -624,7 +700,7 @@ export async function getLatestDriveSnapshot(
     { responseType: "text" }
   );
 
-  const rawData = typeof getRes.data === "string" ? JSON.parse(getRes.data) : getRes.data;
+  const rawData = await parseDriveFileStreamOrString(getRes.data);
   return {
     payload: rawData,
     fileId: latestFile.id,
