@@ -709,6 +709,57 @@ export async function getLatestDriveSnapshot(
   };
 }
 
+export async function getLatestDriveSnapshotByProjectIdOrFolder(
+  drive: drive_v3.Drive,
+  projectId: string,
+  projectFolderId?: string | null
+): Promise<{ payload: any; fileId: string; fileName: string; createdTime?: string } | null> {
+  // Strategy 1: Direct search by file name across drives
+  try {
+    const directRes = await drive.files.list({
+      q: [
+        `name contains 'snapshot_${escapeDriveQuery(projectId)}'`,
+        `mimeType != '${folderMimeType}'`,
+        "trashed = false"
+      ].join(" and "),
+      fields: "files(id,name,createdTime,modifiedTime,parents)",
+      orderBy: "createdTime desc",
+      pageSize: 5,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: "allDrives"
+    });
+    const files = directRes.data.files || [];
+    if (files.length > 0 && files[0].id) {
+      const target = files[0];
+      const getRes = await drive.files.get(
+        {
+          fileId: target.id,
+          alt: "media",
+          supportsAllDrives: true
+        },
+        { responseType: "text" }
+      );
+      const rawData = await parseDriveFileStreamOrString(getRes.data);
+      return {
+        payload: rawData,
+        fileId: target.id,
+        fileName: target.name || "",
+        createdTime: target.createdTime || undefined
+      };
+    }
+  } catch (directErr) {
+    console.warn("[getLatestDriveSnapshotByProjectIdOrFolder] direct query warning:", directErr);
+  }
+
+  // Strategy 2: Search within project folder
+  if (projectFolderId) {
+    return getLatestDriveSnapshot(drive, projectFolderId);
+  }
+
+  return null;
+}
+
 export async function pruneOldDriveSnapshots(
   drive: drive_v3.Drive,
   snapshotsFolderId: string,

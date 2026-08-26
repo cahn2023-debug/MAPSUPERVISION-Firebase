@@ -8,6 +8,7 @@ import {
   ensureProjectFolder,
   findProjectFolderIdByNameOrId,
   getLatestDriveSnapshot,
+  getLatestDriveSnapshotByProjectIdOrFolder,
   pruneOldDriveSnapshots,
   findSnapshotsFolder
 } from "./google-drive-media";
@@ -160,15 +161,22 @@ export async function readDriveSnapshot269(): Promise<PublicProjectPayload | nul
   }
   try {
     const drive = driveClient();
-    const rootFolderId = configuredRootFolderId();
-    const projectFolderId = await findProjectFolderIdByNameOrId(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026")
-      || await ensureProjectFolder(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
-    const snapshotRes = await getLatestDriveSnapshot(drive, projectFolderId);
+    let projectFolderId: string | null = null;
+    try {
+      const rootFolderId = configuredRootFolderId();
+      projectFolderId = await findProjectFolderIdByNameOrId(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
+    } catch (folderErr) {
+      console.warn("[readDriveSnapshot269] root folder lookup error:", folderErr);
+    }
+
+    const snapshotRes = await getLatestDriveSnapshotByProjectIdOrFolder(drive, KNOWN_PUBLIC_PROJECT_ID, projectFolderId);
     if (snapshotRes && snapshotRes.payload && snapshotRes.payload.project) {
       const payload = snapshotRes.payload as PublicProjectPayload;
-      const snapshotsFolderId = await findSnapshotsFolder(drive, projectFolderId);
-      if (snapshotsFolderId) {
-        void pruneOldDriveSnapshots(drive, snapshotsFolderId);
+      if (projectFolderId) {
+        const snapshotsFolderId = await findSnapshotsFolder(drive, projectFolderId);
+        if (snapshotsFolderId) {
+          void pruneOldDriveSnapshots(drive, snapshotsFolderId);
+        }
       }
       return payload;
     }
