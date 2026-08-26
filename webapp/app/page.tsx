@@ -9,6 +9,8 @@ import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, regist
 import { imageSourceUrl } from "@/lib/google-drive-image";
 import {
   createDailyLogDocument,
+  createNoteDocument,
+  deleteProjectTableDocument,
   deleteProjectMemberRecord,
   createProjectDocument,
   createTaskDocument,
@@ -20,6 +22,7 @@ import {
   subscribeProjectDocument,
   subscribeProjectMembers,
   subscribeProjectAccessRequests,
+  subscribeCurrentProjectAccessRequest,
   transitionProjectAccessRequest,
   subscribeProjects,
   subscribeLatestCatalogMigration,
@@ -28,6 +31,9 @@ import {
   syncTables,
   upsertUserProfile,
   updateTaskStatusDocument,
+  updateTaskDocument,
+  updateDailyLogDocument,
+  updateNoteDocument,
   type ContractorScope,
   type ProjectCollections,
   type ProjectDoc,
@@ -56,7 +62,14 @@ type DailyLogDraft = {
   weather: string;
 };
 
+type NoteDraft = {
+  title: string;
+  objectCode: string;
+  content: string;
+};
+
 type AuthMode = "signIn" | "register";
+type Theme = "light" | "dark";
 
 const GisWebMap = dynamic(
   () => import("@/components/GisWebMap").then((module) => module.GisWebMap),
@@ -76,6 +89,7 @@ const emptyDailyLog: DailyLogDraft = {
   categoryName: "",
   weather: ""
 };
+const emptyNote: NoteDraft = { title: "", objectCode: "", content: "" };
 
 const emptyProjectDraft: ProjectDraft = { name: "", projectCode: "" };
 
@@ -639,12 +653,13 @@ export default function HomePage() {
   const [project, setProject] = useState<ProjectDoc | null>(null);
   const [collections, setCollections] = useState<ProjectCollections>(() => emptyProjectCollections());
   const [currentMember, setCurrentMember] = useState<ProjectMemberRow | null>(null);
+  const [currentAccessRequest, setCurrentAccessRequest] = useState<ProjectAccessRequestRow | null>(null);
   const [usersDirectory, setUsersDirectory] = useState<UserProfileRow[]>([]);
   const [projectMembers, setProjectMembers] = useState<ProjectMemberRow[]>([]);
   const [accessRequests, setAccessRequests] = useState<ProjectAccessRequestRow[]>([]);
   const [accessRequestWriteState, setAccessRequestWriteState] = useState("");
   const [accessRequestBusyId, setAccessRequestBusyId] = useState<string | null>(null);
-  const [accessRequestGroups, setAccessRequestGroups] = useState("gis_node");
+  const [accessRequestGroups, setAccessRequestGroups] = useState("DEFAULT,TASKS,NOTES");
   const [accessRequestScope, setAccessRequestScope] = useState<ContractorScope>("ALL");
   const [accessRequestContractors, setAccessRequestContractors] = useState("");
   const [selectedManagedUid, setSelectedManagedUid] = useState("");
@@ -655,6 +670,13 @@ export default function HomePage() {
   const [accessError, setAccessError] = useState("");
   const [taskDraft, setTaskDraft] = useState(emptyTask);
   const [dailyLogDraft, setDailyLogDraft] = useState(emptyDailyLog);
+  const [noteDraft, setNoteDraft] = useState(emptyNote);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskDraft, setEditingTaskDraft] = useState(emptyTask);
+  const [editingDailyLogId, setEditingDailyLogId] = useState<string | null>(null);
+  const [editingDailyLogDraft, setEditingDailyLogDraft] = useState(emptyDailyLog);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteDraft, setEditingNoteDraft] = useState(emptyNote);
   const [writeState, setWriteState] = useState("");
   const [writeBusy, setWriteBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "media" | "admin">("overview");
@@ -663,6 +685,7 @@ export default function HomePage() {
   const [mapFilterContractor, setMapFilterContractor] = useState("");
   const [mapFilterWork, setMapFilterWork] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -673,6 +696,26 @@ export default function HomePage() {
   const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<SitePhotoRow | null>(null);
   const [activeLightboxPlaylist, setActiveLightboxPlaylist] = useState<SitePhotoRow[]>([]);
   const [appVersion, setAppVersion] = useState("v0.1.0");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("mapsupervision-theme");
+    const initialTheme: Theme = stored === "light" || stored === "dark"
+      ? stored
+      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    setTheme(initialTheme);
+    document.documentElement.dataset.theme = initialTheme;
+    document.documentElement.style.colorScheme = initialTheme;
+  }, []);
+
+  function toggleTheme() {
+    setTheme((current) => {
+      const next: Theme = current === "dark" ? "light" : "dark";
+      window.localStorage.setItem("mapsupervision-theme", next);
+      document.documentElement.dataset.theme = next;
+      document.documentElement.style.colorScheme = next;
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetch("/version.json")
@@ -820,6 +863,20 @@ export default function HomePage() {
   }, [selectedProjectId, user]);
 
   useEffect(() => {
+    if (!db || !user || !selectedProjectId || isAdmin) {
+      setCurrentAccessRequest(null);
+      return;
+    }
+    return subscribeCurrentProjectAccessRequest(
+      db,
+      selectedProjectId,
+      user.uid,
+      (request) => setCurrentAccessRequest(request),
+      (error) => setWriteState(errorMessage(error))
+    );
+  }, [selectedProjectId, user, isAdmin]);
+
+  useEffect(() => {
     if (!db || !user || !selectedProjectId) {
       setCurrentMember(null);
       return;
@@ -896,6 +953,15 @@ export default function HomePage() {
     () => filterCollectionsForMember(collections, currentMember, isAdmin),
     [collections, currentMember, isAdmin]
   );
+
+  const allowedDataGroups = currentAccessRequest?.allowedDataGroups ?? [];
+  const hasApprovedGroup = (groups: string[]) =>
+    isAdmin || (
+      currentAccessRequest?.status === "APPROVED" &&
+      allowedDataGroups.some((group) => groups.includes(group))
+    );
+  const canEditTasks = hasApprovedGroup(["TASKS", "DEFAULT", "task", "daily_log"]);
+  const canEditNotes = hasApprovedGroup(["NOTES", "DEFAULT", "note"]);
 
   const contractorOptions = useMemo(
     () => collectContractorOptions(collections),
@@ -1130,7 +1196,7 @@ export default function HomePage() {
   }
 
   async function handleCreateTask() {
-    if (!db || !selectedProjectId || !taskDraft.title.trim()) return;
+    if (!db || !selectedProjectId || !canEditTasks || !taskDraft.title.trim()) return;
     const firestore = db;
     setWriteBusy(true);
     setWriteState("Đang tạo công việc...");
@@ -1146,7 +1212,7 @@ export default function HomePage() {
   }
 
   async function handleCreateDailyLog() {
-    if (!db || !selectedProjectId || !dailyLogDraft.workItem.trim()) return;
+    if (!db || !selectedProjectId || !canEditTasks || !dailyLogDraft.workItem.trim()) return;
     const firestore = db;
     setWriteBusy(true);
     setWriteState("Đang tạo nhật ký thi công...");
@@ -1161,8 +1227,121 @@ export default function HomePage() {
     }
   }
 
+  async function handleCreateNote() {
+    if (!db || !selectedProjectId || !canEditNotes || !noteDraft.content.trim()) return;
+    setWriteBusy(true);
+    setWriteState("Đang tạo ghi chú dùng chung...");
+    try {
+      await createNoteDocument(db, selectedProjectId, noteDraft.title, noteDraft.content, noteDraft.objectCode);
+      setNoteDraft(emptyNote);
+      setWriteState("Đã đồng bộ ghi chú lên Firebase.");
+    } catch (error) {
+      setWriteState(errorMessage(error));
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
+  function startTaskEdit(task: Record<string, unknown>) {
+    setEditingTaskId(String(task.id ?? ""));
+    setEditingTaskDraft({ title: text(task, "title"), description: text(task, "description") });
+  }
+
+  async function handleUpdateTask(task: Record<string, unknown>) {
+    if (!db || !selectedProjectId || !canEditTasks) return;
+    setWriteBusy(true);
+    setWriteState("Đang lưu công việc...");
+    try {
+      await updateTaskDocument(db, selectedProjectId, task, editingTaskDraft);
+      setEditingTaskId(null);
+      setWriteState("Đã cập nhật công việc.");
+    } catch (error) {
+      setWriteState(errorMessage(error));
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
+  async function handleUpdateDailyLog(log: Record<string, unknown>) {
+    if (!db || !selectedProjectId || !canEditTasks) return;
+    setWriteBusy(true);
+    setWriteState("Đang lưu nhật ký...");
+    try {
+      await updateDailyLogDocument(db, selectedProjectId, log, {
+        workItem: editingDailyLogDraft.workItem,
+        note: editingDailyLogDraft.note,
+        manpower: Number(editingDailyLogDraft.manpower || 0),
+        volume: Number(editingDailyLogDraft.volume || 0),
+        unit: editingDailyLogDraft.unit,
+        categoryName: editingDailyLogDraft.categoryName,
+        weather: editingDailyLogDraft.weather
+      });
+      setEditingDailyLogId(null);
+      setWriteState("Đã cập nhật nhật ký.");
+    } catch (error) {
+      setWriteState(errorMessage(error));
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
+  function startDailyLogEdit(log: Record<string, unknown>) {
+    setEditingDailyLogId(String(log.id ?? ""));
+    setEditingDailyLogDraft({
+      workItem: text(log, "workItem"),
+      note: text(log, "note"),
+      manpower: String(log.manpower ?? 0),
+      volume: String(log.volume ?? 0),
+      unit: text(log, "unit") || "m",
+      categoryName: text(log, "categoryName"),
+      weather: text(log, "weather")
+    });
+  }
+
+  function startNoteEdit(note: Record<string, unknown>) {
+    setEditingNoteId(String(note.id ?? ""));
+    setEditingNoteDraft({
+      title: text(note, "title", "objectCode"),
+      objectCode: text(note, "objectCode"),
+      content: text(note, "content", "note", "description")
+    });
+  }
+
+  async function handleUpdateNote(note: Record<string, unknown>) {
+    if (!db || !selectedProjectId || !canEditNotes) return;
+    setWriteBusy(true);
+    setWriteState("Đang lưu ghi chú...");
+    try {
+      await updateNoteDocument(db, selectedProjectId, note, editingNoteDraft);
+      setEditingNoteId(null);
+      setWriteState("Đã cập nhật ghi chú dùng chung.");
+    } catch (error) {
+      setWriteState(errorMessage(error));
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
+  async function handleDeleteProjectRow(tableName: "task" | "daily_log" | "note", row: Record<string, unknown>) {
+    const canEdit = tableName === "note" ? canEditNotes : canEditTasks;
+    if (!db || !selectedProjectId || !canEdit) return;
+    setWriteBusy(true);
+    setWriteState("Đang đánh dấu xóa bản ghi...");
+    try {
+      await deleteProjectTableDocument(db, selectedProjectId, tableName, row);
+      setEditingTaskId(null);
+      setEditingDailyLogId(null);
+      setEditingNoteId(null);
+      setWriteState("Đã xóa và đồng bộ tombstone.");
+    } catch (error) {
+      setWriteState(errorMessage(error));
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
   async function handleTaskStatus(task: Record<string, unknown>, status: TaskRow["status"]) {
-    if (!db || !selectedProjectId) return;
+    if (!db || !selectedProjectId || !canEditTasks) return;
     const firestore = db;
     setWriteState("Đang cập nhật trạng thái công việc...");
     try {
@@ -1176,6 +1355,7 @@ export default function HomePage() {
   if (!firebaseReady) {
     return (
       <main className="shell centered">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} floating />
         <section className="auth-card">
           <p className="eyebrow">MapSupervision Sync</p>
           <h1>Thiếu cấu hình Firebase</h1>
@@ -1190,6 +1370,7 @@ export default function HomePage() {
   if (!authReady) {
     return (
       <main className="shell centered">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} floating />
         <section className="auth-card" style={{ textAlign: "center" }}>
           <p className="eyebrow loading-pulse">Đang kết nối</p>
           <h1>Đang xác thực tài khoản...</h1>
@@ -1201,6 +1382,7 @@ export default function HomePage() {
   if (!user) {
     return (
       <main className="shell centered">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} floating />
         <section className="auth-card">
           <p className="eyebrow">Firebase Auth</p>
           <h1>{authMode === "register" ? "Đăng ký tài khoản" : "Đăng nhập hệ thống"}</h1>
@@ -1320,6 +1502,7 @@ export default function HomePage() {
           <div className="account-card">
             <span className="account-email">{user.email ?? "Tài khoản Firebase"}</span>
             <code className="account-uid">{user.uid}</code>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button className="ghost-button" type="button" onClick={() => void handleSignOut()}>
               Đăng xuất
             </button>
@@ -1561,25 +1744,25 @@ export default function HomePage() {
             <>
               {/* Forms for writing back tasks and logs */}
               <section className="write-grid">
-                <Panel title="Chỉ định nhiệm vụ mới" subtitle={writeState && writeState.includes("task") ? writeState : undefined}>
-                  <TextInput label="Tiêu đề công việc" value={taskDraft.title} onChange={(value) => setTaskDraft((current) => ({ ...current, title: value }))} />
-                  <TextArea label="Mô tả chi tiết" value={taskDraft.description} onChange={(value) => setTaskDraft((current) => ({ ...current, description: value }))} />
-                  <button className="primary-button" type="button" disabled={writeBusy || !selectedProjectId || !taskDraft.title.trim()} onClick={() => void handleCreateTask()}>
+                <Panel title="Chỉ định nhiệm vụ mới" subtitle={writeState && writeState.includes("task") ? writeState : canEditTasks ? "Tạo nhiệm vụ đồng bộ với Android" : "Bạn chưa có quyền TASKS để chỉnh sửa."}>
+                  <TextInput disabled={!canEditTasks} label="Tiêu đề công việc" value={taskDraft.title} onChange={(value) => setTaskDraft((current) => ({ ...current, title: value }))} />
+                  <TextArea disabled={!canEditTasks} label="Mô tả chi tiết" value={taskDraft.description} onChange={(value) => setTaskDraft((current) => ({ ...current, description: value }))} />
+                  <button className="primary-button" type="button" disabled={!canEditTasks || writeBusy || !selectedProjectId || !taskDraft.title.trim()} onClick={() => void handleCreateTask()}>
                     Ghi công việc lên Firebase
                   </button>
                 </Panel>
 
-                <Panel title="Tạo nhật ký thi công" subtitle={writeState && writeState.includes("nhật ký") ? writeState : undefined}>
-                  <TextInput label="Hạng mục công việc" value={dailyLogDraft.workItem} onChange={(value) => setDailyLogDraft((current) => ({ ...current, workItem: value }))} />
+                <Panel title="Tạo nhật ký thi công" subtitle={writeState && writeState.includes("nhật ký") ? writeState : canEditTasks ? "Ghi nhận dữ liệu tại hiện trường" : "Bạn chưa có quyền TASKS để chỉnh sửa."}>
+                  <TextInput disabled={!canEditTasks} label="Hạng mục công việc" value={dailyLogDraft.workItem} onChange={(value) => setDailyLogDraft((current) => ({ ...current, workItem: value }))} />
                   <div className="three-cols">
-                    <TextInput label="Nhân công (người)" value={dailyLogDraft.manpower} onChange={(value) => setDailyLogDraft((current) => ({ ...current, manpower: value }))} />
-                    <TextInput label="Khối lượng" value={dailyLogDraft.volume} onChange={(value) => setDailyLogDraft((current) => ({ ...current, volume: value }))} />
-                    <TextInput label="Đơn vị tính" value={dailyLogDraft.unit} onChange={(value) => setDailyLogDraft((current) => ({ ...current, unit: value }))} />
+                    <TextInput disabled={!canEditTasks} label="Nhân công (người)" value={dailyLogDraft.manpower} onChange={(value) => setDailyLogDraft((current) => ({ ...current, manpower: value }))} />
+                    <TextInput disabled={!canEditTasks} label="Khối lượng" value={dailyLogDraft.volume} onChange={(value) => setDailyLogDraft((current) => ({ ...current, volume: value }))} />
+                    <TextInput disabled={!canEditTasks} label="Đơn vị tính" value={dailyLogDraft.unit} onChange={(value) => setDailyLogDraft((current) => ({ ...current, unit: value }))} />
                   </div>
-                  <TextInput label="Phân nhóm hạng mục" value={dailyLogDraft.categoryName} onChange={(value) => setDailyLogDraft((current) => ({ ...current, categoryName: value }))} />
-                  <TextInput label="Điều kiện thời tiết" value={dailyLogDraft.weather} onChange={(value) => setDailyLogDraft((current) => ({ ...current, weather: value }))} />
-                  <TextArea label="Ghi chú thi công" value={dailyLogDraft.note} onChange={(value) => setDailyLogDraft((current) => ({ ...current, note: value }))} />
-                  <button className="primary-button" type="button" disabled={writeBusy || !selectedProjectId || !dailyLogDraft.workItem.trim()} onClick={() => void handleCreateDailyLog()}>
+                  <TextInput disabled={!canEditTasks} label="Phân nhóm hạng mục" value={dailyLogDraft.categoryName} onChange={(value) => setDailyLogDraft((current) => ({ ...current, categoryName: value }))} />
+                  <TextInput disabled={!canEditTasks} label="Điều kiện thời tiết" value={dailyLogDraft.weather} onChange={(value) => setDailyLogDraft((current) => ({ ...current, weather: value }))} />
+                  <TextArea disabled={!canEditTasks} label="Ghi chú thi công" value={dailyLogDraft.note} onChange={(value) => setDailyLogDraft((current) => ({ ...current, note: value }))} />
+                  <button className="primary-button" type="button" disabled={!canEditTasks || writeBusy || !selectedProjectId || !dailyLogDraft.workItem.trim()} onClick={() => void handleCreateDailyLog()}>
                     Ghi nhật ký lên Firebase
                   </button>
                 </Panel>
@@ -1592,17 +1775,30 @@ export default function HomePage() {
                     rows={visibleCollections.task}
                     empty="Chưa có công việc nào được tạo."
                     render={(task) => (
-                      <>
-                        <strong>{text(task, "title") || "Công việc chưa đặt tên"}</strong>
-                        <span>{text(task, "description") || "Không có mô tả chi tiết."}</span>
-                        <div className="row-actions">
-                          {(["TODO", "IN_PROGRESS", "DONE"] as const).map((status) => (
-                            <button key={status} className={String(task.status ?? "TODO") === status ? "tiny-button active" : "tiny-button"} type="button" onClick={() => void handleTaskStatus(task, status)}>
-                              {status}
-                            </button>
-                          ))}
-                        </div>
-                      </>
+                      editingTaskId === String(task.id ?? "") ? (
+                        <>
+                          <TextInput label="Tiêu đề" value={editingTaskDraft.title} onChange={(value) => setEditingTaskDraft((current) => ({ ...current, title: value }))} />
+                          <TextArea label="Mô tả" value={editingTaskDraft.description} onChange={(value) => setEditingTaskDraft((current) => ({ ...current, description: value }))} />
+                          <div className="row-actions">
+                            <button className="primary-button" type="button" disabled={writeBusy || !editingTaskDraft.title.trim()} onClick={() => void handleUpdateTask(task)}>Lưu</button>
+                            <button className="secondary-button" type="button" disabled={writeBusy} onClick={() => setEditingTaskId(null)}>Hủy</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{text(task, "title") || "Công việc chưa đặt tên"}</strong>
+                          <span>{text(task, "description") || "Không có mô tả chi tiết."}</span>
+                          <div className="row-actions">
+                            {(["TODO", "IN_PROGRESS", "DONE"] as const).map((status) => (
+                              <button key={status} className={String(task.status ?? "TODO") === status ? "tiny-button active" : "tiny-button"} type="button" disabled={!canEditTasks || writeBusy} onClick={() => void handleTaskStatus(task, status)}>
+                                {status}
+                              </button>
+                            ))}
+                            {canEditTasks ? <button className="tiny-button" type="button" disabled={writeBusy} onClick={() => startTaskEdit(task)}>Sửa</button> : null}
+                            {canEditTasks ? <button className="tiny-button danger" type="button" disabled={writeBusy} onClick={() => void handleDeleteProjectRow("task", task)}>Xóa</button> : null}
+                          </div>
+                        </>
+                      )
                     )}
                   />
                 </Panel>
@@ -1623,11 +1819,35 @@ export default function HomePage() {
                     rows={visibleCollections.daily_log}
                     empty="Chưa ghi nhận nhật ký nào."
                     render={(log) => (
-                      <>
-                        <strong>{text(log, "workItem") || "Nhật ký thi công"}</strong>
-                        <span>Nhân công: {formatNumber(log.manpower, "người")} · {text(log, "categoryName")} : {formatNumber(log.volume, text(log, "unit"))}</span>
-                        <small>Thời gian: {formatDateTime(log.updatedAtEpochMs ?? log.createdAtEpochMs)}</small>
-                      </>
+                      editingDailyLogId === String(log.id ?? "") ? (
+                        <>
+                          <TextInput label="Hạng mục" value={editingDailyLogDraft.workItem} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, workItem: value }))} />
+                          <div className="three-cols">
+                            <TextInput label="Nhân công" value={editingDailyLogDraft.manpower} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, manpower: value }))} />
+                            <TextInput label="Khối lượng" value={editingDailyLogDraft.volume} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, volume: value }))} />
+                            <TextInput label="Đơn vị" value={editingDailyLogDraft.unit} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, unit: value }))} />
+                          </div>
+                          <TextInput label="Phân nhóm" value={editingDailyLogDraft.categoryName} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, categoryName: value }))} />
+                          <TextInput label="Thời tiết" value={editingDailyLogDraft.weather} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, weather: value }))} />
+                          <TextArea label="Ghi chú" value={editingDailyLogDraft.note} onChange={(value) => setEditingDailyLogDraft((current) => ({ ...current, note: value }))} />
+                          <div className="row-actions">
+                            <button className="primary-button" type="button" disabled={writeBusy || !editingDailyLogDraft.workItem.trim()} onClick={() => void handleUpdateDailyLog(log)}>Lưu</button>
+                            <button className="secondary-button" type="button" disabled={writeBusy} onClick={() => setEditingDailyLogId(null)}>Hủy</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{text(log, "workItem") || "Nhật ký thi công"}</strong>
+                          <span>Nhân công: {formatNumber(log.manpower, "người")} · {text(log, "categoryName")} : {formatNumber(log.volume, text(log, "unit"))}</span>
+                          <small>Thời gian: {formatDateTime(log.updatedAtEpochMs ?? log.createdAtEpochMs)}</small>
+                          {canEditTasks ? (
+                            <div className="row-actions">
+                              <button className="tiny-button" type="button" disabled={writeBusy} onClick={() => startDailyLogEdit(log)}>Sửa</button>
+                              <button className="tiny-button danger" type="button" disabled={writeBusy} onClick={() => void handleDeleteProjectRow("daily_log", log)}>Xóa</button>
+                            </div>
+                          ) : null}
+                        </>
+                      )
                     )}
                   />
                 </Panel>
@@ -1873,15 +2093,39 @@ export default function HomePage() {
               )}
 
               {/* Quick Notes */}
-              <Panel title="Ghi chú nhanh thực địa" subtitle="Đồng bộ ghi chú từ hiện trường">
+              <Panel title="Ghi chú dùng chung cấp dự án" subtitle={canEditNotes ? "Đồng bộ hai chiều với Android" : "Bạn chưa có quyền NOTES để chỉnh sửa."}>
+                <TextInput disabled={!canEditNotes} label="Tiêu đề / mã đối tượng" value={noteDraft.title} onChange={(value) => setNoteDraft((current) => ({ ...current, title: value }))} />
+                <TextInput disabled={!canEditNotes} label="Mã đối tượng (Android)" value={noteDraft.objectCode} onChange={(value) => setNoteDraft((current) => ({ ...current, objectCode: value }))} />
+                <TextArea disabled={!canEditNotes} label="Nội dung ghi chú" value={noteDraft.content} onChange={(value) => setNoteDraft((current) => ({ ...current, content: value }))} />
+                <button className="primary-button" type="button" disabled={!canEditNotes || writeBusy || !noteDraft.content.trim()} onClick={() => void handleCreateNote()}>
+                  Ghi chú lên Firebase
+                </button>
                 <List
                   rows={visibleCollections.note}
                   empty="Chưa có ghi chú nhanh nào."
                   render={(note) => (
-                    <>
-                      <strong>{text(note, "title", "objectCode") || "Ghi chú"}</strong>
-                      <span>{text(note, "content", "note", "description")}</span>
-                    </>
+                    editingNoteId === String(note.id ?? "") ? (
+                      <>
+                        <TextInput label="Tiêu đề / mã đối tượng" value={editingNoteDraft.title} onChange={(value) => setEditingNoteDraft((current) => ({ ...current, title: value }))} />
+                        <TextInput label="Mã đối tượng (Android)" value={editingNoteDraft.objectCode} onChange={(value) => setEditingNoteDraft((current) => ({ ...current, objectCode: value }))} />
+                        <TextArea label="Nội dung" value={editingNoteDraft.content} onChange={(value) => setEditingNoteDraft((current) => ({ ...current, content: value }))} />
+                        <div className="row-actions">
+                          <button className="primary-button" type="button" disabled={writeBusy || !editingNoteDraft.content.trim()} onClick={() => void handleUpdateNote(note)}>Lưu</button>
+                          <button className="secondary-button" type="button" disabled={writeBusy} onClick={() => setEditingNoteId(null)}>Hủy</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <strong>{text(note, "title", "objectCode") || "Ghi chú"}</strong>
+                        <span>{text(note, "content", "note", "description")}</span>
+                        {canEditNotes ? (
+                          <div className="row-actions">
+                            <button className="tiny-button" type="button" disabled={writeBusy} onClick={() => startNoteEdit(note)}>Sửa</button>
+                            <button className="tiny-button danger" type="button" disabled={writeBusy} onClick={() => void handleDeleteProjectRow("note", note)}>Xóa</button>
+                          </div>
+                        ) : null}
+                      </>
+                    )
                   )}
                 />
               </Panel>
@@ -2025,6 +2269,31 @@ function StatCard({
   );
 }
 
+function ThemeToggle({ theme, onToggle, floating = false }: { theme: Theme; onToggle: () => void; floating?: boolean }) {
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  return (
+    <button
+      type="button"
+      className={floating ? "theme-toggle theme-toggle-floating" : "theme-toggle"}
+      onClick={onToggle}
+      aria-label={`Chuyển sang chế độ ${nextTheme === "dark" ? "tối" : "sáng"}`}
+      title={`Đang dùng ${theme === "dark" ? "Dark" : "Light"} · chuyển sang ${nextTheme === "dark" ? "Dark" : "Light"}`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {theme === "dark" ? (
+          <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" />
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </>
+        )}
+      </svg>
+      <span>{theme === "dark" ? "Dark" : "Light"}</span>
+    </button>
+  );
+}
+
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className="panel">
@@ -2037,20 +2306,20 @@ function Panel({ title, subtitle, children }: { title: string; subtitle?: string
   );
 }
 
-function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextInput({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
   return (
     <label style={{ display: "grid", gap: "6px" }}>
       {label}
-      <input value={value} onChange={(event) => onChange(event.target.value)} />
+      <input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
 
-function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextArea({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
   return (
     <label style={{ display: "grid", gap: "6px" }}>
       {label}
-      <textarea value={value} rows={4} onChange={(event) => onChange(event.target.value)} />
+      <textarea value={value} disabled={disabled} rows={4} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -2207,12 +2476,12 @@ function AdminAccessPanel({
 
 const STANDARD_DATA_GROUPS = [
   "DEFAULT",
+  "TASKS",
+  "NOTES",
   "MAP",
   "GIS",
   "MATERIALS",
-  "REPORTING",
-  "NOTES",
-  "TASKS"
+  "REPORTING"
 ];
 
 function AdminApprovalQueue({
@@ -2247,7 +2516,7 @@ function AdminApprovalQueue({
 
   function openApprovalModal(request: ProjectAccessRequestRow) {
     setModalRequest(request);
-    setSelectedGroups(request.allowedDataGroups.length ? request.allowedDataGroups : ["DEFAULT", "MAP", "GIS"]);
+    setSelectedGroups(request.allowedDataGroups.length ? request.allowedDataGroups : ["DEFAULT", "TASKS", "NOTES"]);
     setCustomGroupInput("");
     setSelectedScope(request.contractorScope || "ALL");
     setContractorsInput(request.allowedContractors.join(", "));
@@ -2447,13 +2716,15 @@ function AdminApprovalQueue({
                 {STANDARD_DATA_GROUPS.map((group) => {
                   const isSelected = selectedGroups.includes(group);
                   return (
-                    <span
+                    <button
                       key={group}
+                      type="button"
                       className={`scope-chip ${isSelected ? "selected" : ""}`}
+                      aria-pressed={isSelected}
                       onClick={() => toggleDataGroup(group)}
                     >
                       {group}
-                    </span>
+                    </button>
                   );
                 })}
               </div>

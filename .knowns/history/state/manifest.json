@@ -217,6 +217,14 @@
       "revision": 7,
       "headHash": "eec43ab2405b0d4045a8926e6b77bbabf40b197ff31aa4ab32dc925e69c91a56"
     },
+    "task:58yfng": {
+      "entityType": "task",
+      "entityId": "58yfng",
+      "path": "tasks/task-58yfng - camera-minimap-zoom-15-32-video-path-03-Dong-bo-d.md",
+      "hash": "55e019eb7edc1f2ccd0a483d0d4cd1638ded1da2d8f55d40f03bf80104f07753",
+      "revision": 3,
+      "headHash": "55e019eb7edc1f2ccd0a483d0d4cd1638ded1da2d8f55d40f03bf80104f07753"
+    },
     "task:5lh0mh": {
       "entityType": "task",
       "entityId": "5lh0mh",
@@ -249,6 +257,14 @@
       "revision": 5,
       "headHash": "a4f7b9dfb94977785b550a65af0bc76031a09ea222b67739b9802f8692fc84ec"
     },
+    "task:7nzyar": {
+      "entityType": "task",
+      "entityId": "7nzyar",
+      "path": "tasks/task-7nzyar - camera-minimap-zoom-15-32-video-path-02-Tich-hop.md",
+      "hash": "d221a1b2f7a99b1fb545940ad7f6dc75c3c2b89e969cfc1e522b88a299ffe097",
+      "revision": 3,
+      "headHash": "d221a1b2f7a99b1fb545940ad7f6dc75c3c2b89e969cfc1e522b88a299ffe097"
+    },
     "task:7qsrje": {
       "entityType": "task",
       "entityId": "7qsrje",
@@ -264,6 +280,14 @@
       "hash": "d96e72a4b6199492137403f2b8fb6f9ae2d9fa4f46e29bbc02c46e1b9177850e",
       "revision": 8,
       "headHash": "d96e72a4b6199492137403f2b8fb6f9ae2d9fa4f46e29bbc02c46e1b9177850e"
+    },
+    "task:8i9ba4": {
+      "entityType": "task",
+      "entityId": "8i9ba4",
+      "path": "tasks/task-8i9ba4 - camera-minimap-zoom-15-32-video-path-04-Kiem-thu.md",
+      "hash": "64f62b313ded14ca0e61c798df2443eba45751e77eeb369b3e106188e33f6de4",
+      "revision": 3,
+      "headHash": "64f62b313ded14ca0e61c798df2443eba45751e77eeb369b3e106188e33f6de4"
     },
     "task:930kkg": {
       "entityType": "task",
@@ -520,6 +544,14 @@
       "hash": "77fdd038493a837a82db2d97dca2d6697c84349c0b238f8e9b23ef6674c72537",
       "revision": 14,
       "headHash": "77fdd038493a837a82db2d97dca2d6697c84349c0b238f8e9b23ef6674c72537"
+    },
+    "task:rr9opa": {
+      "entityType": "task",
+      "entityId": "rr9opa",
+      "path": "tasks/task-rr9opa - camera-minimap-zoom-15-32-video-path-01-Mo-rong-d.md",
+      "hash": "d35d0e5d58536b677f8702f1ec02f6fccdd3011de3117d3d8d139f227e9d8427",
+      "revision": 3,
+      "headHash": "d35d0e5d58536b677f8702f1ec02f6fccdd3011de3117d3d8d139f227e9d8427"
     },
     "task:ry4iav": {
       "entityType": "task",

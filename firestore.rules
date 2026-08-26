@@ -34,11 +34,34 @@ service cloud.firestore {
             get(/databases/$(database)/documents/projects/$(projectId)).data.data.isDeleted != true));
     }
 
-    function allowedDataGroup(projectId, group) {
+    function dataGroupsForCollection(collectionName) {
+      return collectionName == "task" || collectionName == "daily_log"
+        ? ["TASKS", "DEFAULT", "task", "daily_log"]
+        : collectionName == "note"
+        ? ["NOTES", "DEFAULT", "note"]
+        : collectionName == "site_photos"
+        ? ["DEFAULT", "MAP", "GIS", "site_photos"]
+        : [collectionName];
+    }
+
+    function allowedDataGroup(projectId, collectionName) {
       return approvedAccess(projectId) && (
         isAdmin() ||
-        get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.allowedDataGroups.hasAny([group])
+        get(/databases/$(database)/documents/accessRequests/$(accessRequestId(projectId))).data.allowedDataGroups.hasAny(dataGroupsForCollection(collectionName))
       );
+    }
+
+    function hasCurrentSyncTimestamp() {
+      return request.resource.data.updatedAtEpochMs is int &&
+        resource.data.updatedAtEpochMs is int &&
+        request.resource.data.updatedAtEpochMs >= resource.data.updatedAtEpochMs;
+    }
+
+    function syncPayloadTargetsProject(projectId) {
+      return ("projectId" in request.resource.data && request.resource.data.projectId == projectId) ||
+        ("data" in request.resource.data &&
+          "projectId" in request.resource.data.data &&
+          request.resource.data.data.projectId == projectId);
     }
 
     function approvedMedia(projectId) {
@@ -262,7 +285,14 @@ service cloud.firestore {
       match /{collectionName}/{documentId} {
         allow read: if projectIsActive(projectId) && ((collectionName == "site_photos" && approvedMedia(projectId)) ||
           (collectionName != "site_photos" && allowedDataGroup(projectId, collectionName)));
-        allow write: if projectIsActive(projectId) && allowedDataGroup(projectId, collectionName);
+        allow create: if projectIsActive(projectId) &&
+          allowedDataGroup(projectId, collectionName) &&
+          syncPayloadTargetsProject(projectId);
+        allow update: if projectIsActive(projectId) &&
+          allowedDataGroup(projectId, collectionName) &&
+          hasCurrentSyncTimestamp() &&
+          syncPayloadTargetsProject(projectId);
+        allow delete: if false;
       }
     }
 

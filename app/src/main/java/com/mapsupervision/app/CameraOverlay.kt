@@ -594,7 +594,10 @@ fun CameraOverlay(
     var liveMovementPath by remember { mutableStateOf(emptyList<Pair<Double, Double>>()) }
     val cameraPrefs = remember(context) { context.getSharedPreferences("camera_prefs", Context.MODE_PRIVATE) }
     var customMinimapZoom by remember {
-        mutableStateOf(cameraPrefs.getInt("minimap_custom_zoom", PhotoStampRenderer.MINIMAP_MAX_ZOOM))
+        mutableStateOf(
+            cameraPrefs.getInt("minimap_custom_zoom", 20)
+                .coerceIn(PhotoStampRenderer.MINIMAP_MIN_ZOOM, PhotoStampRenderer.MINIMAP_MAX_ZOOM)
+        )
     }
     var customMarkerScale by remember {
         mutableStateOf(cameraPrefs.getFloat("minimap_marker_scale", 1.0f))
@@ -712,12 +715,12 @@ fun CameraOverlay(
 
     var currentTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var currentTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
-    var currentTileZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
+    var currentTileZoom by remember { mutableStateOf(customMinimapZoom) }
     var recordingStartElapsedMs by remember { mutableStateOf<Long?>(null) }
     var recordingDurationSeconds by remember { mutableStateOf(0) }
     var recordingTimelineTileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var recordingTimelineTileKey by remember { mutableStateOf<RoundedLocationKey?>(null) }
-    var recordingTimelineTileZoom by remember { mutableStateOf(PhotoStampRenderer.MINIMAP_MAX_ZOOM) }
+    var recordingTimelineTileZoom by remember { mutableStateOf(customMinimapZoom) }
     val recordingTimelineTileBitmaps = remember { mutableListOf<Bitmap>() }
     val recordingTimelineSamples = remember { mutableListOf<VideoStampTimelineSample>() }
     val addressCache = remember { mutableMapOf<RoundedLocationKey, String>() }
@@ -791,7 +794,7 @@ fun CameraOverlay(
             val oldTile = currentTileBitmap
             currentTileBitmap = null
             currentTileKey = null
-            currentTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+            currentTileZoom = customMinimapZoom
             oldTile?.recycle()
             addressCache.clear()
         }
@@ -1768,7 +1771,7 @@ fun CameraOverlay(
                                                                  recordingStartElapsedMs = null
                                                                  recordingTimelineTileBitmap = null
                                                                  recordingTimelineTileKey = null
-                                                                 recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                                                 recordingTimelineTileZoom = customMinimapZoom
                                                                  recordingTimelineTileBitmaps.forEach { it.recycle() }
                                                                  recordingTimelineTileBitmaps.clear()
                                                              }
@@ -1779,7 +1782,7 @@ fun CameraOverlay(
                                                          recordingStartElapsedMs = null
                                                          recordingTimelineTileBitmap = null
                                                          recordingTimelineTileKey = null
-                                                         recordingTimelineTileZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                                         recordingTimelineTileZoom = customMinimapZoom
                                                          recordingTimelineTileBitmaps.forEach { it.recycle() }
                                                          recordingTimelineTileBitmaps.clear()
                                                          runCatching { videoFile.delete() }
@@ -2059,10 +2062,10 @@ fun CameraOverlay(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        if (customMinimapZoom != PhotoStampRenderer.MINIMAP_MAX_ZOOM || customMarkerScale != 1.0f || customFovAngle != 30.0f || customFovLength != 1.0f) {
+                        if (customMinimapZoom != 20 || customMarkerScale != 1.0f || customFovAngle != 30.0f || customFovLength != 1.0f) {
                             TextButton(
                                 onClick = {
-                                    customMinimapZoom = PhotoStampRenderer.MINIMAP_MAX_ZOOM
+                                    customMinimapZoom = 20
                                     customMarkerScale = 1.0f
                                     customFovAngle = 30.0f
                                     customFovLength = 1.0f
@@ -2076,8 +2079,8 @@ fun CameraOverlay(
                     Slider(
                         value = customMinimapZoom.toFloat(),
                         onValueChange = { customMinimapZoom = it.toInt() },
-                        valueRange = 14f..20f,
-                        steps = 5,
+                        valueRange = 15f..32f,
+                        steps = 16,
                         colors = SliderDefaults.colors(
                             thumbColor = Color(0xFF00E5FF),
                             activeTrackColor = Color(0xFF00E5FF),

@@ -402,5 +402,36 @@ class PhotoStampRendererTest {
         assertTrue(standardViewport.zoom in PhotoStampRenderer.MINIMAP_MIN_ZOOM..PhotoStampRenderer.MINIMAP_MAX_ZOOM)
         assertTrue(wideLongViewport.zoom in PhotoStampRenderer.MINIMAP_MIN_ZOOM..PhotoStampRenderer.MINIMAP_MAX_ZOOM)
     }
+
+    @Test
+    fun `high zoom up to 32 calculates Mercator coordinates without overflow`() {
+        val rect = RectF(0f, 0f, 270f, 270f)
+        val scene = CaptureStampMapScene(
+            cameraLatitude = 21.0280,
+            cameraLongitude = 105.8340,
+            minimapZoom = 32
+        )
+        val viewport = PhotoStampRenderer.resolveMinimapViewport(
+            rect = rect,
+            latitude = 21.0280,
+            longitude = 105.8340,
+            bearingDeg = 0f,
+            borderWidth = 4f,
+            outerDotRadius = 10f,
+            mapScene = scene
+        )
+        assertEquals(32, viewport.zoom)
+
+        val (cameraX, cameraY) = PhotoStampRenderer.getCanvasCoords(
+            21.0280,
+            105.8340,
+            viewport.frame,
+            rect,
+            512,
+            viewport.zoom
+        )
+        assertEquals(rect.centerX(), cameraX, 0.5f)
+        assertEquals(rect.centerY(), cameraY, 0.5f)
+    }
 }
 

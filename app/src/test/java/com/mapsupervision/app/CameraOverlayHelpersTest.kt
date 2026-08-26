@@ -40,14 +40,13 @@ class CameraOverlayHelpersTest {
 
     @Test
     fun `minimap zoom stays within bounds`() {
+        assertEquals(32, resolveLatchedMinimapZoom(32, 20))
+        assertEquals(32, resolveLatchedMinimapZoom(35, 20))
         assertEquals(20, resolveLatchedMinimapZoom(20, 20))
-        assertEquals(19, resolveLatchedMinimapZoom(19, 19))
-        assertEquals(17, resolveLatchedMinimapZoom(17, 19))
         assertEquals(18, resolveLatchedMinimapZoom(18, 17))
         assertEquals(15, resolveLatchedMinimapZoom(15, 17))
-        assertEquals(14, resolveLatchedMinimapZoom(14, 17))
-        assertEquals(14, resolveLatchedMinimapZoom(13, 17))
-        assertEquals(20, resolveLatchedMinimapZoom(21, 17))
+        assertEquals(15, resolveLatchedMinimapZoom(14, 17))
+        assertEquals(15, resolveLatchedMinimapZoom(10, 17))
     }
 
     @Test

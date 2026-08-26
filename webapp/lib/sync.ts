@@ -164,6 +164,20 @@ export type DailyLogRow = {
   deletedAtEpochMs: number | null;
 };
 
+export type NoteRow = {
+  id: string;
+  projectId: string;
+  title?: string;
+  objectCode: string;
+  content: string;
+  objectNodeId: string | null;
+  objectRouteId: string | null;
+  createdAtEpochMs: number;
+  updatedAtEpochMs: number;
+  isDeleted: boolean;
+  deletedAtEpochMs: number | null;
+};
+
 export type SitePhotoRow = {
   id: string;
   projectId: string;
@@ -244,6 +258,27 @@ export const emptyProjectCollections = (): ProjectCollections => ({
   material_handover: [],
   report_draft: []
 });
+
+export function shouldApplySyncUpdate(currentUpdatedAtEpochMs: number, incomingUpdatedAtEpochMs: number): boolean {
+  return Number.isFinite(incomingUpdatedAtEpochMs) && incomingUpdatedAtEpochMs >= currentUpdatedAtEpochMs;
+}
+
+export function buildTombstone<T extends Record<string, unknown>>(
+  row: T,
+  projectId: string,
+  now: number
+): T & { id: string; projectId: string; updatedAtEpochMs: number; isDeleted: true; deletedAtEpochMs: number } {
+  const id = String(row.id ?? "").trim();
+  if (!id) throw new Error("Không thể xóa bản ghi không có mã.");
+  return {
+    ...row,
+    id,
+    projectId,
+    updatedAtEpochMs: now,
+    isDeleted: true,
+    deletedAtEpochMs: now
+  };
+}
 
 export function unpackEnvelope<T extends Record<string, unknown>>(
   documentId: string,
@@ -510,6 +545,21 @@ function parseAccessRequest(requestId: string, raw: DocumentData): ProjectAccess
     requestedAtEpochMs: raw.requestedAtEpochMs == null ? null : Number(raw.requestedAtEpochMs),
     updatedAtEpochMs: Number(raw.updatedAtEpochMs ?? 0)
   };
+}
+
+export function subscribeCurrentProjectAccessRequest(
+  firestore: Firestore,
+  projectId: string,
+  uid: string,
+  onRequest: (request: ProjectAccessRequestRow | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  const requestId = `${projectId}__${uid}`;
+  return onSnapshot(
+    doc(firestore, "accessRequests", requestId),
+    (snapshot) => onRequest(snapshot.exists() ? parseAccessRequest(requestId, snapshot.data()) : null),
+    onError
+  );
 }
 
 export function validateApprovedScope(
@@ -822,13 +872,154 @@ export async function updateTaskStatusDocument(
     isDeleted: Boolean(task.isDeleted ?? false),
     deletedAtEpochMs: task.deletedAtEpochMs ?? null
   };
-  await updateDoc(doc(firestore, "projects", projectId, "task", id), {
-    data: nextData,
+  await setDoc(
+    doc(firestore, "projects", projectId, "task", id),
+    createEnvelope("task", projectId, id, nextData, now),
+    { merge: true }
+  );
+}
+
+export async function updateTaskDocument(
+  firestore: Firestore,
+  projectId: string,
+  task: Record<string, unknown>,
+  changes: Pick<TaskRow, "title" | "description">
+): Promise<void> {
+  const id = String(task.id ?? "").trim();
+  if (!id) throw new Error("Không thể cập nhật công việc không có mã.");
+  const now = Date.now();
+  const nextData: TaskRow = {
+    ...task,
+    ...changes,
+    id,
+    projectId,
+    title: changes.title.trim(),
+    description: changes.description.trim(),
+    status: String(task.status ?? "TODO"),
+    createdAtEpochMs: Number(task.createdAtEpochMs ?? now),
+    completedAtEpochMs: task.completedAtEpochMs == null ? null : Number(task.completedAtEpochMs),
+    objectNodeId: task.objectNodeId == null ? null : String(task.objectNodeId),
+    objectRouteId: task.objectRouteId == null ? null : String(task.objectRouteId),
     updatedAtEpochMs: now,
-    isDeleted: Boolean(nextData.isDeleted),
-    sourceDeviceId: "webapp",
-    lastSyncedAtEpochMs: now
-  });
+    isDeleted: false,
+    deletedAtEpochMs: null
+  } as TaskRow;
+  await setDoc(
+    doc(firestore, "projects", projectId, "task", id),
+    createEnvelope("task", projectId, id, nextData, now),
+    { merge: true }
+  );
+}
+
+export async function deleteProjectTableDocument(
+  firestore: Firestore,
+  projectId: string,
+  tableName: SyncTableName,
+  row: Record<string, unknown>
+): Promise<void> {
+  const id = String(row.id ?? "").trim();
+  if (!id) throw new Error("Không thể xóa bản ghi không có mã.");
+  const now = Date.now();
+  const tombstone = buildTombstone(row, projectId, now);
+  await setDoc(
+    doc(firestore, "projects", projectId, tableName, id),
+    createEnvelope(tableName, projectId, id, tombstone, now),
+    { merge: true }
+  );
+}
+
+export async function updateDailyLogDocument(
+  firestore: Firestore,
+  projectId: string,
+  row: Record<string, unknown>,
+  changes: Pick<DailyLogRow, "workItem" | "note" | "manpower" | "volume" | "unit" | "categoryName" | "weather">
+): Promise<void> {
+  const id = String(row.id ?? "").trim();
+  if (!id) throw new Error("Không thể cập nhật nhật ký không có mã.");
+  const now = Date.now();
+  const nextData = {
+    ...row,
+    ...changes,
+    id,
+    projectId,
+    workItem: changes.workItem.trim(),
+    note: changes.note.trim(),
+    manpower: Number(changes.manpower),
+    volume: Number(changes.volume),
+    unit: changes.unit.trim(),
+    categoryName: changes.categoryName.trim(),
+    weather: changes.weather.trim(),
+    updatedAtEpochMs: now,
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  await setDoc(
+    doc(firestore, "projects", projectId, "daily_log", id),
+    createEnvelope("daily_log", projectId, id, nextData, now),
+    { merge: true }
+  );
+}
+
+export async function createNoteDocument(
+  firestore: Firestore,
+  projectId: string,
+  title: string,
+  content: string,
+  objectCode = ""
+): Promise<void> {
+  const now = Date.now();
+  const ref = doc(collection(doc(collection(firestore, "projects"), projectId), "note"));
+  const normalizedTitle = title.trim();
+  const payload: NoteRow = {
+    id: ref.id,
+    projectId,
+    objectCode: objectCode.trim(),
+    content: content.trim(),
+    objectNodeId: null,
+    objectRouteId: null,
+    createdAtEpochMs: now,
+    updatedAtEpochMs: now,
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  await setDoc(ref, createEnvelope(
+    "note",
+    projectId,
+    ref.id,
+    normalizedTitle ? { ...payload, title: normalizedTitle } : payload,
+    now
+  ));
+}
+
+export async function updateNoteDocument(
+  firestore: Firestore,
+  projectId: string,
+  row: Record<string, unknown>,
+  changes: { title: string; content: string; objectCode?: string }
+): Promise<void> {
+  const id = String(row.id ?? "").trim();
+  if (!id) throw new Error("Không thể cập nhật ghi chú không có mã.");
+  const now = Date.now();
+  const normalizedTitle = changes.title.trim();
+  const baseData = {
+    ...row,
+    ...changes,
+    id,
+    projectId,
+    objectCode: (changes.objectCode ?? String(row.objectCode ?? "")).trim(),
+    content: changes.content.trim(),
+    updatedAtEpochMs: now,
+    isDeleted: false,
+    deletedAtEpochMs: null
+  };
+  const nextData = normalizedTitle
+    ? { ...baseData, title: normalizedTitle }
+    : (({ title: _title, ...withoutTitle }) => withoutTitle)(baseData);
+  await setDoc(
+    doc(firestore, "projects", projectId, "note", id),
+    createEnvelope("note", projectId, id, nextData, now),
+    { merge: true }
+  );
 }
 
 export async function createDailyLogDocument(

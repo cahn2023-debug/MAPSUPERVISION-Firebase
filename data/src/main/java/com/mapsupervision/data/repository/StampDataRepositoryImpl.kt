@@ -23,6 +23,7 @@ import java.net.URL
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.tan
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -168,13 +169,15 @@ class StampDataRepositoryImpl @Inject constructor(
     }
 
     private fun fetchOsmTile(lat: Double, lng: Double, zoom: Int): Bitmap? {
+        val tileZoom = zoom.coerceIn(15, 19)
         return try {
-            val n = 1 shl zoom
-            val xTile = ((lng + 180.0) / 360.0 * n).toInt().coerceIn(0, n - 1)
+            val n = Math.pow(2.0, tileZoom.toDouble())
+            val maxTileIndex = (n - 1).toInt().coerceAtLeast(0)
+            val xTile = ((lng + 180.0) / 360.0 * n).toInt().coerceIn(0, maxTileIndex)
             val latRad = Math.toRadians(lat)
             val yTile = ((1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / PI) / 2.0 * n)
-                .toInt().coerceIn(0, n - 1)
-            val url = URL("https://tile.openstreetmap.org/$zoom/$xTile/$yTile.png")
+                .toInt().coerceIn(0, maxTileIndex)
+            val url = URL("https://tile.openstreetmap.org/$tileZoom/$xTile/$yTile.png")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "MapSupervision/1.0 (Android)")

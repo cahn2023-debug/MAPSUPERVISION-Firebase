@@ -35,6 +35,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             `
           }}
         />
+        <Script
+          id="initialize-theme"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                var stored = window.localStorage.getItem("mapsupervision-theme");
+                var theme = stored === "light" || stored === "dark"
+                  ? stored
+                  : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.style.colorScheme = theme;
+              })();
+            `
+          }}
+        />
         {children}
       </body>
     </html>

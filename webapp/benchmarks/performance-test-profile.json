@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "profileId": "web-backend-performance-v2",
-  "frozenAt": "2026-08-25T08:00:00.000Z",
+  "frozenAt": "2026-08-25T14:40:57.579Z",
   "appVersion": "0.1.0",
   "host": {
     "operatingSystem": "win32",
@@ -64,7 +64,7 @@
     "anonymizedReal": {
       "reference": "anonymized-real-v2",
       "sourceAlias": "selected-active-largest-v1",
-      "expectedDocumentCount": 616,
+      "expectedDocumentCount": 617,
       "persistedInRepository": false
     }
   },
