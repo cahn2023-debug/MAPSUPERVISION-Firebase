@@ -730,8 +730,8 @@ export async function getLatestDriveSnapshotByProjectIdOrFolder(
       corpora: "allDrives"
     });
     const files = directRes.data.files || [];
-    if (files.length > 0 && files[0].id) {
-      const target = files[0];
+    const target = files.find(f => typeof f.id === "string" && f.id.length > 0);
+    if (target && target.id) {
       const getRes = await drive.files.get(
         {
           fileId: target.id,
