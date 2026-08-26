@@ -118,30 +118,16 @@ fun WorkspaceViewModel.addDailyLog(request: AddDailyLogRequest) {
         val nodeId = normalizedNodeCode?.let { ensureIndexes().nodesByCode[it]?.id }
         val routeId = normalizedRouteCode?.let { ensureIndexes().routesByCode[it]?.id }
 
-        if (normalizedNodeCode.isNullOrBlank() && normalizedRouteCode.isNullOrBlank()) {
-            showMessage("Vui lòng chọn vị trí hoặc tuyến liên kết")
-            return@launch
-        }
-
-        if (normalizedNodeCode.isNullOrBlank() && !normalizedRouteCode.isNullOrBlank()) {
-            showMessage("Không thể lưu nhật ký liên kết tuyến mà không chọn vị trí cụ thể")
-            return@launch
-        }
-
         val normalizedPlanSnapshot = request.planSnapshot?.let { snapshot ->
             val plannedNodeCode = snapshot.plannedNodeCode?.let { findBestMatchingNodeCode(it, _state.value.designNodes) }
             val plannedRouteCode = snapshot.plannedRouteCode?.let { findBestMatchingRouteCode(it, _state.value.designRoutes) }
-            if (plannedRouteCode != null && plannedNodeCode == null && normalizedNodeCode == null) {
-                showMessage("Kế hoạch theo tuyến cần chọn node cụ thể trước khi lưu nhật ký")
-                return@launch
-            }
             DailyLogPlanSnapshotDraft(
                 linkedWorkPlanId = snapshot.linkedWorkPlanId,
                 plannedWorkName = snapshot.plannedWorkName,
                 plannedQuantity = snapshot.plannedQuantity,
                 plannedUnit = snapshot.plannedUnit,
                 plannedNodeCode = plannedNodeCode ?: normalizedNodeCode,
-                plannedRouteCode = plannedRouteCode
+                plannedRouteCode = plannedRouteCode ?: normalizedRouteCode
             )
         }
 

@@ -1704,21 +1704,21 @@ fun ProgressHubScreen(
                     )
                 }
 
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Ảnh đối chiếu", fontWeight = FontWeight.Bold, color = primaryTextColor)
-                            Text("Khớp: ${matchedPhotos.size}", color = successColor)
-                            Text("Chưa khớp: ${unmatchedPhotos.size}", color = redColor)
+                if (photosForSelectedDate.isNotEmpty()) {
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Ảnh đối chiếu", fontWeight = FontWeight.Bold, color = primaryTextColor)
+                                Text("Khớp: ${matchedPhotos.size}", color = successColor)
+                                Text("Chưa khớp: ${unmatchedPhotos.size}", color = redColor)
+                            }
                         }
                     }
-                }
 
-                if (photos.isNotEmpty()) {
                     item {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -1727,7 +1727,7 @@ fun ProgressHubScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("Ảnh nhật ký gần nhất", fontWeight = FontWeight.Bold, color = primaryTextColor)
-                                photos.take(8).forEach { photo ->
+                                photosForSelectedDate.take(8).forEach { photo ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,

@@ -530,6 +530,11 @@ class GemmaChatViewModel @Inject constructor(
                     }
                     ChatActionType.ADD_DAILY_LOG -> {
                         val draft = action.dailyLog ?: return@launch
+                        val effectiveEpochDay = if (draft.dateEpochDay > 0L) {
+                            draft.dateEpochDay
+                        } else {
+                            java.time.LocalDate.now().toEpochDay()
+                        }
                         workspaceViewModel.addDailyLog(
                             workItem = draft.workItem,
                             manpower = draft.manpower,
@@ -538,7 +543,7 @@ class GemmaChatViewModel @Inject constructor(
                             temperature = draft.temperature,
                             nodeCode = draft.nodeCode,
                             routeCode = draft.routeCode,
-                            dateEpochDay = draft.dateEpochDay,
+                            dateEpochDay = effectiveEpochDay,
                             volume = draft.volume,
                             unit = draft.unit,
                             categoryName = draft.categoryName
