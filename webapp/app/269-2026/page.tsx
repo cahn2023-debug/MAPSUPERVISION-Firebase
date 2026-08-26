@@ -490,16 +490,94 @@ export default function PublicProjectPage() {
     return photos.filter((p) => String(p.syncStatus || "") === "DONE" || Boolean(p.remoteUrl)).length;
   }, [photos]);
 
-  // Filtered daily logs
-  const filteredDailyLogs = useMemo(() => {
-    return dailyLogs.filter((log) => {
-      if (filterContractor) {
-        const c = String(log.contractor ?? "").toLowerCase();
-        if (!c.includes(filterContractor.toLowerCase())) return false;
-      }
-      return true;
-    });
-  }, [dailyLogs, filterContractor]);
+  // Resolved daily logs with attached GIS Node / Route
+  const resolvedDailyLogs = useMemo(() => {
+    const active = dailyLogs.filter(
+      (l) => l.isDeleted !== 1 && l.isDeleted !== true && l.deletionState !== "DELETED"
+    );
+
+    return active
+      .map((log) => {
+        const rawNodeId = String(log.nodeId ?? log.plannedNodeId ?? "");
+        const rawRouteId = String(log.routeId ?? log.plannedRouteId ?? "");
+        const objectCode = String(log.objectCode ?? "");
+
+        const matchedNode = nodes.find(
+          (n) =>
+            (rawNodeId && (String(n.id) === rawNodeId || String(n.code) === rawNodeId)) ||
+            (objectCode && (String(n.code) === objectCode || String(n.id) === objectCode))
+        );
+
+        const matchedRoute = routes.find(
+          (r) =>
+            (rawRouteId && (String(r.id) === rawRouteId || String(r.code) === rawRouteId)) ||
+            (objectCode && (String(r.code) === objectCode || String(r.id) === objectCode))
+        );
+
+        let matchedKind: "node" | "route" | "general" = "general";
+        let objectTitle = "";
+        let code = "";
+
+        if (matchedNode) {
+          matchedKind = "node";
+          objectTitle = String(matchedNode.code || matchedNode.name || "Điểm đo GIS");
+          code = String(matchedNode.code || matchedNode.name || matchedNode.id || "");
+        } else if (matchedRoute) {
+          matchedKind = "route";
+          objectTitle = String(matchedRoute.code || matchedRoute.name || "Tuyến cáp GIS");
+          code = String(matchedRoute.code || matchedRoute.name || matchedRoute.id || "");
+        } else {
+          matchedKind = "general";
+          objectTitle = String(log.plannedWorkName || log.objectCode || "Nhật ký thi công hiện trường");
+        }
+
+        const contractor = String(
+          log.contractor || matchedNode?.contractor || matchedRoute?.contractor || "—"
+        ).trim();
+
+        // Date resolution
+        const dateEpoch = log.dateEpochDay
+          ? Number(log.dateEpochDay) * 86400000
+          : Number(log.createdAtEpochMs || log.updatedAtEpochMs || log.createdAt || log.date || Date.now());
+        const dateStr = formatDate(dateEpoch);
+
+        // Work items formatting (split by bullet or newlines)
+        const rawWorkText = String(log.workItem || log.workContent || "").trim();
+        const workItemLines = rawWorkText
+          ? rawWorkText
+              .split("\n")
+              .map((line) => line.trim().replace(/^[-*•]\s*/, ""))
+              .filter((line) => line.length > 0)
+          : [];
+
+        return {
+          raw: log,
+          id: String(log.id),
+          dateStr,
+          dateEpoch,
+          matchedKind,
+          objectTitle,
+          objectCode: code,
+          matchedObject: matchedNode || matchedRoute,
+          contractor,
+          manpower: log.manpower ?? log.manpowerCount ?? log.workerCount ?? "—",
+          machinery: String(log.machineryCount ?? log.equipment ?? "—"),
+          weather: String(log.weather ?? "Bình thường"),
+          temperature: log.temperature as string | number | undefined,
+          workItemLines,
+          note: String(log.note ?? "").trim(),
+        };
+      })
+      .filter((resolved) => {
+        if (filterContractor) {
+          if (!resolved.contractor.toLowerCase().includes(filterContractor.toLowerCase())) {
+            return false;
+          }
+        }
+        return true;
+      })
+      .sort((a, b) => b.dateEpoch - a.dateEpoch);
+  }, [dailyLogs, nodes, routes, filterContractor]);
 
   // Selected GIS item details
   const selectedObjectDetail = useMemo(() => {
@@ -1125,40 +1203,99 @@ export default function PublicProjectPage() {
             <div className="public-dual-columns">
               <div className="public-column">
                 <div className="public-section-header">
-                  <h2>Nhật ký thi công ({filteredDailyLogs.length})</h2>
+                  <h2>Nhật ký thi công ({resolvedDailyLogs.length})</h2>
                   <span className="public-tag">Dòng thời gian</span>
                 </div>
 
-                {filteredDailyLogs.length === 0 ? (
+                {resolvedDailyLogs.length === 0 ? (
                   <div className="public-empty-state">
                     <p>Chưa có bản ghi nhật ký thi công nào.</p>
                   </div>
                 ) : (
                   <div className="public-timeline">
-                    {filteredDailyLogs.map((log) => (
-                      <article key={String(log.id)} className="public-timeline-card">
+                    {resolvedDailyLogs.map((log) => (
+                      <article key={log.id} className="public-timeline-card">
                         <div className="public-timeline-header">
-                          <span className="public-timeline-date">📅 {formatDate(log.date || log.createdAt)}</span>
-                          <span className="public-tag category">{display(log.categoryName || "Giám sát")}</span>
+                          <div className="public-timeline-object-badge-row">
+                            <span className={`public-object-kind-badge ${log.matchedKind}`}>
+                              {log.matchedKind === "node"
+                                ? "📍 ĐỐI TƯỢNG (NODE)"
+                                : log.matchedKind === "route"
+                                ? "🛣️ TUYẾN CÁP (ROUTE)"
+                                : "📝 NHẬT KÝ CHUNG"}
+                            </span>
+                            <span className="public-timeline-date">📅 {log.dateStr}</span>
+                          </div>
+
+                          {log.matchedObject && (
+                            <button
+                              type="button"
+                              className="public-locate-btn"
+                              title="Định vị đối tượng này trên bản đồ GIS"
+                              onClick={() => {
+                                setSelected({
+                                  kind: log.matchedKind === "node" ? "node" : "route",
+                                  code: log.objectCode,
+                                });
+                                setActiveTab("map");
+                              }}
+                            >
+                              🗺️ Xem trên bản đồ
+                            </button>
+                          )}
                         </div>
-                        <h4 className="public-timeline-work">{display(log.workItem || log.workContent || "Hạng mục công việc")}</h4>
+
+                        <h3 className="public-timeline-object-title">
+                          {log.objectTitle}
+                        </h3>
+
+                        {log.workItemLines.length > 0 && (
+                          <div className="public-timeline-workitems-box">
+                            <div className="workitems-title">📋 Hạng mục & Khối lượng thực hiện:</div>
+                            <ul className="workitems-list">
+                              {log.workItemLines.map((line, idx) => (
+                                <li key={idx} className="workitem-row">
+                                  <span className="workitem-dot">•</span>
+                                  <span className="workitem-text">{line}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         <div className="public-timeline-metrics">
                           <div className="metric">
                             <span className="muted">👷 Nhân lực:</span>
-                            <strong>{display(log.manpowerCount ?? log.workerCount ?? "—")}</strong>
-                          </div>
-                          <div className="metric">
-                            <span className="muted">🚜 Máy móc:</span>
-                            <strong>{display(log.machineryCount ?? log.equipment ?? "—")}</strong>
+                            <strong>
+                              {display(log.manpower)}{" "}
+                              {log.manpower !== "—" && !isNaN(Number(log.manpower))
+                                ? "người"
+                                : ""}
+                            </strong>
                           </div>
                           <div className="metric">
                             <span className="muted">🌤️ Thời tiết:</span>
-                            <strong>{display(log.weather ?? "Bình thường")}</strong>
+                            <strong>
+                              {display(log.weather)}
+                              {Boolean(log.temperature) ? ` (${display(log.temperature)}°C)` : ""}
+                            </strong>
                           </div>
+                          {log.machinery !== "—" && (
+                            <div className="metric">
+                              <span className="muted">🚜 Máy móc:</span>
+                              <strong>{log.machinery}</strong>
+                            </div>
+                          )}
                         </div>
-                        {Boolean(log.note) && <p className="public-timeline-note">📝 {display(log.note)}</p>}
+
+                        {Boolean(log.note) && (
+                          <p className="public-timeline-note">📝 <strong>Ghi chú:</strong> {log.note}</p>
+                        )}
+
                         <div className="public-timeline-footer">
-                          <span className="muted">Nhà thầu: <strong>{display(log.contractor)}</strong></span>
+                          <span className="muted">
+                            Nhà thầu: <strong style={{ color: "var(--ink)" }}>{log.contractor}</strong>
+                          </span>
                         </div>
                       </article>
                     ))}

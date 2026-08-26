@@ -3578,17 +3578,78 @@ select:focus {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.public-timeline-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-md);
 }
 
 .public-timeline-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.public-timeline-object-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.public-object-kind-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+.public-object-kind-badge.node {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--tertiary);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+}
+
+.public-object-kind-badge.route {
+  background: rgba(255, 176, 116, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(255, 176, 116, 0.25);
+}
+
+.public-object-kind-badge.general {
+  background: var(--surface-soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.public-locate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.public-locate-btn:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+  transform: translateY(-1px);
 }
 
 .public-timeline-date {
@@ -3597,15 +3658,61 @@ select:focus {
   color: var(--muted);
 }
 
-.public-timeline-work {
+.public-timeline-object-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--ink);
+  line-height: 1.35;
+}
+
+.public-timeline-workitems-box {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workitems-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.workitems-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workitem-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.workitem-dot {
+  color: var(--accent);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.workitem-text {
+  flex: 1;
 }
 
 .public-timeline-metrics {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   font-size: 12px;
   background: var(--surface-soft);
@@ -3625,12 +3732,15 @@ select:focus {
   color: var(--ink);
   line-height: 1.4;
   background: rgba(255, 176, 116, 0.05);
-  padding: 8px;
+  padding: 8px 12px;
   border-radius: 6px;
+  border-left: 3px solid var(--accent);
 }
 
 .public-timeline-footer {
-  font-size: 11px;
+  font-size: 12px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
 }
 
 /* TASKS LIST */
