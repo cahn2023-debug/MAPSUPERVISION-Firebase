@@ -155,21 +155,34 @@ export function setDriveSnapshotReaderMock(mock: (() => Promise<PublicProjectPay
   driveSnapshotReaderMock = mock;
 }
 
+export let lastDriveDiagnostic: {
+  configuredRoot?: string;
+  projectFolderId?: string | null;
+  snapshotRes?: any;
+  error?: string;
+} = {};
+
 export async function readDriveSnapshot269(): Promise<PublicProjectPayload | null> {
   if (process.env.NODE_ENV === "test" && driveSnapshotReaderMock) {
     return driveSnapshotReaderMock();
   }
+  lastDriveDiagnostic = {};
   try {
     const drive = driveClient();
     let projectFolderId: string | null = null;
     try {
       const rootFolderId = configuredRootFolderId();
+      lastDriveDiagnostic.configuredRoot = rootFolderId;
       projectFolderId = await findProjectFolderIdByNameOrId(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
+      lastDriveDiagnostic.projectFolderId = projectFolderId;
     } catch (folderErr) {
+      lastDriveDiagnostic.error = "Folder error: " + (folderErr instanceof Error ? folderErr.message : String(folderErr));
       console.warn("[readDriveSnapshot269] root folder lookup error:", folderErr);
     }
 
     const snapshotRes = await getLatestDriveSnapshotByProjectIdOrFolder(drive, KNOWN_PUBLIC_PROJECT_ID, projectFolderId);
+    lastDriveDiagnostic.snapshotRes = snapshotRes ? { fileId: snapshotRes.fileId, fileName: snapshotRes.fileName, hasPayload: !!snapshotRes.payload } : null;
+
     if (snapshotRes && snapshotRes.payload && snapshotRes.payload.project) {
       const payload = snapshotRes.payload as PublicProjectPayload;
       if (projectFolderId) {
@@ -181,6 +194,7 @@ export async function readDriveSnapshot269(): Promise<PublicProjectPayload | nul
       return payload;
     }
   } catch (driveErr) {
+    lastDriveDiagnostic.error = "Drive client error: " + (driveErr instanceof Error ? driveErr.message : String(driveErr));
     console.warn("[readPublicProject] Google Drive snapshot lookup error:", driveErr);
   }
   return null;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readPublicProject } from "@/lib/public-project";
+import { readPublicProject, lastDriveDiagnostic } from "@/lib/public-project";
 
 export const dynamic = "force-dynamic";
 
@@ -7,11 +7,13 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get("refresh") === "true" || searchParams.get("refresh") === "1" || searchParams.get("bypass") === "1";
+    const isDebug = searchParams.get("debug") === "1" || searchParams.get("debug") === "true";
     const payload = await readPublicProject(bypassCache);
     if (!payload) {
-      return NextResponse.json({ error: "Không tìm thấy dự án công khai 269 - 2026." }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy dự án công khai 269 - 2026.", _diag: isDebug ? lastDriveDiagnostic : undefined }, { status: 404 });
     }
-    return NextResponse.json(payload, {
+    const responseData = isDebug ? { ...payload, _diag: lastDriveDiagnostic } : payload;
+    return NextResponse.json(responseData, {
       headers: {
         "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
         "CDN-Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
     console.error("[api/public/269-2026] Error fetching public project:", error);
     const msg = error instanceof Error ? error.message : "Đã xảy ra lỗi khi tải dữ liệu dự án từ Firestore.";
     return NextResponse.json(
-      { error: msg },
+      { error: msg, _diag: lastDriveDiagnostic },
       { status: 500 }
     );
   }
