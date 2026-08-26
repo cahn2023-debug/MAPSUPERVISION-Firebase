@@ -127,6 +127,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapsupervision.core.logging.AppLogger
@@ -300,6 +301,10 @@ internal class CameraMovementPath {
             points += point
         }
         return points.toList()
+    }
+
+    fun clear() {
+        points.clear()
     }
 
     fun snapshot(): List<Pair<Double, Double>> = points.toList()
@@ -835,7 +840,11 @@ fun CameraOverlay(
                 val safeLat = lat ?: return@runCatching
                 val safeLng = lng ?: return@runCatching
                 liveLocation = loc
-                liveMovementPath = cameraMovementPath.append(loc)
+                liveMovementPath = if (isRecording) {
+                    cameraMovementPath.append(loc)
+                } else {
+                    emptyList()
+                }
                 val mapScene = buildCaptureStamp(
                     timestampMs = 0L,
                     location = loc,
@@ -1123,14 +1132,20 @@ fun CameraOverlay(
             if (stampEnabled && viewport != null) {
                 val elevatedOffsetYPx by animateIntAsState(
                     targetValue = if (showSettingsSheet && settingsSheetHeightPx > 0) {
-                        (-settingsSheetHeightPx).coerceAtLeast(-viewport.height / 2)
+                        val desiredBottomY = (previewSurfaceSize.height - settingsSheetHeightPx - with(density) { 16.dp.toPx() })
+                        val normalBottomY = (viewport.top + viewport.height).toFloat()
+                        val shift = (desiredBottomY - normalBottomY).toInt()
+                        val minAllowedTopY = with(density) { 70.dp.toPx() }
+                        val maxShiftUp = (minAllowedTopY - viewport.top).toInt()
+                        shift.coerceAtLeast(maxShiftUp).coerceAtMost(0)
                     } else 0,
+                    animationSpec = tween(durationMillis = 280),
                     label = "elevatedOffsetY"
                 )
                 val previewStamp = remember(
                     liveLocation,
                     liveMovementPath,
-                    liveMinimapZoom,
+                    customMinimapZoom,
                     customMarkerScale,
                     customFovAngle,
                     customFovLength,
@@ -1150,7 +1165,7 @@ fun CameraOverlay(
                         mapNodes = captureMapNodes,
                         mapRoutes = captureMapRoutes,
                         movementPath = liveMovementPath,
-                        minimapZoom = liveMinimapZoom,
+                        minimapZoom = customMinimapZoom,
                         markerScale = customMarkerScale,
                         fovAngleDeg = customFovAngle,
                         fovLengthScale = customFovLength,
@@ -1162,6 +1177,7 @@ fun CameraOverlay(
                         .offset { IntOffset(viewport.left, viewport.top + elevatedOffsetYPx) }
                         .width(with(density) { viewport.width.toDp() })
                         .height(with(density) { viewport.height.toDp() })
+                        .zIndex(20f)
                 ) {
                     drawIntoCanvas { canvas ->
                         PhotoStampRenderer.drawStamp(
@@ -1665,6 +1681,9 @@ fun CameraOverlay(
                                             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                             return@clickable
                                         }
+                                        cameraMovementPath.clear()
+                                        val initialMovementPath = cameraMovementPath.append(liveLocation)
+                                        liveMovementPath = initialMovementPath
                                         val stampAtRecordStart = buildCaptureStamp(
                                             timestampMs = System.currentTimeMillis(),
                                             location = liveLocation,
@@ -1673,7 +1692,7 @@ fun CameraOverlay(
                                             bearingDeg = bearing,
                                             mapNodes = captureMapNodes,
                                             mapRoutes = captureMapRoutes,
-                                            movementPath = liveMovementPath,
+                                            movementPath = initialMovementPath,
                                             minimapZoom = liveMinimapZoom,
                                             markerScale = customMarkerScale,
                                             fovAngleDeg = customFovAngle,
@@ -1701,7 +1720,7 @@ fun CameraOverlay(
                                                      bearingDeg = bearing,
                                                      mapNodes = captureMapNodes,
                                                      mapRoutes = captureMapRoutes,
-                                                     movementPath = liveMovementPath,
+                                                     movementPath = initialMovementPath,
                                                      minimapZoom = liveMinimapZoom,
                                                      markerScale = customMarkerScale,
                                                      fovAngleDeg = customFovAngle,
@@ -1737,6 +1756,8 @@ fun CameraOverlay(
                                                 }
                                                 is VideoRecordEvent.Finalize -> {
                                                     isRecording = false
+                                                    cameraMovementPath.clear()
+                                                    liveMovementPath = emptyList()
                                                     activeRecording = null
                                                     val timelineSnapshot = recordingTimelineSamples.toList()
                                                     if (!event.hasError()) {
@@ -1934,6 +1955,7 @@ fun CameraOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(10f)
                     .background(Color(0x33000000))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

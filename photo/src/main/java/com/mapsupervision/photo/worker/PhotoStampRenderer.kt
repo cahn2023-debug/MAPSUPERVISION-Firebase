@@ -625,19 +625,26 @@ object PhotoStampRenderer {
     ): MinimapViewport {
         val cameraLat = mapScene?.cameraLatitude ?: latitude
         val cameraLng = mapScene?.cameraLongitude ?: longitude
+        val explicitZoom = mapScene?.minimapZoom
+        if (explicitZoom != null) {
+            val clampedZoom = explicitZoom.coerceIn(MINIMAP_MIN_ZOOM, MINIMAP_MAX_ZOOM)
+            return MinimapViewport(
+                centerLat = cameraLat,
+                centerLng = cameraLng,
+                zoom = clampedZoom,
+                frame = buildMinimapTileFrame(cameraLat, cameraLng, clampedZoom)
+            )
+        }
         val scopedNodes = mapScene?.nodes.orEmpty()
         val scopedRoutes = mapScene?.routes.orEmpty()
         val movementPath = mapScene?.movementPath.orEmpty()
-        val maxAllowedZoom = mapScene?.minimapZoom
-            ?.coerceIn(MINIMAP_MIN_ZOOM, MINIMAP_MAX_ZOOM)
-            ?: MINIMAP_MAX_ZOOM
         val hasScopedMap = scopedNodes.isNotEmpty() || scopedRoutes.isNotEmpty() || movementPath.isNotEmpty()
         if (!hasScopedMap) {
             return MinimapViewport(
                 centerLat = cameraLat,
                 centerLng = cameraLng,
-                zoom = maxAllowedZoom,
-                frame = buildMinimapTileFrame(cameraLat, cameraLng, maxAllowedZoom)
+                zoom = MINIMAP_MAX_ZOOM,
+                frame = buildMinimapTileFrame(cameraLat, cameraLng, MINIMAP_MAX_ZOOM)
             )
         }
 
@@ -659,7 +666,7 @@ object PhotoStampRenderer {
 
         val latitudes = mapPoints.map { it.first }
         val longitudes = mapPoints.map { it.second }
-        for (zoom in maxAllowedZoom downTo MINIMAP_MIN_ZOOM) {
+        for (zoom in MINIMAP_MAX_ZOOM downTo MINIMAP_MIN_ZOOM) {
             val worldPoints = mapPoints.map { worldPixelPosition(it.first, it.second, zoom) }
             val cameraWorld = worldPixelPosition(cameraLat, cameraLng, zoom)
             val maxDeltaX = worldPoints.maxOf { kotlin.math.abs(it.first - cameraWorld.first) }
@@ -782,6 +789,7 @@ object PhotoStampRenderer {
         val movementPath = mapScene?.movementPath.orEmpty()
         if (movementPath.size > 1) {
             val path = Path()
+            val waypointCoords = mutableListOf<Pair<Float, Float>>()
             movementPath.forEachIndexed { index, point ->
                 val (pathX, pathY) = getCanvasCoords(
                     point.first,
@@ -792,6 +800,9 @@ object PhotoStampRenderer {
                     viewport.zoom
                 )
                 if (index == 0) path.moveTo(pathX, pathY) else path.lineTo(pathX, pathY)
+                if (index < movementPath.size - 1) {
+                    waypointCoords += pathX to pathY
+                }
             }
             val movementPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.argb(255, 0, 229, 255) // Cyan #00E5FF
@@ -801,6 +812,22 @@ object PhotoStampRenderer {
                 strokeJoin = Paint.Join.ROUND
             }
             canvas.drawPath(path, movementPaint)
+
+            // Draw waypoint dots at previous coordinate locations along the path
+            val dotFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(230, 0, 229, 255)
+                style = Paint.Style.FILL
+            }
+            val dotStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 1.5f * scale
+            }
+            val dotRadius = (3.5f * scale).coerceIn(2.5f, 6f)
+            waypointCoords.forEach { (wx, wy) ->
+                canvas.drawCircle(wx, wy, dotRadius, dotFillPaint)
+                canvas.drawCircle(wx, wy, dotRadius, dotStrokePaint)
+            }
         }
 
         // Draw GIS routes

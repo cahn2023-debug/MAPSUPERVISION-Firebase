@@ -227,6 +227,17 @@ class CameraOverlayHelpersTest {
     }
 
     @Test
+    fun `camera movement path resets with clear`() {
+        val path = CameraMovementPath()
+        path.append(PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0))
+        path.append(PhotoLocationSnapshot(latitude = 10.1, longitude = 106.1))
+        assertEquals(2, path.snapshot().size)
+
+        path.clear()
+        assertTrue(path.snapshot().isEmpty())
+    }
+
+    @Test
     fun `capture stamp carries latched minimap zoom into timeline state`() {
         val location = PhotoLocationSnapshot(latitude = 10.0, longitude = 106.0)
 

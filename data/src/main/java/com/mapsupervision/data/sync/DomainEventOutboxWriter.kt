@@ -51,6 +51,7 @@ class DomainEventOutboxWriter @Inject constructor(
         is DomainEvent.ProgressChanged -> "ProgressChanged"
         is DomainEvent.TaskChanged -> "TaskChanged"
         is DomainEvent.MaterialUpdated -> "MaterialUpdated"
+        is DomainEvent.PhotoDeleted -> "PhotoDeleted"
     }
 
     private fun DomainEvent.toPayloadJson(): String {
@@ -97,6 +98,11 @@ class DomainEventOutboxWriter @Inject constructor(
                 json.put("nodeCode", nodeCode)
                 json.put("materialName", materialName)
                 json.put("actualQty", actualQty)
+            }
+            is DomainEvent.PhotoDeleted -> {
+                json.put("photoId", photoId)
+                json.put("objectCode", objectCode)
+                json.put("folderKey", folderKey)
             }
         }
         return json.toString()

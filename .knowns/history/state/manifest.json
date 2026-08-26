@@ -49,6 +49,14 @@
       "revision": 1,
       "headHash": "d3e3b7dd7353d0f0c560feb9c518dc51e26a03373c7410fca2ad477887179035"
     },
+    "doc:doc-55dc22c79e4171fd7b402f2f9674c790": {
+      "entityType": "doc",
+      "entityId": "doc-55dc22c79e4171fd7b402f2f9674c790",
+      "path": "docs/specs/2026-08-26/xa-nh-android-v-web-ng-b-google-drive.md",
+      "hash": "b1a0f97a745f6d790fea80798d9b93825549e49cc3d759ee533aaa4fd56df0cc",
+      "revision": 3,
+      "headHash": "b1a0f97a745f6d790fea80798d9b93825549e49cc3d759ee533aaa4fd56df0cc"
+    },
     "doc:doc-5ebc14fa48a9919bfb9838e46079c885": {
       "entityType": "doc",
       "entityId": "doc-5ebc14fa48a9919bfb9838e46079c885",
@@ -305,6 +313,14 @@
       "revision": 9,
       "headHash": "7f71392fb12f57d61df7a24a82bb86faa4786e5afea2fba69fe512ac7d4ba789"
     },
+    "task:9h3h5i": {
+      "entityType": "task",
+      "entityId": "9h3h5i",
+      "path": "tasks/task-9h3h5i - xa-nh-android-v-web-ng-b-google-drive-02-Lưu-trạn.md",
+      "hash": "183b7df0f8ba9777a3eb6838135a4bd5aa19710600131b72dce69da717cbefaa",
+      "revision": 1,
+      "headHash": "183b7df0f8ba9777a3eb6838135a4bd5aa19710600131b72dce69da717cbefaa"
+    },
     "task:avrsg3": {
       "entityType": "task",
       "entityId": "avrsg3",
@@ -401,6 +417,14 @@
       "revision": 5,
       "headHash": "102d2c9789b92475be1bb87f4780636c81af7a5531292b5ac03c87888fce9318"
     },
+    "task:inslpj": {
+      "entityType": "task",
+      "entityId": "inslpj",
+      "path": "tasks/task-inslpj - xa-nh-android-v-web-ng-b-google-drive-01-Xóa-ảnh.md",
+      "hash": "0ea5fe75c269df8fd159624ce9a4fbd5f040c7233a6cc6dd0dbebbdf80e76c8d",
+      "revision": 2,
+      "headHash": "0ea5fe75c269df8fd159624ce9a4fbd5f040c7233a6cc6dd0dbebbdf80e76c8d"
+    },
     "task:j15llb": {
       "entityType": "task",
       "entityId": "j15llb",
@@ -489,6 +513,14 @@
       "revision": 11,
       "headHash": "7ff482b55d1a660ada9d3dc7573a7bcbde741257641054b9e5ce3c770c8e6019"
     },
+    "task:o0iw0p": {
+      "entityType": "task",
+      "entityId": "o0iw0p",
+      "path": "tasks/task-o0iw0p - xa-nh-android-v-web-ng-b-google-drive-04-Kiểm-thử.md",
+      "hash": "6b77bbba774b38df955d3ad4c098d577b1417280f6b3191a326a87b4d6918ffa",
+      "revision": 1,
+      "headHash": "6b77bbba774b38df955d3ad4c098d577b1417280f6b3191a326a87b4d6918ffa"
+    },
     "task:o6r10r": {
       "entityType": "task",
       "entityId": "o6r10r",
@@ -552,6 +584,14 @@
       "hash": "d35d0e5d58536b677f8702f1ec02f6fccdd3011de3117d3d8d139f227e9d8427",
       "revision": 3,
       "headHash": "d35d0e5d58536b677f8702f1ec02f6fccdd3011de3117d3d8d139f227e9d8427"
+    },
+    "task:rvw8c7": {
+      "entityType": "task",
+      "entityId": "rvw8c7",
+      "path": "tasks/task-rvw8c7 - xa-nh-android-v-web-ng-b-google-drive-03-Cảnh-báo.md",
+      "hash": "b9bce08c41d4bea5b382a72fdec6f0d67d4c3963936b5bd29d8e5e3d1a8e88f4",
+      "revision": 1,
+      "headHash": "b9bce08c41d4bea5b382a72fdec6f0d67d4c3963936b5bd29d8e5e3d1a8e88f4"
     },
     "task:ry4iav": {
       "entityType": "task",

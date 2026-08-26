@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 interface PhotoRepository {
     suspend fun add(photo: SitePhoto): AppResult<Unit>
+    suspend fun delete(photo: SitePhoto): AppResult<Unit> =
+        AppResult.Error(UnsupportedOperationException("Photo deletion is not supported"))
     suspend fun updateStatusTag(photo: SitePhoto, statusTag: String?): AppResult<SitePhoto> =
         AppResult.Success(photo.copy(statusTag = statusTag?.trim()?.takeIf { it.isNotEmpty() }))
     suspend fun byProject(projectId: String): AppResult<List<SitePhoto>>

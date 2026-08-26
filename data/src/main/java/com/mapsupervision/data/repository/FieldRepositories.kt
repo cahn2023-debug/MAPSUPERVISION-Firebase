@@ -40,6 +40,8 @@ import com.mapsupervision.domain.model.WorkPlan
 import com.mapsupervision.domain.repository.DailyLogRepository
 import com.mapsupervision.domain.repository.WorkVolumeProgressRepository
 import com.mapsupervision.domain.repository.PhotoRepository
+import com.mapsupervision.domain.repository.DomainEvent
+import com.mapsupervision.domain.repository.DomainEventBus
 import com.mapsupervision.domain.repository.ProgressRepository
 import com.mapsupervision.domain.repository.WorkPlanRepository
 import com.mapsupervision.storage.ProjectStorageManager
@@ -131,7 +133,8 @@ class PhotoRepositoryImpl @Inject constructor(
     private val dao: SitePhotoDao,
     private val projectScopedDatabaseProvider: ProjectScopedDatabaseProvider,
     private val projectDao: ProjectDao,
-    private val storageManager: ProjectStorageManager
+    private val storageManager: ProjectStorageManager,
+    private val domainEventBus: DomainEventBus
 ) : PhotoRepository {
     override suspend fun add(photo: SitePhoto): AppResult<Unit> = withContext(Dispatchers.IO) { runCatching {
         val normalized = photo.normalizeForStorage()
@@ -190,6 +193,54 @@ class PhotoRepositoryImpl @Inject constructor(
         onSuccess = { AppResult.Success(Unit) },
         onFailure = { AppResult.Error(DatabaseException("Failed to add photo", it)) }
     ) }
+
+    override suspend fun delete(photo: SitePhoto): AppResult<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val now = maxOf(System.currentTimeMillis(), photo.updatedAtEpochMs + 1L)
+            val database = scopedDatabase(photo.projectId)
+            val photoDao = database?.sitePhotoDao() ?: dao
+            photoDao.upsert(
+                photo.toEntity().copy(
+                    updatedAtEpochMs = now,
+                    isDeleted = true,
+                    deletedAtEpochMs = now,
+                    syncStatus = SitePhotoSyncStatus.PENDING,
+                    syncErrorMessage = null,
+                    lastSyncAttemptEpochMs = null
+                )
+            )
+            database?.photoTagDao()?.deleteForPhoto(photo.projectId, photo.id)
+            linkedSetOf(photo.filePath, photo.thumbnailPath)
+                .map(::File)
+                .filter { it.exists() }
+                .forEach { it.delete() }
+            deleteEmptyMediaFolders(File(photo.filePath).parentFile)
+            domainEventBus.publish(
+                DomainEvent.PhotoDeleted(
+                    projectId = photo.projectId,
+                    photoId = photo.id,
+                    objectCode = photo.objectCode,
+                    folderKey = listOfNotNull(photo.matchedNodeCode, photo.matchedRouteCode, photo.statusTag)
+                        .joinToString("/").ifBlank { photo.objectCode },
+                    occurredAtEpochMs = now
+                )
+            )
+        }.fold(
+            onSuccess = { AppResult.Success(Unit) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to delete photo", it)) }
+        )
+    }
+
+    private fun deleteEmptyMediaFolders(folder: File?) {
+        var current = folder
+        repeat(2) {
+            if (current != null && current.exists() && current.listFiles().isNullOrEmpty()) {
+                val parent = current.parentFile
+                current.delete()
+                current = parent
+            }
+        }
+    }
 
     override suspend fun updateStatusTag(photo: SitePhoto, statusTag: String?): AppResult<SitePhoto> =
         withContext(Dispatchers.IO) {

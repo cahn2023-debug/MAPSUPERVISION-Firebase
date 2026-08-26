@@ -327,6 +327,10 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text("Giờ khớp: ${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(selectedPhoto.matchedAtEpochMs.takeIf { it > 0L } ?: selectedPhoto.capturedAtEpochMs))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(
+                        onClick = { viewModel.deletePhoto(selectedPhoto) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Xóa ảnh khỏi Android") }
                 }
             },
             confirmButton = {

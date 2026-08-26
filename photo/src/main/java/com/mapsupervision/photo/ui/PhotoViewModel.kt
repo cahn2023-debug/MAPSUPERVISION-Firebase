@@ -163,6 +163,16 @@ class PhotoViewModel @Inject constructor(
         _selectedPhotoForReview.value = null
     }
 
+    fun deletePhoto(photo: SitePhoto) {
+        viewModelScope.launch {
+            val result = photoRepository.delete(photo)
+            if (result is AppResult.Success) {
+                clearPhotoReviewSelection()
+                refresh()
+            }
+        }
+    }
+
     fun updateSelectedPhotoTags(tagCodesCsv: String) {
         val current = _selectedPhotoForReview.value ?: return
         val activeId = activeProjectIdCache ?: return

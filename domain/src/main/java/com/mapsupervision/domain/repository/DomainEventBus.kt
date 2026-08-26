@@ -58,6 +58,14 @@ sealed interface DomainEvent {
         val actualQty: Double,
         override val occurredAtEpochMs: Long
     ) : DomainEvent
+
+    data class PhotoDeleted(
+        override val projectId: String?,
+        val photoId: String,
+        val objectCode: String,
+        val folderKey: String,
+        override val occurredAtEpochMs: Long
+    ) : DomainEvent
 }
 
 interface DomainEventBus {
@@ -65,4 +73,3 @@ interface DomainEventBus {
 
     suspend fun publish(event: DomainEvent)
 }
-

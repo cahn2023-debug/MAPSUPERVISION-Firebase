@@ -256,6 +256,11 @@ private class FakePhotoRepository : PhotoRepository {
         return AppResult.Success(Unit)
     }
 
+    override suspend fun delete(photo: SitePhoto): AppResult<Unit> {
+        saved.removeAll { it.id == photo.id }
+        return AppResult.Success(Unit)
+    }
+
     override suspend fun byProject(projectId: String): AppResult<List<SitePhoto>> {
         return AppResult.Success(saved.filter { it.projectId == projectId })
     }
