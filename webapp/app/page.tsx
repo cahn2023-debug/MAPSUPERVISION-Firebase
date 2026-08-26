@@ -679,7 +679,7 @@ export default function HomePage() {
   const [editingNoteDraft, setEditingNoteDraft] = useState(emptyNote);
   const [writeState, setWriteState] = useState("");
   const [writeBusy, setWriteBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "media" | "admin">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "dashboard" | "tasks" | "media" | "admin">("overview");
   const [selectedMapObject, setSelectedMapObject] = useState<SelectedObject>(null);
   const [mapSearchQuery, setMapSearchQuery] = useState("");
   const [mapFilterContractor, setMapFilterContractor] = useState("");
@@ -992,7 +992,10 @@ export default function HomePage() {
       .flatMap((tableName) => visibleCollections[tableName].map((row) => Number(row.updatedAtEpochMs ?? row.createdAtEpochMs ?? 0)))
       .filter((value) => Number.isFinite(value) && value > 0)
       .sort((left, right) => right - left)[0];
-    const plannedQty = visibleCollections.work_volume_progress.reduce((sum, row) => sum + Number(row.plannedQty ?? row.quantity ?? 0), 0);
+    const plannedFromNodeSummary = visibleCollections.gis_node.reduce((sum, row) => sum + parseDesignVolumeSummary(row.workVolumeSummary).reduce((subtotal, item) => subtotal + item.quantity, 0), 0);
+    const plannedFromDesign = visibleCollections.work_plan.reduce((sum, row) => sum + Number(row.quantity ?? row.plannedQty ?? 0), 0);
+    const plannedFromProgress = visibleCollections.work_volume_progress.reduce((sum, row) => sum + Number(row.plannedQty ?? row.quantity ?? 0), 0);
+    const plannedQty = plannedFromNodeSummary > 0 ? plannedFromNodeSummary : plannedFromDesign > 0 ? plannedFromDesign : plannedFromProgress;
     const actualQty = visibleCollections.work_volume_progress.reduce((sum, row) => sum + Number(row.actualQty ?? row.completedQty ?? 0), 0);
     const openTasks = visibleCollections.task.filter((task) => String(task.status ?? "TODO") !== "DONE").length;
     return {
@@ -1003,6 +1006,33 @@ export default function HomePage() {
       materialPercent: plannedQty > 0 ? Math.min(100, (actualQty / plannedQty) * 100) : 0
     };
   }, [visibleCollections]);
+
+  const dashboardWorkRows = useMemo(() => {
+    const grouped = new Map<string, { planned: number; actual: number; unit: string }>();
+    for (const row of visibleCollections.gis_node) {
+      for (const item of parseDesignVolumeSummary(row.workVolumeSummary)) {
+        const current = grouped.get(item.name) ?? { planned: 0, actual: 0, unit: "" };
+        current.planned += item.quantity;
+        grouped.set(item.name, current);
+      }
+    }
+    for (const row of visibleCollections.work_plan) {
+      const name = text(row, "workName", "categoryName", "name", "title") || "Chưa phân loại";
+      const current = grouped.get(name) ?? { planned: 0, actual: 0, unit: text(row, "unit") };
+      current.planned += Number(row.quantity ?? row.plannedQty ?? 0);
+      if (!current.unit) current.unit = text(row, "unit");
+      grouped.set(name, current);
+    }
+    for (const row of visibleCollections.work_volume_progress) {
+      const name = text(row, "workName", "categoryName", "name", "title") || "Chưa phân loại";
+      const current = grouped.get(name) ?? { planned: 0, actual: 0, unit: text(row, "unit") };
+      if (current.planned === 0) current.planned += Number(row.plannedQty ?? row.quantity ?? 0);
+      current.actual += Number(row.actualQty ?? row.completedQty ?? 0);
+      if (!current.unit) current.unit = text(row, "unit");
+      grouped.set(name, current);
+    }
+    return [...grouped.entries()].map(([name, values]) => ({ name, ...values, percent: values.planned > 0 ? Math.min(100, (values.actual / values.planned) * 100) : 0 })).sort((a, b) => b.planned - a.planned);
+  }, [visibleCollections.gis_node, visibleCollections.work_plan, visibleCollections.work_volume_progress]);
 
   const photoNodeGroups = useMemo(() => {
     return groupPhotosByNodeAndTag(
@@ -1581,6 +1611,13 @@ export default function HomePage() {
           Sơ đồ & Trạng thái
         </button>
         <button
+          className={`tab-btn ${activeTab === "dashboard" ? "active" : ""}`}
+          type="button"
+          onClick={() => setActiveTab("dashboard")}
+        >
+          DASHBOARD
+        </button>
+        <button
           className={`tab-btn ${activeTab === "tasks" ? "active" : ""}`}
           type="button"
           onClick={() => setActiveTab("tasks")}
@@ -1719,6 +1756,31 @@ export default function HomePage() {
             </div>
           )}
         </>
+      )}
+
+      {activeTab === "dashboard" && (
+        <section className="dashboard-page" aria-labelledby="dashboard-title">
+          <div className="dashboard-heading">
+            <div><span className="eyebrow">TIẾN ĐỘ DỰ ÁN</span><h2 id="dashboard-title">Dashboard khối lượng thực hiện</h2><p className="muted">So sánh khối lượng thực hiện với tổng khối lượng theo thiết kế.</p></div>
+            <span className="dashboard-live"><span className="status-dot ok" /> Realtime</span>
+          </div>
+          <div className="dashboard-kpis">
+            <StatCard label="Tổng khối lượng thiết kế" value={formatNumber(stats.plannedQty)} detail="Theo hồ sơ thiết kế" />
+            <StatCard label="Khối lượng đã thực hiện" value={formatNumber(stats.actualQty)} detail="Tổng ghi nhận thực tế" />
+            <StatCard label="Tỷ lệ hoàn thành" value={`${stats.materialPercent.toFixed(1)}%`} detail={`${dashboardWorkRows.length} hạng mục`} progress={stats.materialPercent} />
+          </div>
+          <div className="dashboard-grid">
+            <Panel title="Tổng quan hoàn thành" subtitle="Thực hiện / Thiết kế">
+              <div className="completion-chart-wrap">
+                <div className="completion-donut" style={{ background: `conic-gradient(var(--accent) ${stats.materialPercent}%, var(--surface-soft) 0)` }} role="img" aria-label={`Đã hoàn thành ${stats.materialPercent.toFixed(1)} phần trăm`}><div><strong>{stats.materialPercent.toFixed(1)}%</strong><span>hoàn thành</span></div></div>
+                <div className="completion-legend"><div><span className="legend-dot actual" />Đã thực hiện <strong>{formatNumber(stats.actualQty)}</strong></div><div><span className="legend-dot planned" />Còn lại <strong>{formatNumber(Math.max(0, stats.plannedQty - stats.actualQty))}</strong></div><small>Tỷ lệ tính trên tổng khối lượng thiết kế.</small></div>
+              </div>
+            </Panel>
+            <Panel title="Theo hạng mục" subtitle="Khối lượng thực hiện / thiết kế">
+              {dashboardWorkRows.length ? <div className="dashboard-bars">{dashboardWorkRows.map((row) => <div className="dashboard-bar-row" key={row.name}><div className="dashboard-bar-label"><span title={row.name}>{row.name}</span><strong>{row.percent.toFixed(0)}%</strong></div><div className="dashboard-bar-track"><div className="dashboard-bar-fill" style={{ width: `${row.percent}%` }} /></div><small>{formatNumber(row.actual)} / {formatNumber(row.planned)}{row.unit ? ` ${row.unit}` : ""}</small></div>)}</div> : <div className="empty-state">Chưa có dữ liệu khối lượng cho dự án này.</div>}
+            </Panel>
+          </div>
+        </section>
       )}
 
       {/* Tab Content: Tasks */}
@@ -2267,6 +2329,16 @@ function StatCard({
       <small>{detail}</small>
     </section>
   );
+}
+
+function parseDesignVolumeSummary(value: unknown): Array<{ name: string; quantity: number }> {
+  return String(value ?? "").split(/\r?\n/).map((line) => {
+    const separator = line.lastIndexOf(":");
+    if (separator < 1) return null;
+    const name = line.slice(0, separator).trim();
+    const quantity = Number(line.slice(separator + 1).trim().replace(",", "."));
+    return name && Number.isFinite(quantity) ? { name, quantity } : null;
+  }).filter((row): row is { name: string; quantity: number } => row !== null);
 }
 
 function ThemeToggle({ theme, onToggle, floating = false }: { theme: Theme; onToggle: () => void; floating?: boolean }) {
