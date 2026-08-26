@@ -1,11 +1,3 @@
 {
-  "active": [
-    {
-      "taskId": "inslpj",
-      "taskTitle": "[xa-nh-android-v-web-ng-b-google-drive-01] Xóa ảnh local Android và đồng bộ outbox",
-      "startedAt": "2026-08-26T04:57:54.024Z",
-      "pausedAt": null,
-      "totalPausedMs": 0
-    }
-  ]
+  "active": []
 }

@@ -1,15 +1,16 @@
 ---
 id: rvw8c7
 title: "[xa-nh-android-v-web-ng-b-google-drive-03] Cảnh báo và thao tác giữ hoặc xóa ảnh trên web"
-status: todo
+status: in-progress
 priority: high
 labels:
   - from-spec
   - spec:xa-nh-android-v-web-ng-b-google-drive
   - spec-date:2026-08-26
 createdAt: '2026-08-26T04:53:29.978Z'
-updatedAt: '2026-08-26T04:53:29.978Z'
+updatedAt: '2026-08-26T05:12:25.353Z'
 timeSpent: 0
+assignee: '@me'
 spec: specs/2026-08-26/xa-nh-android-v-web-ng-b-google-drive
 fulfills:
   - AC-4
@@ -29,5 +30,17 @@ Hiển thị trạng thái ảnh đã xóa trên Android theo từng ảnh, hỗ
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
+- [ ] #1 Web keeps Android-deleted photos visible with a per-photo warning.
+- [ ] #2 Keep action removes the warning without deleting Drive media.
+- [ ] #3 Drive delete action requires explicit confirmation and shows busy/error states.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Extend the site_photos listener to retain Android-deleted records needed for review.
+2. Add per-photo keep/delete actions to the lightbox UI.
+3. Route Drive deletion through the authenticated backend and handle retryable errors.
+4. Build/test the webapp and record D1-D5 compliance and System Decision Impact.
+<!-- SECTION:PLAN:END -->
 
