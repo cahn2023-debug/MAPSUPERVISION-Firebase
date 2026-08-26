@@ -115,6 +115,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "doc:doc-999d119bf410fdf75ca257aa554f353a": {
+    "entityType": "doc",
+    "entityId": "doc-999d119bf410fdf75ca257aa554f353a",
+    "canonicalHash": "1827c369dd7d90181929811d5471a647fa50d6f4f346d6673a700b4fb81cd1a7",
+    "indexedHash": "1827c369dd7d90181929811d5471a647fa50d6f4f346d6673a700b4fb81cd1a7",
+    "revision": 5,
+    "path": "docs/specs/2026-08-26/node-popup-header-scaling-and-full-work-items-synchronization.md",
+    "indexedRevision": 5,
+    "indexedPath": "docs/specs/2026-08-26/node-popup-header-scaling-and-full-work-items-synchronization.md",
+    "indexedAt": "2026-08-26T15:31:41.656594Z"
+  },
   "doc:doc-a66e7a1cd11f0b1e59463e199f491bfa": {
     "entityType": "doc",
     "entityId": "doc-a66e7a1cd11f0b1e59463e199f491bfa",
@@ -256,6 +267,17 @@
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
   },
+  "task:2ddj6z": {
+    "entityType": "task",
+    "entityId": "2ddj6z",
+    "canonicalHash": "0824213829ee2b2bed8f67cf11a7a9b805e939bae928c99c4d4e15e4b6ed1aa3",
+    "indexedHash": "0824213829ee2b2bed8f67cf11a7a9b805e939bae928c99c4d4e15e4b6ed1aa3",
+    "revision": 3,
+    "path": "tasks/2ddj6z.md",
+    "indexedRevision": 3,
+    "indexedPath": "tasks/2ddj6z.md",
+    "indexedAt": "2026-08-26T15:31:29.1280554Z"
+  },
   "task:3rw9vs": {
     "entityType": "task",
     "entityId": "3rw9vs",
@@ -318,6 +340,17 @@
     "indexedRevision": 3,
     "indexedPath": "tasks/58yfng.md",
     "indexedAt": "2026-08-26T02:25:46.6455251Z"
+  },
+  "task:5k9j9b": {
+    "entityType": "task",
+    "entityId": "5k9j9b",
+    "canonicalHash": "3ca34c49a6364bf1b6e371444383888c6b87e3c8da73f51e5f42ef32b9489a78",
+    "indexedHash": "3ca34c49a6364bf1b6e371444383888c6b87e3c8da73f51e5f42ef32b9489a78",
+    "revision": 2,
+    "path": "tasks/5k9j9b.md",
+    "indexedRevision": 2,
+    "indexedPath": "tasks/5k9j9b.md",
+    "indexedAt": "2026-08-26T15:31:32.0716577Z"
   },
   "task:5lh0mh": {
     "entityType": "task",
@@ -1112,5 +1145,16 @@
     "path": "tasks/zfv69f.md",
     "indexedAt": "0001-01-01T00:00:00Z",
     "stale": true
+  },
+  "task:zpd7m7": {
+    "entityType": "task",
+    "entityId": "zpd7m7",
+    "canonicalHash": "becb0fab569e7352f396b1d5fdba48e343ba112d336528454d66274262d09f3e",
+    "indexedHash": "becb0fab569e7352f396b1d5fdba48e343ba112d336528454d66274262d09f3e",
+    "revision": 2,
+    "path": "tasks/zpd7m7.md",
+    "indexedRevision": 2,
+    "indexedPath": "tasks/zpd7m7.md",
+    "indexedAt": "2026-08-26T15:31:35.6342992Z"
   }
 }

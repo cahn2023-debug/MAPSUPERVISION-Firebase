@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.border
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Column
@@ -1394,9 +1395,10 @@ fun MapHubScreen(
                                             .padding(horizontal = 8.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("Nội dung", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
-                                        Text("KL thiết kế", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
-                                        Text("KL thi công", modifier = Modifier.weight(0.25f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+                                        Text("STT", modifier = Modifier.weight(0.12f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("Nội dung", modifier = Modifier.weight(0.44f), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("KL thiết kế", modifier = Modifier.weight(0.22f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("KL thi công", modifier = Modifier.weight(0.22f), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                                     }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 1.dp)
 
@@ -1417,15 +1419,22 @@ fun MapHubScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
+                                                text = "${index + 1}",
+                                                modifier = Modifier.weight(0.12f),
+                                                fontSize = 11.sp,
+                                                textAlign = TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
                                                 text = itemName,
-                                                modifier = Modifier.weight(0.5f),
+                                                modifier = Modifier.weight(0.44f),
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 lineHeight = 16.sp
                                             )
                                             Text(
-                                                text = itemCount.ifBlank { "-" },
-                                                modifier = Modifier.weight(0.25f),
+                                                text = if (itemCount.isBlank() || itemCount == "0") "0" else itemCount,
+                                                modifier = Modifier.weight(0.22f),
                                                 fontSize = 12.sp,
                                                 textAlign = TextAlign.Center,
                                                 fontWeight = FontWeight.SemiBold,
@@ -1433,7 +1442,7 @@ fun MapHubScreen(
                                             )
                                             Box(
                                                 modifier = Modifier
-                                                    .weight(0.25f)
+                                                    .weight(0.22f)
                                                     .heightIn(min = 34.dp)
                                                     .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
                                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
@@ -2150,75 +2159,91 @@ private fun NodeIdentityHeader(
     onCloseNodeCard: () -> Unit
 ) {
     val isCenter = mapUi.centerNodeCode == node.code
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        // Row 1: Primary Title + Action Buttons
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Mã: ${node.code}",
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            if (node.mapNumberLabel.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (mapUi.status.isNotBlank()) {
                     Text(
-                        text = "Số hiệu: ${node.mapNumberLabel}",
-                        color = MaterialTheme.colorScheme.primary,
+                        text = mapUi.status,
+                        color = if (mapUi.status.contains("Chậm", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        modifier = Modifier.padding(end = 2.dp)
                     )
                 }
-            }
-            if (isCenter) {
-                Box(
+                Text(
+                    text = if (isCenter) "Bỏ trung tâm" else "Đặt trung tâm",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
-                        .background(Color(0xFFF97316), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "Điểm trung tâm",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable {
+                            if (isCenter) onSetCenterNode(null) else onSetCenterNode(node)
+                        }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+                IconButton(onClick = onCloseNodeCard, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
                 }
             }
         }
-        if (mapUi.status.isNotBlank()) {
-            Text(
-                text = mapUi.status,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(end = 4.dp)
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = if (isCenter) "Bỏ trung tâm" else "Đặt trung tâm",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable {
-                        if (isCenter) onSetCenterNode(null) else onSetCenterNode(node)
+
+        // Row 2: Secondary Identifiers & Badges (Số hiệu / Điểm trung tâm)
+        if (node.mapNumberLabel.isNotBlank() || isCenter) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (node.mapNumberLabel.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Số hiệu: ${node.mapNumberLabel}",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            )
-            IconButton(onClick = onCloseNodeCard, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Outlined.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                }
+                if (isCenter) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFF97316), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Điểm trung tâm",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }

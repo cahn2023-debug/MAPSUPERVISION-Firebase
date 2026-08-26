@@ -61,6 +61,7 @@ internal data class WorkspaceIndexes(
     val progressByNodeCode: Map<String, NodeProgress> = emptyMap(),
     val workVolumeRowsByNodeKey: Map<String, List<WorkVolumeProgress>> = emptyMap(),
     val parsedMaterialsByNodeKey: Map<String, List<PreparedMaterialLine>> = emptyMap(),
+    val allProjectWorkNames: List<String> = emptyList(),
     val normalizedNodeSearch: Map<String, NodeSearchIndex> = emptyMap(),
     val normalizedRouteSearch: Map<String, RouteSearchIndex> = emptyMap(),
     val materialTypeOptions: List<String> = emptyList(),
@@ -346,6 +347,24 @@ internal fun buildWorkspaceIndexes(state: WorkspaceState): WorkspaceIndexes {
         }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
+    val allProjectWorkNamesSet = LinkedHashSet<String>()
+    for (node in state.designNodes) {
+        val parsed = parsedMaterialsByNodeKey[node.id].orEmpty()
+        for (item in parsed) {
+            val name = item.itemName.trim()
+            if (name.isNotBlank() && !name.equals("routeLength", ignoreCase = true)) {
+                allProjectWorkNamesSet.add(name)
+            }
+        }
+    }
+    for (row in state.workVolumeRows) {
+        val name = row.workName.trim()
+        if (name.isNotBlank() && !name.equals("routeLength", ignoreCase = true)) {
+            allProjectWorkNamesSet.add(name)
+        }
+    }
+    val allProjectWorkNames = allProjectWorkNamesSet.sortedWith(String.CASE_INSENSITIVE_ORDER)
+
     return WorkspaceIndexes(
         nodesById = nodesById,
         nodesByCode = nodesByCode,
@@ -354,6 +373,7 @@ internal fun buildWorkspaceIndexes(state: WorkspaceState): WorkspaceIndexes {
         progressByNodeCode = progressByNodeCode,
         workVolumeRowsByNodeKey = workVolumeRowsByNodeKey,
         parsedMaterialsByNodeKey = parsedMaterialsByNodeKey,
+        allProjectWorkNames = allProjectWorkNames,
         normalizedNodeSearch = state.designNodes.associate { node -> node.id to buildNodeSearchIndex(node) },
         normalizedRouteSearch = state.designRoutes.associate { route -> route.code to buildRouteSearchIndex(route) },
         materialTypeOptions = materialTypeOptions,

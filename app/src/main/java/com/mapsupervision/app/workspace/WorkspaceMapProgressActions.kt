@@ -306,15 +306,15 @@ fun WorkspaceViewModel.addDailyLog(
 }
 
 internal fun WorkspaceViewModel.extractPlannedQty(node: GisNode?, workName: String): Float {
-    if (node == null) return 100f
+    if (node == null) return 0f
     val lines = node.workVolumeSummary.split("\n")
     for (line in lines) {
         val parts = line.split(":", limit = 2)
         if (parts.size == 2 && parts[0].trim().equals(workName, ignoreCase = true)) {
-            return parts[1].trim().toFloatOrNull() ?: 100f
+            return parts[1].trim().toFloatOrNull() ?: 0f
         }
     }
-    return 100f
+    return 0f
 }
 
 fun WorkspaceViewModel.addWorkCategory(name: String, unit: String) {
@@ -1187,9 +1187,21 @@ fun WorkspaceViewModel.getDataHubUiState(): DataHubUiState = ensureIndexes().dat
 fun WorkspaceViewModel.getSelectedNodeMaterialLines(): List<PreparedMaterialLine> {
     val stateSnapshot = _state.value
     val selectedNode = stateSnapshot.mapUi.selectedNode ?: return emptyList()
-    val baseLines = ensureIndexes(stateSnapshot).parsedMaterialsByNodeKey[selectedNode.id].orEmpty()
-    return baseLines.map { line ->
-        line.copy(actualText = resolveMaterialActualText(stateSnapshot.workVolumeProgress, selectedNode, line.itemName))
+    val indexes = ensureIndexes(stateSnapshot)
+    val baseLines = indexes.parsedMaterialsByNodeKey[selectedNode.id].orEmpty()
+    val nodeLinesByName = baseLines.associateBy { it.itemName.trim().lowercase() }
+    val allWorkNames = indexes.allProjectWorkNames.ifEmpty { baseLines.map { it.itemName.trim() } }
+
+    return allWorkNames.map { workName ->
+        val existing = nodeLinesByName[workName.trim().lowercase()]
+        val plannedText = existing?.plannedText?.trim().orEmpty()
+        val plannedQty = existing?.plannedQty ?: (plannedText.toFloatOrNull() ?: 0f)
+        PreparedMaterialLine(
+            itemName = workName,
+            plannedText = if (plannedText.isNotBlank()) plannedText else "0",
+            plannedQty = plannedQty,
+            actualText = resolveMaterialActualText(stateSnapshot.workVolumeProgress, selectedNode, workName)
+        )
     }
 }
 

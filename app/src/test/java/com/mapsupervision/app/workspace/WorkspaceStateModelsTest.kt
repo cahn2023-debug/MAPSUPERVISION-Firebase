@@ -168,5 +168,47 @@ class WorkspaceStateModelsTest {
         assertEquals(1.5f, updated.mapUi.nodeSizeScale)
         assertEquals(2.0f, updated.mapUi.routeWidthScale)
     }
+
+    @Test
+    fun `buildWorkspaceIndexes aggregates allProjectWorkNames from nodes and rows sorted case-insensitively`() {
+        val node1 = com.mapsupervision.domain.model.GisNode(
+            id = "n1",
+            projectId = "p1",
+            code = "N01",
+            contractor = "C1",
+            latitude = 21.0,
+            longitude = 105.0,
+            workVolumeSummary = "Tủ đèn: 2\nĐiện (m): 100"
+        )
+        val node2 = com.mapsupervision.domain.model.GisNode(
+            id = "n2",
+            projectId = "p1",
+            code = "N02",
+            contractor = "C1",
+            latitude = 21.1,
+            longitude = 105.1,
+            workVolumeSummary = "Đào đường Asphalt: 50\nĐiện (m): 50"
+        )
+        val row = WorkVolumeProgress(
+            id = "r1",
+            projectId = "p1",
+            nodeCode = "N01",
+            workName = "Ống HDPE D65/50",
+            plannedQty = 0f,
+            actualQty = 10f,
+            updatedAtEpochMs = 1L
+        )
+        val state = WorkspaceState(
+            designNodes = listOf(node1, node2),
+            workVolumeRows = listOf(row)
+        )
+
+        val indexes = buildWorkspaceIndexes(state)
+
+        assertEquals(
+            listOf("Điện (m)", "Đào đường Asphalt", "Ống HDPE D65/50", "Tủ đèn").sortedWith(String.CASE_INSENSITIVE_ORDER),
+            indexes.allProjectWorkNames
+        )
+    }
 }
 
