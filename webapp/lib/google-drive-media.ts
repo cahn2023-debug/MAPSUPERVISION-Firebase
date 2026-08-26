@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import fs from "node:fs";
 import { google, type drive_v3 } from "googleapis";
+import { sanitizePrivateKey, sanitizeServiceAccount } from "./firebase-admin";
 
 export { driveFileIdFromUrl } from "./google-drive-image";
 
@@ -103,10 +104,7 @@ function serviceAccountCredentials() {
   const filePath = stripWrappingQuotes(process.env.GOOGLE_SERVICE_ACCOUNT_FILE || process.env.FIREBASE_SERVICE_ACCOUNT_FILE || "");
   if (filePath && fs.existsSync(filePath)) {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    if (typeof parsed.private_key === "string") {
-      parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-    }
-    return parsed;
+    return sanitizeServiceAccount(parsed);
   }
 
   const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
@@ -127,10 +125,7 @@ function serviceAccountCredentials() {
       }
     }
     if (parsed) {
-      if (typeof parsed.private_key === "string") {
-        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-      }
-      return parsed;
+      return sanitizeServiceAccount(parsed);
     }
   }
 
@@ -141,7 +136,7 @@ function serviceAccountCredentials() {
   if (clientEmail && privateKey) {
     return {
       client_email: clientEmail,
-      private_key: privateKey.replace(/\\n/g, "\n"),
+      private_key: sanitizePrivateKey(privateKey),
       project_id: projectId
     };
   }
