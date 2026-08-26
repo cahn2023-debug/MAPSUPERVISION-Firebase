@@ -11,6 +11,8 @@ type PublicData = {
   project: Row;
   collections: Record<string, Row[]>;
   updatedAtEpochMs: number;
+  isCached?: boolean;
+  quotaExceeded?: boolean;
 };
 
 type TabKey = "map" | "photos" | "daily_log" | "progress" | "gis";
@@ -101,7 +103,7 @@ function extractPhotoTags(photo: Row): string[] {
   return Array.from(tagsSet);
 }
 
-export type PhotoNodeGroup = {
+type PhotoNodeGroup = {
   nodeKey: string;
   nodeName: string;
   nodeCode: string;
@@ -115,20 +117,47 @@ export type PhotoNodeGroup = {
 
 function groupPhotosByNodeAndTag(
   photos: Row[],
-  gisNodes: Row[],
-  searchKeyword: string,
-  selectedTagFilter: string,
-  contractorFilter: string
+  nodes: Row[],
+  searchKeyword = "",
+  tagFilter = "",
+  contractorFilter = ""
 ): PhotoNodeGroup[] {
-  const nodeMap = new Map<string, Row>();
-  for (const node of gisNodes) {
-    const id = String(node.id || "").trim();
-    const code = String(node.code || node.nodeCode || "").trim();
-    const name = String(node.name || "").trim();
-    if (id) nodeMap.set(id, node);
-    if (code) nodeMap.set(code, node);
-    if (name) nodeMap.set(name, node);
-  }
+  const normalizedSearch = searchKeyword.trim().toLowerCase();
+
+  const filteredPhotos = photos.filter((photo) => {
+    if (contractorFilter) {
+      const c = String(photo.contractor ?? "").toLowerCase();
+      if (!c.includes(contractorFilter.toLowerCase())) {
+        return false;
+      }
+    }
+
+    const photoTags = extractPhotoTags(photo);
+    if (tagFilter) {
+      if (!photoTags.includes(tagFilter)) {
+        return false;
+      }
+    }
+
+    if (normalizedSearch) {
+      const code = String(photo.objectCode ?? "").toLowerCase();
+      const node = String(photo.matchedNodeId ?? "").toLowerCase();
+      const eng = String(photo.engineer ?? "").toLowerCase();
+      const note = String(photo.captureNote ?? photo.caption ?? "").toLowerCase();
+      const matchTag = photoTags.some((t) => t.toLowerCase().includes(normalizedSearch));
+
+      const matches =
+        code.includes(normalizedSearch) ||
+        node.includes(normalizedSearch) ||
+        eng.includes(normalizedSearch) ||
+        note.includes(normalizedSearch) ||
+        matchTag;
+
+      if (!matches) return false;
+    }
+
+    return true;
+  });
 
   const groupsByKey = new Map<string, {
     nodeKey: string;
@@ -138,15 +167,16 @@ function groupPhotosByNodeAndTag(
     photos: Row[];
   }>();
 
-  for (const photo of photos) {
-    const photoId = String(photo.id || "");
-    if (!photoId && !photo.capturedAtEpochMs && !photo.remoteUrl) continue;
+  for (const photo of filteredPhotos) {
+    const objectCode = String(photo.objectCode || "").trim();
+    const matchedNodeId = String(photo.matchedNodeId || photo.nodeId || "").trim();
 
-    const matchedNodeId = String(photo.matchedNodeId || "").trim();
-    const objectCode = String(photo.objectCode || photo.nodeCode || "").trim();
-
-    const matchedNode = (matchedNodeId && nodeMap.get(matchedNodeId)) ||
-                        (objectCode && nodeMap.get(objectCode));
+    const matchedNode = nodes.find((n) => {
+      const nid = String(n.id || "").trim();
+      const ncode = String(n.code || n.nodeCode || "").trim();
+      return (matchedNodeId && (nid === matchedNodeId || ncode === matchedNodeId)) ||
+             (objectCode && (ncode === objectCode || nid === objectCode));
+    });
 
     const nodeCode = matchedNode ? String(matchedNode.code || matchedNode.nodeCode || objectCode) : (objectCode || "UNASSIGNED");
     const nodeName = matchedNode ? String(matchedNode.name || nodeCode) : (objectCode ? `Vị trí ${objectCode}` : "Ảnh chưa phân loại Node");
@@ -168,13 +198,6 @@ function groupPhotosByNodeAndTag(
   const result: PhotoNodeGroup[] = [];
 
   for (const group of groupsByKey.values()) {
-    if (contractorFilter) {
-      const c = (group.contractor || "").toLowerCase();
-      if (!c.includes(contractorFilter.toLowerCase())) {
-        continue;
-      }
-    }
-
     group.photos.sort((a, b) => Number(b.capturedAtEpochMs ?? b.updatedAtEpochMs ?? 0) - Number(a.capturedAtEpochMs ?? a.updatedAtEpochMs ?? 0));
 
     const tagSet = new Set<string>();
@@ -186,113 +209,63 @@ function groupPhotosByNodeAndTag(
       if (tags.length === 0) {
         untaggedPhotos.push(photo);
       } else {
-        for (const tag of tags) {
+        tags.forEach((tag) => {
           tagSet.add(tag);
           if (!photosByTag[tag]) {
             photosByTag[tag] = [];
           }
           photosByTag[tag].push(photo);
-        }
+        });
       }
     }
 
     const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b, "vi"));
     const hasTags = tags.length > 0;
 
-    let filteredAllPhotos = group.photos;
-    if (searchKeyword.trim()) {
-      const q = searchKeyword.toLowerCase();
-      filteredAllPhotos = filteredAllPhotos.filter((p) => {
-        const oCode = String(p.objectCode || "").toLowerCase();
-        const eng = String(p.engineer || "").toLowerCase();
-        const note = String(p.captureNote || p.caption || "").toLowerCase();
-        const nName = group.nodeName.toLowerCase();
-        const nCode = group.nodeCode.toLowerCase();
-        const pTags = extractPhotoTags(p).join(" ").toLowerCase();
-        return oCode.includes(q) || eng.includes(q) || note.includes(q) || nName.includes(q) || nCode.includes(q) || pTags.includes(q);
-      });
-    }
-
-    if (selectedTagFilter) {
-      if (selectedTagFilter === "__UNTAGGED__") {
-        filteredAllPhotos = filteredAllPhotos.filter((p) => extractPhotoTags(p).length === 0);
-      } else {
-        filteredAllPhotos = filteredAllPhotos.filter((p) => extractPhotoTags(p).includes(selectedTagFilter));
-      }
-    }
-
-    if (filteredAllPhotos.length === 0 && (searchKeyword.trim() || selectedTagFilter)) {
-      continue;
-    }
-
-    const filteredPhotosByTag: Record<string, Row[]> = {};
-    const filteredUntagged: Row[] = [];
-
-    for (const tag of tags) {
-      if (selectedTagFilter && selectedTagFilter !== tag) continue;
-      const list = (photosByTag[tag] || []).filter((p) => filteredAllPhotos.includes(p));
-      if (list.length > 0 || !selectedTagFilter) {
-        filteredPhotosByTag[tag] = list;
-      }
-    }
-
-    const unList = untaggedPhotos.filter((p) => filteredAllPhotos.includes(p));
-    if (unList.length > 0) {
-      filteredUntagged.push(...unList);
-    }
-
-    const finalTags = selectedTagFilter && selectedTagFilter !== "__UNTAGGED__"
-      ? (tags.includes(selectedTagFilter) ? [selectedTagFilter] : [])
-      : tags;
-
     result.push({
       nodeKey: group.nodeKey,
       nodeName: group.nodeName,
       nodeCode: group.nodeCode,
       contractor: group.contractor,
-      hasTags: hasTags && (!selectedTagFilter || selectedTagFilter !== "__UNTAGGED__"),
-      tags: finalTags,
-      photosByTag: filteredPhotosByTag,
-      untaggedPhotos: filteredUntagged,
-      allPhotos: filteredAllPhotos
+      hasTags,
+      tags,
+      photosByTag,
+      untaggedPhotos,
+      allPhotos: group.photos
     });
   }
 
-  return result.sort((a, b) => a.nodeCode.localeCompare(b.nodeCode, "vi"));
+  return result.sort((a, b) => {
+    if (a.nodeKey === "UNASSIGNED") return 1;
+    if (b.nodeKey === "UNASSIGNED") return -1;
+    return a.nodeName.localeCompare(b.nodeName, "vi");
+  });
 }
 
 function PublicPhotoThumbnail({
   photo,
-  onClick,
-  width = 600
+  onClick
 }: {
   photo: Row;
   onClick: () => void;
-  width?: number;
 }) {
-  const directUrl = imageUrlForPhoto(photo, width);
+  const directUrl = imageUrlForPhoto(photo, 400);
   const proxyUrl = `/api/public/269-2026/media/${encodeURIComponent(String(photo.id))}`;
-  const [src, setSrc] = useState<string | undefined>(directUrl || proxyUrl);
+  const [src, setSrc] = useState<string>(directUrl || proxyUrl);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    setSrc(directUrl || proxyUrl);
-    setFailed(false);
-  }, [directUrl, proxyUrl]);
-
-  const driveUrl = driveLinkForPhoto(photo);
   const tags = extractPhotoTags(photo);
-  const isDone = photo.syncStatus === "DONE" || Boolean(driveUrl);
+  const isDone = String(photo.syncStatus || "") === "DONE" || Boolean(photo.remoteUrl);
   const lat = getNumericCoordinate(photo.latitude);
   const lon = getNumericCoordinate(photo.longitude);
 
   return (
     <div className="photo-card-mini" onClick={onClick}>
       <div className="photo-card-thumb-wrap">
-        {!failed && src ? (
+        {!failed ? (
           <img
             src={src}
-            alt={String(photo.objectCode || "Ảnh thực địa")}
+            alt={display(photo.objectCode || photo.id)}
             loading="lazy"
             onError={() => {
               if (src !== proxyUrl) {
@@ -338,8 +311,29 @@ function PublicPhotoThumbnail({
 }
 
 export default function PublicProjectPage() {
-  const [data, setData] = useState<PublicData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PublicData | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("mapsupervision_public_269_2026_cache");
+        if (cached) return JSON.parse(cached);
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return !localStorage.getItem("mapsupervision_public_269_2026_cache");
+      } catch {
+        return true;
+      }
+    }
+    return true;
+  });
+
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("map");
@@ -382,17 +376,33 @@ export default function PublicProjectPage() {
     }
   };
 
-  // Data fetching
+  // Data fetching with local cache persistence and graceful degradation
   const loadData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const response = await fetch("/api/public/269-2026", { cache: "no-store" });
+      const response = await fetch("/api/public/269-2026");
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Không thể tải dữ liệu dự án.");
       setData(body);
       setError("");
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("mapsupervision_public_269_2026_cache", JSON.stringify(body));
+        } catch {
+          // ignore
+        }
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể tải dữ liệu dự án.");
+      const msg = cause instanceof Error ? cause.message : "Không thể tải dữ liệu dự án.";
+      // If we already have cached data in state, do not blank out the page
+      setData((current) => {
+        if (current) {
+          setError(""); // Don't show hard error block
+          return { ...current, quotaExceeded: true };
+        }
+        setError(msg);
+        return null;
+      });
     } finally {
       setLoading(false);
       if (isManual) setRefreshing(false);
@@ -402,8 +412,10 @@ export default function PublicProjectPage() {
   useEffect(() => {
     void loadData(false);
     const timer = window.setInterval(() => {
-      void loadData(false);
-    }, 30_000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void loadData(false);
+      }
+    }, 120_000); // 2 minutes interval
     return () => window.clearInterval(timer);
   }, [loadData]);
 
@@ -728,6 +740,15 @@ export default function PublicProjectPage() {
             </button>
           </div>
         </div>
+
+        {Boolean(data?.quotaExceeded || data?.isCached) && (
+          <div className="public-cache-banner">
+            <span className="public-cache-icon">⚡</span>
+            <div className="public-cache-text">
+              <strong>Chế độ Bộ nhớ đệm Tốc độ cao:</strong> Website đang phục vụ dữ liệu từ bản lưu đệm an toàn để đảm bảo hoạt động liên tục và ổn định.
+            </div>
+          </div>
+        )}
 
         {/* KPI METRICS OVERVIEW CARDS */}
         <div className="public-kpi-grid">

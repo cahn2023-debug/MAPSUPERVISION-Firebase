@@ -10,12 +10,17 @@ export async function GET() {
       return NextResponse.json({ error: "Không tìm thấy dự án công khai 269 - 2026." }, { status: 404 });
     }
     return NextResponse.json(payload, {
-      headers: { "Cache-Control": "no-store" }
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
+        "CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
+        "Vercel-CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400"
+      }
     });
   } catch (error) {
     console.error("[api/public/269-2026] Error fetching public project:", error);
+    const msg = error instanceof Error ? error.message : "Đã xảy ra lỗi khi tải dữ liệu dự án công khai.";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Đã xảy ra lỗi khi tải dữ liệu dự án công khai." },
+      { error: msg },
       { status: 500 }
     );
   }
