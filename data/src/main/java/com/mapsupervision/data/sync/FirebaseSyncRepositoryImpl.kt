@@ -47,6 +47,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
     // ponytail: mutable internal fields for testing without heavy mock libraries
     internal var firebaseRuntime = FirebaseRuntime(appContext)
     internal var driveMediaUploadClient = DriveMediaUploadClient()
+    internal var workspaceSnapshotExporter = WorkspaceSnapshotExporter(sharedDatabase, projectScopedDatabaseProvider)
     internal var enforceAccessChecks = true
     private val httpClient = OkHttpClient()
 
@@ -69,6 +70,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
             if (pushed > 0 || mediaResult.uploadedMedia > 0) {
                 sharedDatabase.projectDao().markCloudDataConfirmed(projectId, System.currentTimeMillis())
             }
+            exportAndUploadSnapshotInternal(projectId)
             SyncBatchResult(
                 pushed = pushed,
                 uploadedMedia = mediaResult.uploadedMedia,
@@ -78,6 +80,21 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
             onSuccess = { AppResult.Success(it) },
             onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Failed to push Firebase sync payload", it), it)) }
         )
+    }
+
+    internal suspend fun exportAndUploadSnapshotInternal(projectId: String) {
+        runCatching {
+            val project = sharedDatabase.projectDao().get(projectId) ?: return@runCatching
+            val snapshotJson = workspaceSnapshotExporter.exportProjectSnapshotJson(projectId) ?: return@runCatching
+            driveMediaUploadClient.uploadSnapshot(
+                projectId = project.id,
+                projectName = project.name,
+                snapshotJson = snapshotJson,
+                rootFolderId = project.mediaStorageFolderId.takeIf { it.isNotBlank() }
+            )
+        }.onFailure { error ->
+            AppLogger.e(error, "Failed to export/upload project snapshot: ${error.message}")
+        }
     }
 
     override suspend fun pullChanges(projectId: String, sinceEpochMs: Long?): AppResult<SyncBatchResult> = withContext(Dispatchers.IO) {

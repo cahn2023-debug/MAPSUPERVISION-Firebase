@@ -2,6 +2,14 @@ import fs from "fs";
 import path from "path";
 import { getAdminDb } from "./firebase-admin";
 import { seedSnapshot269 } from "./seed-snapshot-269";
+import {
+  driveClient,
+  configuredRootFolderId,
+  ensureProjectFolder,
+  getLatestDriveSnapshot,
+  pruneOldDriveSnapshots,
+  findSnapshotsFolder
+} from "./google-drive-media";
 
 export const PUBLIC_PROJECT_SLUG = "269-2026";
 export const KNOWN_PUBLIC_PROJECT_ID = "6874375a-3366-4457-a978-b8ee71c4e461";
@@ -34,6 +42,10 @@ export interface PublicProjectPayload {
 // In-Memory Cache (Global across warm serverless invocations)
 let inMemoryCache: { payload: PublicProjectPayload; timestamp: number } | null = null;
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds cache for near real-time sync with Firestore
+
+export function resetPublicProjectCacheForTesting() {
+  inMemoryCache = null;
+}
 
 function getCacheFilePath(): string {
   const tmpDir = process.env.TMPDIR || process.env.TEMP || "/tmp";
@@ -136,6 +148,34 @@ export async function findPublicProject(slug = PUBLIC_PROJECT_SLUG) {
   return matched || null;
 }
 
+let driveSnapshotReaderMock: (() => Promise<PublicProjectPayload | null>) | null = null;
+export function setDriveSnapshotReaderMock(mock: (() => Promise<PublicProjectPayload | null>) | null) {
+  driveSnapshotReaderMock = mock;
+}
+
+export async function readDriveSnapshot269(): Promise<PublicProjectPayload | null> {
+  if (process.env.NODE_ENV === "test" && driveSnapshotReaderMock) {
+    return driveSnapshotReaderMock();
+  }
+  try {
+    const drive = driveClient();
+    const rootFolderId = configuredRootFolderId();
+    const projectFolderId = await ensureProjectFolder(drive, rootFolderId, KNOWN_PUBLIC_PROJECT_ID, "Dự án 269 - 2026");
+    const snapshotRes = await getLatestDriveSnapshot(drive, projectFolderId);
+    if (snapshotRes && snapshotRes.payload && snapshotRes.payload.project) {
+      const payload = snapshotRes.payload as PublicProjectPayload;
+      const snapshotsFolderId = await findSnapshotsFolder(drive, projectFolderId);
+      if (snapshotsFolderId) {
+        void pruneOldDriveSnapshots(drive, snapshotsFolderId);
+      }
+      return payload;
+    }
+  } catch (driveErr) {
+    console.warn("[readPublicProject] Google Drive snapshot lookup error:", driveErr);
+  }
+  return null;
+}
+
 export async function readPublicProject(): Promise<PublicProjectPayload | null> {
   const now = Date.now();
 
@@ -144,6 +184,19 @@ export async function readPublicProject(): Promise<PublicProjectPayload | null> 
     return inMemoryCache.payload;
   }
 
+  // 1. Priority 1: Read Latest Snapshot from Google Drive (Zero Firestore reads!)
+  try {
+    const driveSnapshot = await readDriveSnapshot269();
+    if (driveSnapshot) {
+      inMemoryCache = { payload: driveSnapshot, timestamp: now };
+      saveDiskCache(driveSnapshot);
+      return driveSnapshot;
+    }
+  } catch (driveError) {
+    console.warn("[readPublicProject] Failed to resolve Google Drive snapshot, falling back:", driveError);
+  }
+
+  // 2. Priority 2: Fallback to Firestore query
   try {
     const project = await findPublicProject();
     if (!project) {
@@ -192,3 +245,4 @@ export async function readPublicProject(): Promise<PublicProjectPayload | null> 
     return { ...seedSnapshot269, updatedAtEpochMs: now, isCached: true, quotaExceeded: true };
   }
 }
+

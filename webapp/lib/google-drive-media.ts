@@ -571,3 +571,150 @@ export async function uploadProjectMedia(input: DriveMediaUpload): Promise<Drive
     drivePath: [projectFolder, ...taggedSegments, originalName].join("/")
   };
 }
+
+export const SNAPSHOTS_FOLDER_NAME = "Snapshots";
+export const SNAPSHOT_RETENTION_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes buffer
+
+export async function findSnapshotsFolder(
+  drive: drive_v3.Drive,
+  projectFolderId: string
+): Promise<string | null> {
+  return findChildFolder(drive, projectFolderId, SNAPSHOTS_FOLDER_NAME);
+}
+
+export async function ensureSnapshotsFolder(
+  drive: drive_v3.Drive,
+  projectFolderId: string
+): Promise<string> {
+  return ensureChildFolder(drive, projectFolderId, SNAPSHOTS_FOLDER_NAME);
+}
+
+export async function getLatestDriveSnapshot(
+  drive: drive_v3.Drive,
+  projectFolderId: string
+): Promise<{ payload: any; fileId: string; fileName: string; createdTime?: string } | null> {
+  const snapshotsFolderId = await findSnapshotsFolder(drive, projectFolderId);
+  if (!snapshotsFolderId) return null;
+
+  const listResponse = await drive.files.list({
+    q: [
+      `'${escapeDriveQuery(snapshotsFolderId)}' in parents`,
+      `mimeType != '${folderMimeType}'`,
+      "trashed = false"
+    ].join(" and "),
+    fields: "files(id,name,createdTime,modifiedTime)",
+    orderBy: "createdTime desc",
+    pageSize: 10,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+
+  const files = listResponse.data.files || [];
+  if (files.length === 0) return null;
+
+  const latestFile = files[0];
+  if (!latestFile.id) return null;
+
+  const getRes = await drive.files.get(
+    {
+      fileId: latestFile.id,
+      alt: "media",
+      supportsAllDrives: true
+    },
+    { responseType: "text" }
+  );
+
+  const rawData = typeof getRes.data === "string" ? JSON.parse(getRes.data) : getRes.data;
+  return {
+    payload: rawData,
+    fileId: latestFile.id,
+    fileName: latestFile.name || "",
+    createdTime: latestFile.createdTime || undefined
+  };
+}
+
+export async function pruneOldDriveSnapshots(
+  drive: drive_v3.Drive,
+  snapshotsFolderId: string,
+  maxAgeMs: number = SNAPSHOT_RETENTION_MAX_AGE_MS
+): Promise<{ deletedFileIds: string[] }> {
+  const deletedFileIds: string[] = [];
+  try {
+    const listResponse = await drive.files.list({
+      q: [
+        `'${escapeDriveQuery(snapshotsFolderId)}' in parents`,
+        `mimeType != '${folderMimeType}'`,
+        "trashed = false"
+      ].join(" and "),
+      fields: "files(id,name,createdTime)",
+      orderBy: "createdTime desc",
+      pageSize: 50,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+
+    const files = listResponse.data.files || [];
+    if (files.length <= 1) {
+      return { deletedFileIds };
+    }
+
+    const now = Date.now();
+    // Keep files[0] (the newest snapshot). Check others against retention window.
+    for (let i = 1; i < files.length; i++) {
+      const file = files[i];
+      if (!file.id) continue;
+      const fileTime = file.createdTime ? new Date(file.createdTime).getTime() : 0;
+      if (now - fileTime >= maxAgeMs) {
+        try {
+          await drive.files.delete({
+            fileId: file.id,
+            supportsAllDrives: true
+          });
+          deletedFileIds.push(file.id);
+        } catch (delErr) {
+          console.warn(`[pruneOldDriveSnapshots] Failed to delete file ${file.id}:`, delErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[pruneOldDriveSnapshots] Error pruning snapshots:", err);
+  }
+  return { deletedFileIds };
+}
+
+export async function uploadDriveSnapshot(
+  drive: drive_v3.Drive,
+  rootFolderId: string,
+  projectId: string,
+  projectName: string,
+  snapshotPayload: Record<string, unknown>
+): Promise<{ fileId: string; fileName: string }> {
+  const projectFolderId = await ensureProjectFolder(drive, rootFolderId, projectId, projectName);
+  const snapshotsFolderId = await ensureSnapshotsFolder(drive, projectFolderId);
+  const epochMs = (snapshotPayload.updatedAtEpochMs as number) || Date.now();
+  const fileName = `snapshot_${projectId}_${epochMs}.json`;
+  const content = JSON.stringify(snapshotPayload);
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      mimeType: "application/json",
+      parents: [snapshotsFolderId]
+    },
+    media: {
+      mimeType: "application/json",
+      body: Readable.from([content])
+    },
+    fields: "id,name",
+    supportsAllDrives: true
+  });
+
+  const fileId = created.data.id;
+  if (!fileId) throw new Error("Failed to upload snapshot file to Google Drive.");
+
+  // Run cleanup in background
+  void pruneOldDriveSnapshots(drive, snapshotsFolderId, SNAPSHOT_RETENTION_MAX_AGE_MS);
+
+  return { fileId, fileName };
+}
+

@@ -213,4 +213,70 @@ class DriveMediaUploadClientTest {
 
         assertEquals("PATCH", capturedRequest.get()?.method)
     }
+
+    @Test
+    fun pruneOldSnapshots_deletesSnapshotsOlderThan5Minutes() {
+        val deletedUrls = mutableListOf<String>()
+        val now = System.currentTimeMillis()
+        val tNewest = java.time.Instant.ofEpochMilli(now).toString()
+        val t3Min = java.time.Instant.ofEpochMilli(now - 3 * 60 * 1000L).toString()
+        val t6Min = java.time.Instant.ofEpochMilli(now - 6 * 60 * 1000L).toString()
+        val t10Min = java.time.Instant.ofEpochMilli(now - 10 * 60 * 1000L).toString()
+
+        val listResponseBody = """
+            {
+                "files": [
+                    {"id": "file-newest", "name": "snapshot_1.json", "createdTime": "$tNewest"},
+                    {"id": "file-3min", "name": "snapshot_2.json", "createdTime": "$t3Min"},
+                    {"id": "file-6min", "name": "snapshot_3.json", "createdTime": "$t6Min"},
+                    {"id": "file-10min", "name": "snapshot_4.json", "createdTime": "$t10Min"}
+                ]
+            }
+        """.trimIndent()
+
+        val httpClient = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    val req = chain.request()
+                    if (req.method == "GET") {
+                        Response.Builder()
+                            .request(req)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(listResponseBody.toResponseBody("application/json".toMediaTypeOrNull()))
+                            .build()
+                    } else if (req.method == "DELETE") {
+                        deletedUrls.add(req.url.toString())
+                        Response.Builder()
+                            .request(req)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("{}".toResponseBody("application/json".toMediaTypeOrNull()))
+                            .build()
+                    } else {
+                        chain.proceed(req)
+                    }
+                }
+            )
+            .build()
+
+        val client = DriveMediaUploadClient(
+            httpClient,
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        val deleted = client.pruneOldSnapshots(
+            accessToken = "token123",
+            snapshotsFolderId = "snap-folder-1",
+            maxAgeMs = 5 * 60 * 1000L
+        )
+
+        assertEquals(listOf("file-6min", "file-10min"), deleted)
+        assertEquals(2, deletedUrls.size)
+        assertTrue(deletedUrls.any { it.contains("file-6min") })
+        assertTrue(deletedUrls.any { it.contains("file-10min") })
+    }
 }
+

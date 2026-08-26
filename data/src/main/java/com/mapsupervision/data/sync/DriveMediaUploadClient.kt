@@ -593,8 +593,21 @@ internal open class DriveMediaUploadClient(
         return "$action ($statusCode): $responseText"
     }
 
-    private fun buildDriveListUrl(query: String, fields: String = "files(id,name)"): String =
-        "https://www.googleapis.com/drive/v3/files?q=${urlEncode(query)}&fields=${urlEncode(fields)}&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true"
+    private fun buildDriveListUrl(
+        query: String,
+        fields: String = "files(id,name)",
+        orderBy: String? = null,
+        pageSize: Int = 1
+    ): String = buildString {
+        append("https://www.googleapis.com/drive/v3/files")
+        append("?q=").append(urlEncode(query))
+        append("&fields=").append(urlEncode(fields))
+        append("&pageSize=").append(pageSize)
+        if (!orderBy.isNullOrBlank()) {
+            append("&orderBy=").append(urlEncode(orderBy))
+        }
+        append("&supportsAllDrives=true&includeItemsFromAllDrives=true")
+    }
 
     internal fun sanitizeSegment(value: String, default: String = "unknown"): String =
         value.trim()
@@ -669,9 +682,101 @@ internal open class DriveMediaUploadClient(
         val parents: List<String>
     )
 
+    open fun uploadSnapshot(
+        projectId: String,
+        projectName: String,
+        snapshotJson: String,
+        rootFolderId: String? = null
+    ): String {
+        if (!directUploadConfig.enabled) {
+            return ""
+        }
+        val targetRootFolderId = rootFolderId?.trim().orEmpty().ifBlank { directUploadConfig.rootFolderId.trim() }
+        if (targetRootFolderId.isBlank()) {
+            return ""
+        }
+        val serviceAccount = decodeServiceAccount()
+        val accessToken = exchangeAccessToken(serviceAccount)
+        val projectFolderId = ensureProjectFolder(accessToken, targetRootFolderId, projectId, projectName)
+        val snapshotsFolderId = ensureFolderPath(accessToken, projectFolderId, listOf("Snapshots"))
+
+        val now = System.currentTimeMillis()
+        val fileName = "snapshot_${projectId}_$now.json"
+        val bytes = snapshotJson.toByteArray(StandardCharsets.UTF_8)
+        val uploadUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id"
+        val metadataJson = """{"name":"${jsonEscape(fileName)}","mimeType":"application/json","parents":["${jsonEscape(snapshotsFolderId)}"]}"""
+        val body = buildDriveMultipartUploadBody(metadataJson, "application/json", bytes)
+        val request = Request.Builder()
+            .url(uploadUrl)
+            .header("Authorization", "Bearer $accessToken")
+            .post(body)
+            .build()
+        val fileId = httpClient.newCall(request).execute().use { response ->
+            val responseText = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                error("Failed to upload snapshot to Drive ($response.code): $responseText")
+            }
+            Json.parseToJsonElement(responseText).jsonObject["id"]?.jsonPrimitive?.content.orEmpty()
+        }
+        if (fileId.isNotBlank()) {
+            ensurePublicReader(accessToken, fileId)
+            pruneOldSnapshots(accessToken, snapshotsFolderId, maxAgeMs = 5 * 60 * 1000L)
+        }
+        return fileId
+    }
+
+    internal fun pruneOldSnapshots(accessToken: String, snapshotsFolderId: String, maxAgeMs: Long = 5 * 60 * 1000L): List<String> {
+        val deleted = mutableListOf<String>()
+        try {
+            val query = listOf(
+                "'${escapeDriveQuery(snapshotsFolderId)}' in parents",
+                "mimeType != '$FOLDER_MIME_TYPE'",
+                "trashed = false"
+            ).joinToString(" and ")
+            val url = buildDriveListUrl(query, fields = "files(id,name,createdTime)", orderBy = "createdTime desc", pageSize = 50)
+            val responseText = authorizedJsonRequest(accessToken, url)
+            val files = Json.parseToJsonElement(responseText).jsonObject["files"]?.let { it.jsonArray }.orEmpty()
+            if (files.size <= 1) return deleted
+
+            val now = System.currentTimeMillis()
+            for (i in 1 until files.size) {
+                val fileObj = files[i].jsonObject
+                val fileId = fileObj["id"]?.jsonPrimitive?.content.orEmpty()
+                val createdTimeStr = fileObj["createdTime"]?.jsonPrimitive?.content.orEmpty()
+                if (fileId.isBlank()) continue
+                val createdEpochMs = parseRfc3339(createdTimeStr)
+                if (createdEpochMs > 0 && now - createdEpochMs >= maxAgeMs) {
+                    deleteDriveFile(accessToken, fileId)
+                    deleted.add(fileId)
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore pruning error so snapshot flow continues
+        }
+        return deleted
+    }
+
+    private fun parseRfc3339(dateStr: String): Long {
+        return try {
+            java.time.Instant.parse(dateStr).toEpochMilli()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun deleteDriveFile(accessToken: String, fileId: String) {
+        val request = Request.Builder()
+            .url("https://www.googleapis.com/drive/v3/files/$fileId?supportsAllDrives=true")
+            .header("Authorization", "Bearer $accessToken")
+            .delete()
+            .build()
+        httpClient.newCall(request).execute().close()
+    }
+
     private companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val MULTIPART_RELATED_MEDIA_TYPE = "multipart/related".toMediaType()
         private const val FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
     }
 }
+
