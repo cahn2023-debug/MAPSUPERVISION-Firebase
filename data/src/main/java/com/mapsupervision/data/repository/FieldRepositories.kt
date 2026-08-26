@@ -206,6 +206,8 @@ class PhotoRepositoryImpl @Inject constructor(
                     deletedAtEpochMs = now,
                     syncStatus = SitePhotoSyncStatus.PENDING,
                     syncErrorMessage = null,
+                    androidDeletedAtEpochMs = now,
+                    androidDeletionStatus = "PENDING",
                     lastSyncAttemptEpochMs = null
                 )
             )

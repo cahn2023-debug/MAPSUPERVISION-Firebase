@@ -1,5 +1,6 @@
 package com.mapsupervision.app
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import com.mapsupervision.domain.model.FirebaseAccessRequestStatus
 import com.mapsupervision.domain.model.FirebaseProjectAccessRequest
 import com.mapsupervision.domain.model.FirebaseProjectCatalogEntry
 import com.mapsupervision.domain.model.FirebaseCatalogMigrationReport
+import com.mapsupervision.domain.model.Project
 import java.text.DateFormat
 import java.util.Date
 
@@ -42,6 +44,8 @@ fun FirebaseProjectCatalogScreen(
     adminLoading: Boolean,
     adminError: String,
     adminBusyRequestId: String?,
+    localProjects: List<Project> = emptyList(),
+    activeProjectId: String? = null,
     onRefresh: () -> Unit,
     onMigrationRefresh: () -> Unit = {},
     onRequestAccess: (String) -> Unit,
@@ -224,16 +228,21 @@ fun FirebaseProjectCatalogScreen(
                 modifier = Modifier.weight(1f)
             )
         } else {
+            val localProjectIds = remember(localProjects) { localProjects.map { it.id }.toSet() }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(entries, key = { it.projectId }) { entry ->
                     val status = statusFor(entry.projectId)
+                    val isLocalAvailable = entry.projectId in localProjectIds
+                    val isActive = entry.projectId == activeProjectId
                     ProjectCatalogCard(
                         entry = entry,
                         status = status,
                         isAdmin = isAdmin,
+                        isLocalAvailable = isLocalAvailable,
+                        isActive = isActive,
                         isRequesting = requestingProjectId == entry.projectId,
                         onRequestAccess = { onRequestAccess(entry.projectId) },
                         onOpenProject = { onOpenProject(entry) }
@@ -433,6 +442,8 @@ private fun ProjectCatalogCard(
     entry: FirebaseProjectCatalogEntry,
     status: FirebaseAccessRequestStatus,
     isAdmin: Boolean,
+    isLocalAvailable: Boolean,
+    isActive: Boolean,
     isRequesting: Boolean,
     onRequestAccess: () -> Unit,
     onOpenProject: () -> Unit
@@ -447,20 +458,60 @@ private fun ProjectCatalogCard(
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = entry.projectName,
+                        text = entry.projectName.ifBlank { entry.projectCode },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Mã: ${entry.projectCode}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (isActive) {
+                            Surface(
+                                color = Color(0xFFE65100).copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.6f))
+                            ) {
+                                Text(
+                                    text = "ĐANG MỞ",
+                                    color = Color(0xFFFFB74D),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else if (isLocalAvailable) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "ĐÃ CÓ TRÊN MÁY",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 StatusBadge(status = if (isAdmin) FirebaseAccessRequestStatus.APPROVED else status)
             }
 
@@ -481,9 +532,13 @@ private fun ProjectCatalogCard(
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(Icons.Outlined.CloudDone, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            if (isActive) Icons.Outlined.FolderOpen else Icons.Outlined.CloudDone,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Mở dự án")
+                        Text(if (isActive) "Vào dự án" else "Mở dự án")
                     }
                 } else {
                     when (status) {

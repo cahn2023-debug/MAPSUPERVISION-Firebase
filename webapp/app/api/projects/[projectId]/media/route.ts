@@ -3,6 +3,7 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { Readable } from "node:stream";
 import {
   downloadDriveFile,
+  deleteDriveFile,
   driveFileIdFromUrl,
   uploadProjectMedia,
   type DriveMediaObjectType,
@@ -16,7 +17,8 @@ type ErrorCode =
   | "FORBIDDEN"
   | "BAD_REQUEST"
   | "CONFIGURATION_ERROR"
-  | "UPLOAD_FAILED";
+  | "UPLOAD_FAILED"
+  | "DRIVE_DELETE_FAILED";
 
 type ProjectAccess = {
   hasAccess: boolean;
@@ -217,5 +219,46 @@ export async function GET(
     const message = error instanceof Error ? error.message : "Failed to read media.";
     const code: ErrorCode = message.includes("GOOGLE_") ? "CONFIGURATION_ERROR" : "UPLOAD_FAILED";
     return apiError(code === "CONFIGURATION_ERROR" ? 500 : 502, code, message);
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ projectId: string }> }
+) {
+  const { projectId } = await context.params;
+  const token = readBearerToken(request);
+  if (!token) return apiError(401, "UNAUTHORIZED", "Missing Firebase ID token.");
+
+  let access: ProjectAccess;
+  try {
+    access = await verifyProjectAccess(projectId, token);
+  } catch {
+    return apiError(401, "UNAUTHORIZED", "Invalid Firebase ID token.");
+  }
+  if (!access.hasAccess) return apiError(403, "FORBIDDEN", "User does not have access to this project.");
+
+  const photoId = new URL(request.url).searchParams.get("photoId")?.trim() || "";
+  if (!photoId) return apiError(400, "BAD_REQUEST", "photoId is required.");
+
+  const ref = getAdminDb().collection("projects").doc(projectId).collection("site_photos").doc(photoId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) return apiError(404, "BAD_REQUEST", "Media record not found.");
+  const photoData = unpackProjectData(snapshot.data() as Record<string, unknown> | undefined);
+  if (photoData.androidDeletionStatus !== "PENDING") {
+    return apiError(409, "BAD_REQUEST", "Ảnh chưa được đánh dấu đã xóa trên Android.");
+  }
+  const fileId = driveFileIdFromUrl(String(photoData.remoteUrl ?? "").trim());
+  if (!fileId) return apiError(404, "BAD_REQUEST", "Media file is not available.");
+
+  try {
+    await deleteDriveFile(fileId);
+    const now = Date.now();
+    const nextData = { ...photoData, id: photoId, projectId, isDeleted: true, deletedAtEpochMs: now, androidDeletionStatus: "DRIVE_DELETED", updatedAtEpochMs: now };
+    await ref.set({ data: nextData, id: photoId, projectId, tableName: "site_photos", updatedAtEpochMs: now, isDeleted: true, lastSyncedAtEpochMs: now }, { merge: true });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete Google Drive media.";
+    return apiError(502, "DRIVE_DELETE_FAILED", message);
   }
 }

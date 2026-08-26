@@ -198,11 +198,7 @@ class ProjectViewModel @Inject constructor(
                                 localRequest.data in setOf(ProjectDeletionState.DELETED, ProjectDeletionState.CLOUD_DECISION_PENDING)
                             ) {
                                 _uiState.value = _uiState.value.copy(
-                                    message = if (localRequest.data == ProjectDeletionState.DELETED) {
-                                        "ÄÃ£ xÃ³a project local; khÃ´ng cÃ³ dá»¯ liá»‡u Cloud Ä‘á»ƒ xÃ³a"
-                                    } else {
-                                        "ÄÃ£ xÃ³a project local; chá» quáº£n trá»‹ viÃªn quyáº¿t Ä‘á»‹nh dá»¯ liá»‡u Cloud"
-                                    }
+                                    message = "Đã xóa dự án khỏi máy; dữ liệu Cloud được bảo toàn."
                                 )
                                 refresh()
                                 return@launch

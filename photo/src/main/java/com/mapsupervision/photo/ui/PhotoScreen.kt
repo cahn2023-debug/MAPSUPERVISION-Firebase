@@ -38,11 +38,13 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +62,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -76,6 +80,7 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
     val selectedForReview by viewModel.selectedPhotoForReview.collectAsState()
     val currentAiQuality = aiQuality
     val currentSelectedForReview = selectedForReview
+    var photoPendingDelete by remember { mutableStateOf<com.mapsupervision.domain.model.SitePhoto?>(null) }
     var objectCode by remember { mutableStateOf("NODE") }
     var engineer by remember { mutableStateOf("Engineer") }
     var statusFilter by remember { mutableStateOf("ALL") }
@@ -247,7 +252,19 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
                     unmatchedPhotos.take(10).forEach { photo ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             MatchBadge(photo = photo)
-                            Text("${photo.objectCode} | ${photo.filePath}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${photo.objectCode} | ${photo.filePath}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(
+                                onClick = { photoPendingDelete = photo },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Outlined.Delete, contentDescription = null)
+                                Spacer(Modifier.padding(horizontal = 2.dp))
+                                Text("Delete")
+                            }
                         }
                     }
                 }
@@ -328,9 +345,13 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
                     )
                     Text("Giờ khớp: ${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(selectedPhoto.matchedAtEpochMs.takeIf { it > 0L } ?: selectedPhoto.capturedAtEpochMs))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedButton(
-                        onClick = { viewModel.deletePhoto(selectedPhoto) },
+                        onClick = { photoPendingDelete = selectedPhoto },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Xóa ảnh khỏi Android") }
+                    ) {
+                        Icon(Icons.Outlined.Delete, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("Delete ảnh khỏi Android")
+                    }
                 }
             },
             confirmButton = {
@@ -350,6 +371,26 @@ fun PhotoScreen(viewModel: PhotoViewModel = hiltViewModel()) {
                 .imePadding(),
             shape = RoundedCornerShape(16.dp),
             containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    photoPendingDelete?.let { photo ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { photoPendingDelete = null },
+            title = { Text("Delete ảnh?") },
+            text = { Text("Ảnh sẽ bị xóa khỏi Android. Nếu đây là ảnh cuối cùng, thư mục chứa ảnh cũng sẽ được xóa.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deletePhoto(photo)
+                        photoPendingDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { photoPendingDelete = null }) { Text("Hủy") }
+            }
         )
     }
 }

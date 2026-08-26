@@ -41,6 +41,7 @@ class ProjectRepositoryImpl @Inject constructor(
     )
 
     override suspend fun list(includeArchived: Boolean): AppResult<List<Project>> = runCatching {
+        runCatching { projectDao.purgeDeletedProjects() }
         projectDao.list(includeArchived).map {
             if (it.storageMode == ProjectStorageMode.PROJECT_DB && it.projectDbPath.isNotBlank()) {
                 val dbFile = java.io.File(it.projectDbPath)
@@ -99,11 +100,11 @@ class ProjectRepositoryImpl @Inject constructor(
             mediaStorageFolderId = resolved.mediaStorageFolderId,
             mediaStorageFolderUrl = resolved.mediaStorageFolderUrl,
             mediaStorageUpdatedAtEpochMs = resolved.mediaStorageUpdatedAtEpochMs,
-            isDeleted = resolved.isDeleted,
-            deletedAtEpochMs = resolved.deletedAtEpochMs,
-            deletionState = resolved.deletionState,
-            deletionRequestId = resolved.deletionRequestId,
-            deletionErrorCode = resolved.deletionErrorCode,
+            isDeleted = false,
+            deletedAtEpochMs = null,
+            deletionState = ProjectDeletionState.ACTIVE,
+            deletionRequestId = null,
+            deletionErrorCode = null,
             cloudDeletionCompletedAtEpochMs = resolved.cloudDeletionCompletedAtEpochMs,
             cloudDataConfirmed = resolved.cloudDataConfirmed,
             cloudDecisionRequestId = resolved.cloudDecisionRequestId,
@@ -166,17 +167,8 @@ class ProjectRepositoryImpl @Inject constructor(
         try {
             deleteLocalProjectData(project)
             val now = System.currentTimeMillis()
-            if (project.cloudDataConfirmed) {
-                check(projectDao.markCloudDecisionPending(projectId, requestId, now) > 0) {
-                    "Project local deletion completed but decision state could not be persisted"
-                }
-                ProjectDeletionState.CLOUD_DECISION_PENDING
-            } else {
-                check(projectDao.completeLocalOnlyDeletion(projectId, requestId, now, now) > 0) {
-                    "Local-only deletion could not be completed"
-                }
-                ProjectDeletionState.DELETED
-            }
+            projectDao.completeLocalOnlyDeletion(projectId, requestId, now, now)
+            ProjectDeletionState.DELETED
         } catch (error: Throwable) {
             projectDao.markLocalDeletionFailed(
                 projectId,

@@ -369,6 +369,21 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
                     lastSyncedAtEpochMs = now
                 )
                 val target = if (table.collectionName == "__project_root__") {
+                    val catalogTarget = firestore.collection("projectCatalog").document(projectId)
+                    val rawName = payload["name"]?.toString()?.trim().orEmpty()
+                    val slug = payload["slug"]?.toString()?.trim().orEmpty()
+                    val projectCode = (payload["projectCode"]?.toString()?.trim() ?: slug).ifBlank { projectId.take(8).uppercase(java.util.Locale.ROOT) }
+                    val isArchived = (payload["isArchived"] as? Number)?.toInt() == 1 || payload["isArchived"] == true
+                    val currentUid = firebaseRuntime.auth().currentUser?.uid ?: "legacy-owner"
+                    val catalogData = mapOf(
+                        "projectName" to rawName.ifBlank { projectCode },
+                        "projectCode" to projectCode,
+                        "createdByUid" to currentUid,
+                        "updatedAtEpochMs" to envelope.updatedAtEpochMs,
+                        "status" to if (isArchived) "ARCHIVED" else "ACTIVE"
+                    )
+                    batch.set(catalogTarget, catalogData, SetOptions.merge())
+                    batchWrites += 1
                     firestore.collection("projects").document(projectId)
                 } else {
                     firestore.collection("projects").document(projectId).collection(table.collectionName).document(id)

@@ -198,11 +198,15 @@ export type SitePhotoRow = {
   matchedRouteId?: string | null;
   remoteUrl: string | null;
   syncErrorMessage?: string | null;
+  androidDeletedAtEpochMs?: number | null;
+  androidDeletionStatus?: string | null;
   syncStatus: string;
   mimeType: string;
   mediaType: string;
   isDeleted: boolean;
 };
+
+export type AndroidPhotoDecision = "KEEP" | "DELETE_DRIVE";
 
 export type ReportDraftRow = {
   id: string;
@@ -820,12 +824,33 @@ export function subscribeProjectTable(
     (snapshot: QuerySnapshot<DocumentData>) => {
       const rows = snapshot.docs
         .map((rowDoc) => unpackEnvelope<Record<string, unknown>>(rowDoc.id, rowDoc.data()))
-        .filter((row) => !Boolean(row.isDeleted))
+        .filter((row) => !Boolean(row.isDeleted) || (tableName === "site_photos" && ["PENDING", "KEPT"].includes(String(row.androidDeletionStatus ?? ""))))
         .sort((left, right) => Number(right.updatedAtEpochMs ?? 0) - Number(left.updatedAtEpochMs ?? 0));
       onRows(tableName, rows);
     },
     (error) => onError(tableName, error)
   );
+}
+
+export async function decideAndroidDeletedPhoto(
+  firestore: Firestore,
+  projectId: string,
+  row: Record<string, unknown>,
+  decision: AndroidPhotoDecision
+): Promise<void> {
+  const id = String(row.id ?? "").trim();
+  if (!id) throw new Error("Ảnh không có mã định danh.");
+  const now = Date.now();
+  const nextData = {
+    ...row,
+    id,
+    projectId,
+    isDeleted: true,
+    deletedAtEpochMs: row.deletedAtEpochMs ?? now,
+    updatedAtEpochMs: now,
+    androidDeletionStatus: decision === "KEEP" ? "KEPT" : "PENDING"
+  };
+  await setDoc(doc(firestore, "projects", projectId, "site_photos", id), createEnvelope("site_photos", projectId, id, nextData, now), { merge: true });
 }
 
 export async function createTaskDocument(

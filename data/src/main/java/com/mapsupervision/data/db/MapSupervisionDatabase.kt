@@ -99,7 +99,7 @@ import com.mapsupervision.data.db.dao.MaterialDeclarationDao
         MaterialDeclarationEntity::class,
         RagDocumentEmbeddingEntity::class
     ],
-    version = 52,
+    version = 53,
     exportSchema = true
 )
 @TypeConverters(DbTypeConverters::class)
@@ -2974,6 +2974,13 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_52_53 = object : Migration(52, 53) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `site_photos` ADD COLUMN `androidDeletedAtEpochMs` INTEGER")
+                db.execSQL("ALTER TABLE `site_photos` ADD COLUMN `androidDeletionStatus` TEXT NOT NULL DEFAULT 'NONE'")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_8_9,
             MIGRATION_9_10,
@@ -3018,7 +3025,8 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             MIGRATION_48_49,
             MIGRATION_49_50,
             MIGRATION_50_51,
-            MIGRATION_51_52
+            MIGRATION_51_52,
+            MIGRATION_52_53
         )
     }
 }

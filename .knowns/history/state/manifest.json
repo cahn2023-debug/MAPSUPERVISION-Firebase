@@ -41,6 +41,14 @@
       "revision": 4,
       "headHash": "48c59304ce858cf7aed4eeb2fbc8fd28273f020138df6ba180baa78b86d46644"
     },
+    "doc:doc-422a02271566a9dda23de8370b438ab6": {
+      "entityType": "doc",
+      "entityId": "doc-422a02271566a9dda23de8370b438ab6",
+      "path": "docs/specs/2026-08-26/public-project-portal-269-2026.md",
+      "hash": "6cb0e07b5452055f9658b77ceacc9213a8ff4967a6c8b86d36bd03f576231ae8",
+      "revision": 2,
+      "headHash": "6cb0e07b5452055f9658b77ceacc9213a8ff4967a6c8b86d36bd03f576231ae8"
+    },
     "doc:doc-5552a2952ff80ae71093bbd4647e5d1f": {
       "entityType": "doc",
       "entityId": "doc-5552a2952ff80ae71093bbd4647e5d1f",
@@ -113,6 +121,14 @@
       "revision": 3,
       "headHash": "0b0c41ae9a0952581b755c96206de09200851ecb5e03b10c829594cbf5b245b6"
     },
+    "doc:doc-c9cf37b3f72d038fb3522b24f30b1a93": {
+      "entityType": "doc",
+      "entityId": "doc-c9cf37b3f72d038fb3522b24f30b1a93",
+      "path": "docs/specs/2026-08-26/local-project-deletion-and-cloud-restoration.md",
+      "hash": "948cd6437981da216736477110d752798f1ee997e79c2508b1b0f54bd5c36f8c",
+      "revision": 1,
+      "headHash": "948cd6437981da216736477110d752798f1ee997e79c2508b1b0f54bd5c36f8c"
+    },
     "doc:doc-d418befc2828fded54fabfa2cc945d72": {
       "entityType": "doc",
       "entityId": "doc-d418befc2828fded54fabfa2cc945d72",
@@ -128,6 +144,14 @@
       "hash": "dfef87d8f830389bd680597e77676c939e81e7bcd8fb5c6615065c721be9c29f",
       "revision": 12,
       "headHash": "dfef87d8f830389bd680597e77676c939e81e7bcd8fb5c6615065c721be9c29f"
+    },
+    "doc:doc-ecd39b0f22f2e5c64c922d8a85122b6b": {
+      "entityType": "doc",
+      "entityId": "doc-ecd39b0f22f2e5c64c922d8a85122b6b",
+      "path": "docs/specs/2026-08-26/daily-log-display-and-photo-date-filter.md",
+      "hash": "de3e62df7089ea57be846f0af9e0ec3f4f69cea55d03784f0da6f8d72ca599c4",
+      "revision": 1,
+      "headHash": "de3e62df7089ea57be846f0af9e0ec3f4f69cea55d03784f0da6f8d72ca599c4"
     },
     "doc:doc-ed69bd064dc60a78c68a15077a90884c": {
       "entityType": "doc",
@@ -200,6 +224,14 @@
       "hash": "e9615fe073eecfa9caff890a11f0c2a17b02d7775cbdc9be30d396a1fa2e05d8",
       "revision": 6,
       "headHash": "e9615fe073eecfa9caff890a11f0c2a17b02d7775cbdc9be30d396a1fa2e05d8"
+    },
+    "task:3xvv2s": {
+      "entityType": "task",
+      "entityId": "3xvv2s",
+      "path": "tasks/task-3xvv2s - proj-del-02-Clean-Local-Deletion-Execution.md",
+      "hash": "3b0a39212bdfc02441a3c81263c8d74729f260ded4f6aa21a39b889d4deebacf",
+      "revision": 2,
+      "headHash": "3b0a39212bdfc02441a3c81263c8d74729f260ded4f6aa21a39b889d4deebacf"
     },
     "task:4a5rim": {
       "entityType": "task",
@@ -281,6 +313,14 @@
       "revision": 8,
       "headHash": "ed702e1bc2bc149df0a6c3cd634c4db2cfe6d5cc25487b0488eada4c9d41e672"
     },
+    "task:81d0t2": {
+      "entityType": "task",
+      "entityId": "81d0t2",
+      "path": "tasks/task-81d0t2 - proj-del-03-Drawer-UI-Cleanup-and-Deletion-Confir.md",
+      "hash": "2b3e4755923b81a7ee11bdf54938990952e590f86804660599ce62813878d615",
+      "revision": 2,
+      "headHash": "2b3e4755923b81a7ee11bdf54938990952e590f86804660599ce62813878d615"
+    },
     "task:8b4bgf": {
       "entityType": "task",
       "entityId": "8b4bgf",
@@ -317,9 +357,9 @@
       "entityType": "task",
       "entityId": "9h3h5i",
       "path": "tasks/task-9h3h5i - xa-nh-android-v-web-ng-b-google-drive-02-Lưu-trạn.md",
-      "hash": "86ccfb7afd3cad96dd89b8ef6ce942fafa8a6b85b017d7a00131cf8f807de24d",
-      "revision": 2,
-      "headHash": "86ccfb7afd3cad96dd89b8ef6ce942fafa8a6b85b017d7a00131cf8f807de24d"
+      "hash": "25c593f4f48ae658f94d4b37f23520709f9b605bf972b509215cc9a5e3a5d54d",
+      "revision": 4,
+      "headHash": "25c593f4f48ae658f94d4b37f23520709f9b605bf972b509215cc9a5e3a5d54d"
     },
     "task:avrsg3": {
       "entityType": "task",
@@ -392,6 +432,22 @@
       "hash": "fba7f460e7c0ff115e43b2dd0cdd8d8dd75544c9fe089d71834afb20016183e0",
       "revision": 5,
       "headHash": "fba7f460e7c0ff115e43b2dd0cdd8d8dd75544c9fe089d71834afb20016183e0"
+    },
+    "task:h35tbe": {
+      "entityType": "task",
+      "entityId": "h35tbe",
+      "path": "tasks/task-h35tbe - proj-del-04-Cloud-Re-download-Verification-Test-S.md",
+      "hash": "b183b54d646588cb64f4ff9076186f0b4f11a4bab4ec9dc3e06205d506c73c53",
+      "revision": 2,
+      "headHash": "b183b54d646588cb64f4ff9076186f0b4f11a4bab4ec9dc3e06205d506c73c53"
+    },
+    "task:hrmc2f": {
+      "entityType": "task",
+      "entityId": "hrmc2f",
+      "path": "tasks/task-hrmc2f - proj-name-04-Unit-Testing-Verification-Suite-Pars.md",
+      "hash": "91635b7926688c9c080b242bf8a4a7fbab9372f039523255cda946ba544f93d0",
+      "revision": 2,
+      "headHash": "91635b7926688c9c080b242bf8a4a7fbab9372f039523255cda946ba544f93d0"
     },
     "task:hzbfzu": {
       "entityType": "task",
@@ -517,9 +573,9 @@
       "entityType": "task",
       "entityId": "o0iw0p",
       "path": "tasks/task-o0iw0p - xa-nh-android-v-web-ng-b-google-drive-04-Kiểm-thử.md",
-      "hash": "f20fb12163475d2bcc999b79c1a19055a9337abd41d6df2d36fb4b3acb540b95",
-      "revision": 2,
-      "headHash": "f20fb12163475d2bcc999b79c1a19055a9337abd41d6df2d36fb4b3acb540b95"
+      "hash": "c216e93caeee54a6e0fdb3c7ae459506fe653b2c340e301081f180e6e011a6ed",
+      "revision": 5,
+      "headHash": "c216e93caeee54a6e0fdb3c7ae459506fe653b2c340e301081f180e6e011a6ed"
     },
     "task:o6r10r": {
       "entityType": "task",
@@ -553,6 +609,14 @@
       "revision": 7,
       "headHash": "9fb8dd7d472307c348462daceb7ec6ee6ba0468e95458ee1853cee4771bf86b3"
     },
+    "task:q5mriu": {
+      "entityType": "task",
+      "entityId": "q5mriu",
+      "path": "tasks/task-q5mriu - proj-name-03-UI-UX-Refinement-for-Project-Cards-F.md",
+      "hash": "17e547cc60125c4b627740bc57c3fe73bff58fa6b841a1dc8b87bf22d713f1b5",
+      "revision": 2,
+      "headHash": "17e547cc60125c4b627740bc57c3fe73bff58fa6b841a1dc8b87bf22d713f1b5"
+    },
     "task:q74bwe": {
       "entityType": "task",
       "entityId": "q74bwe",
@@ -577,6 +641,14 @@
       "revision": 14,
       "headHash": "77fdd038493a837a82db2d97dca2d6697c84349c0b238f8e9b23ef6674c72537"
     },
+    "task:r6tubb": {
+      "entityType": "task",
+      "entityId": "r6tubb",
+      "path": "tasks/task-r6tubb - proj-name-02-ViewModel-Local-State-Orchestration.md",
+      "hash": "072c90efd28d425fdb5c91ee06235d81403cbb43105910e6e2d4bf32f834b0fe",
+      "revision": 2,
+      "headHash": "072c90efd28d425fdb5c91ee06235d81403cbb43105910e6e2d4bf32f834b0fe"
+    },
     "task:rr9opa": {
       "entityType": "task",
       "entityId": "rr9opa",
@@ -589,9 +661,9 @@
       "entityType": "task",
       "entityId": "rvw8c7",
       "path": "tasks/task-rvw8c7 - xa-nh-android-v-web-ng-b-google-drive-03-Cảnh-báo.md",
-      "hash": "1d8db17452c2060bddc64f01e1b5b9b08cce4b87f6f3162c49a248746959efca",
-      "revision": 2,
-      "headHash": "1d8db17452c2060bddc64f01e1b5b9b08cce4b87f6f3162c49a248746959efca"
+      "hash": "a101e4363069d087d13cbeb24464d2a2e740c0facd2c262f10365a46c86835e0",
+      "revision": 4,
+      "headHash": "a101e4363069d087d13cbeb24464d2a2e740c0facd2c262f10365a46c86835e0"
     },
     "task:ry4iav": {
       "entityType": "task",
@@ -680,6 +752,14 @@
       "hash": "77acd78db3351b0f3c8013c809c2a9cf1735b26515540b7651ff71606616f200",
       "revision": 14,
       "headHash": "77acd78db3351b0f3c8013c809c2a9cf1735b26515540b7651ff71606616f200"
+    },
+    "task:v0pbkr": {
+      "entityType": "task",
+      "entityId": "v0pbkr",
+      "path": "tasks/task-v0pbkr - proj-del-01-DAO-Query-Filtering-and-Self-Healing.md",
+      "hash": "d9456d9b0fb261c22de94a909b140c9f5e243ceb4eff7e4de1a3aa104032fe0c",
+      "revision": 2,
+      "headHash": "d9456d9b0fb261c22de94a909b140c9f5e243ceb4eff7e4de1a3aa104032fe0c"
     },
     "task:vtdoe0": {
       "entityType": "task",
@@ -784,6 +864,14 @@
       "hash": "103796af480e40c302b04e74fad8317c9c9a913b93eef28a17c704c66d513e40",
       "revision": 3,
       "headHash": "103796af480e40c302b04e74fad8317c9c9a913b93eef28a17c704c66d513e40"
+    },
+    "task:zaftn2": {
+      "entityType": "task",
+      "entityId": "zaftn2",
+      "path": "tasks/task-zaftn2 - proj-name-01-Parser-Repository-Self-Healing-Fireb.md",
+      "hash": "683d7ad2818f3763ec8750b595610ef608d165c1bc335c2ff9f0d5eaa469771c",
+      "revision": 2,
+      "headHash": "683d7ad2818f3763ec8750b595610ef608d165c1bc335c2ff9f0d5eaa469771c"
     },
     "task:zfv69f": {
       "entityType": "task",

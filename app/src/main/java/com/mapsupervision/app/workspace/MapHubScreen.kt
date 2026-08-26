@@ -236,6 +236,7 @@ fun MapHubScreen(
     var deletionIdentity by remember { mutableStateOf("") }
     var deletionPassword by remember { mutableStateOf("") }
     var deletionPendingConfirmed by remember { mutableStateOf(false) }
+    var alsoDeleteCloud by remember { mutableStateOf(false) }
     var showContractorMenu by remember { mutableStateOf(false) }
     var showMaterialMenu by remember { mutableStateOf(false) }
     var showLayerMenu by remember { mutableStateOf(false) }
@@ -419,7 +420,7 @@ fun MapHubScreen(
                                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Column {
                                         Text(
-                                            p.name,
+                                            p.name.ifBlank { p.slug },
                                             style = MaterialTheme.typography.titleMedium,
                                             color = if (isActive) onPrimaryColor else textColor,
                                             fontWeight = FontWeight.Bold
@@ -474,38 +475,6 @@ fun MapHubScreen(
                                         }
 
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.DELETED && !session.isAdmin) {
-                                                OutlinedButton(onClick = { onAcknowledgeRemoteDeletion(p.id, false) }) { Text("Giữ chỉ đọc") }
-                                                Button(
-                                                    onClick = { onAcknowledgeRemoteDeletion(p.id, true) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
-                                                ) { Text("Xóa bản local") }
-                                            } else if (p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING) {
-                                                OutlinedButton(onClick = {
-                                                    dismissedCloudDecisionProjectId = null
-                                                }) { Text("Quyết định Cloud", style = MaterialTheme.typography.labelSmall) }
-                                                Button(
-                                                    onClick = { onForceDeleteLocalProject(p.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
-                                                ) { Text("Xóa local", style = MaterialTheme.typography.labelSmall) }
-                                            } else if (p.deletionState in setOf(
-                                                    com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_RETAINED,
-                                                    com.mapsupervision.domain.model.ProjectDeletionState.RESTORE_PENDING
-                                                )) {
-                                                OutlinedButton(onClick = { onDecideCloudDeletion(p.id, true) }) { Text("Khôi phục", style = MaterialTheme.typography.labelSmall) }
-                                                Button(
-                                                    onClick = { onForceDeleteLocalProject(p.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
-                                                ) { Text("Xóa local", style = MaterialTheme.typography.labelSmall) }
-                                            } else if (p.deletionState in setOf(
-                                                    com.mapsupervision.domain.model.ProjectDeletionState.DELETE_FAILED,
-                                                    com.mapsupervision.domain.model.ProjectDeletionState.LOCAL_DELETE_FAILED
-                                                )) {
-                                                Button(
-                                                    onClick = { onForceDeleteLocalProject(p.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onSurfaceColor)
-                                                ) { Text("Dọn dẹp local", style = MaterialTheme.typography.labelSmall) }
-                                            }
                                             if (!isRevoked) {
                                                 IconButton(
                                                     onClick = { onExportProject(p) },
@@ -540,6 +509,7 @@ fun MapHubScreen(
                                                 if (!isRevoked && canDelete && p.deletionState == com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE) {
                                                     IconButton(onClick = {
                                                         deletionProject = p
+                                                        alsoDeleteCloud = false
                                                         deletionIdentity = ""
                                                         deletionPassword = ""
                                                         deletionPendingConfirmed = false
@@ -1664,7 +1634,11 @@ fun MapHubScreen(
         deletionProject?.let { project ->
             val targetIdentifier = project.slug.ifBlank { project.name }
             val isIdentityMatch = deletionIdentity.trim() == project.name || deletionIdentity.trim() == project.slug || deletionIdentity.trim() == project.id
-            val isConfirmEnabled = isIdentityMatch && deletionPassword.isNotBlank()
+            val isConfirmEnabled = if (alsoDeleteCloud) {
+                isIdentityMatch && deletionPassword.isNotBlank()
+            } else {
+                true
+            }
 
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { deletionProject = null },
@@ -1680,76 +1654,118 @@ fun MapHubScreen(
                             Icon(Icons.Outlined.Delete, contentDescription = null, tint = dangerColor, modifier = Modifier.size(20.dp))
                         }
                         Column {
-                            Text("Xác nhận xóa vĩnh viễn", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium, color = dangerColor)
+                            Text(
+                                text = if (alsoDeleteCloud) "Xác nhận xóa vĩnh viễn" else "Xóa dự án khỏi máy",
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = dangerColor
+                            )
                             Text("Dự án: ${project.name}", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
                         }
                     }
                 },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(dangerColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
-                                .border(1.dp, dangerColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text("⚠️ Cảnh báo mất dữ liệu:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = dangerColor)
-                            Text("• Dữ liệu GIS, công việc, nhật ký thực địa trên Firebase sẽ bị xóa vĩnh viễn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
-                            Text("• Dữ liệu Catalog và phân quyền thành viên sẽ bị hủy bỏ.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
-                            Text("• Dữ liệu ảnh thực địa trên Google Drive vẫn được giữ nguyên an toàn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                        if (!alsoDeleteCloud) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(orangeColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                                    .border(1.dp, orangeColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("ℹ️ Thông tin xóa cục bộ:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = orangeColor)
+                                Text("• Dự án sẽ được dọn dẹp và xóa hoàn toàn khỏi bộ nhớ máy này để giải phóng dung lượng.", style = MaterialTheme.typography.bodySmall, color = textColor)
+                                Text("• Dữ liệu trên Cloud (Firebase & Drive) vẫn được bảo toàn nguyên vẹn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                                Text("• Bạn có thể tải lại và đồng bộ ngược lại máy bất cứ lúc nào từ danh mục Cloud.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(dangerColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                                    .border(1.dp, dangerColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("⚠️ Cảnh báo mất dữ liệu vĩnh viễn:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = dangerColor)
+                                Text("• Dữ liệu GIS, công việc, nhật ký thực địa trên Firebase sẽ bị xóa vĩnh viễn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                                Text("• Dữ liệu Catalog và phân quyền thành viên sẽ bị hủy bỏ.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                                Text("• Dữ liệu ảnh thực địa trên Google Drive vẫn được giữ nguyên an toàn.", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                            }
+
+                            Text("1. Nhập chính xác tên hoặc mã dự án ($targetIdentifier):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
+                            OutlinedTextField(
+                                value = deletionIdentity,
+                                onValueChange = { deletionIdentity = it },
+                                placeholder = { Text(targetIdentifier) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                isError = deletionIdentity.isNotBlank() && !isIdentityMatch,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text("2. Mật khẩu tài khoản (xác thực lại quyền Admin):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
+                            OutlinedTextField(
+                                value = deletionPassword,
+                                onValueChange = { deletionPassword = it },
+                                placeholder = { Text("Nhập mật khẩu tài khoản...") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { deletionPendingConfirmed = !deletionPendingConfirmed }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Checkbox(
+                                    checked = deletionPendingConfirmed,
+                                    onCheckedChange = { deletionPendingConfirmed = it }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Tôi xác nhận chấp nhận hủy bỏ các thay đổi chưa đồng bộ (nếu có)", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                            }
                         }
 
-                        Text("1. Nhập chính xác tên hoặc mã dự án ($targetIdentifier):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = deletionIdentity,
-                            onValueChange = { deletionIdentity = it },
-                            placeholder = { Text(targetIdentifier) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            isError = deletionIdentity.isNotBlank() && !isIdentityMatch,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Text("2. Mật khẩu tài khoản (xác thực lại quyền Admin):", style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(
-                            value = deletionPassword,
-                            onValueChange = { deletionPassword = it },
-                            placeholder = { Text("Nhập mật khẩu tài khoản...") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { deletionPendingConfirmed = !deletionPendingConfirmed }
-                                .padding(vertical = 2.dp)
-                        ) {
-                            Checkbox(
-                                checked = deletionPendingConfirmed,
-                                onCheckedChange = { deletionPendingConfirmed = it }
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Tôi xác nhận chấp nhận hủy bỏ các thay đổi chưa đồng bộ (nếu có)", style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                        if (session.isAdmin) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { alsoDeleteCloud = !alsoDeleteCloud }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Checkbox(
+                                    checked = alsoDeleteCloud,
+                                    onCheckedChange = { alsoDeleteCloud = it }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Đồng thời xóa vĩnh viễn dữ liệu trên Cloud (Quyền Admin)", style = MaterialTheme.typography.bodySmall, color = dangerColor, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            onDeleteProject(project.id, deletionIdentity, deletionPassword, deletionPendingConfirmed)
+                            if (alsoDeleteCloud) {
+                                onDeleteProject(project.id, deletionIdentity, deletionPassword, deletionPendingConfirmed)
+                            } else {
+                                onForceDeleteLocalProject(project.id)
+                            }
                             deletionProject = null
                         },
                         enabled = isConfirmEnabled,
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = dangerColor, contentColor = onPrimaryColor)
                     ) {
-                        Text("Xác nhận Xóa", fontWeight = FontWeight.Bold)
+                        Text(if (alsoDeleteCloud) "Xác nhận Xóa Cloud" else "Xác nhận Xóa khỏi máy", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {

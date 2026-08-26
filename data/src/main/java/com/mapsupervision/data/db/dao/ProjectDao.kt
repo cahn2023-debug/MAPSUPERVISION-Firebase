@@ -15,8 +15,11 @@ interface ProjectDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ProjectEntity)
 
-    @Query("SELECT * FROM projects WHERE isDeleted = 0 AND (:includeArchived = 1 OR isArchived = 0) ORDER BY createdAtEpochMs DESC")
+    @Query("SELECT * FROM projects WHERE isDeleted = 0 AND deletionState = 'ACTIVE' AND (:includeArchived = 1 OR isArchived = 0) ORDER BY createdAtEpochMs DESC")
     suspend fun list(includeArchived: Boolean): List<ProjectEntity>
+
+    @Query("DELETE FROM projects WHERE isDeleted = 1 OR deletionState IN ('CLOUD_DECISION_PENDING', 'DELETED', 'LOCAL_DELETE_FAILED')")
+    suspend fun purgeDeletedProjects(): Int
 
     @Query("SELECT * FROM projects WHERE id = :projectId LIMIT 1")
     suspend fun get(projectId: String): ProjectEntity?

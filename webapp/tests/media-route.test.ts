@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { Readable } from "node:stream";
-import { GET, POST } from "../app/api/projects/[projectId]/media/route";
+import { DELETE, GET, POST } from "../app/api/projects/[projectId]/media/route";
 import { setAdminAuthMock, setAdminDbMock } from "../lib/firebase-admin";
 import { driveFileIdFromUrl, setUploadProjectMediaMock, setDriveClientMock, uploadProjectMedia } from "../lib/google-drive-media";
 import { normalizeGoogleDriveFolderInput } from "../lib/sync";
@@ -29,7 +29,8 @@ function projectDbMock(
               }
               const photoData = photoDocs[id];
               return { exists: Boolean(photoData), data: () => photoData ? { data: photoData } : null };
-            }
+            },
+            set: async () => undefined
           })
         })
       })
@@ -262,6 +263,26 @@ test("GET /api/projects/[projectId]/media - Valid request streams image bytes", 
   assert.strictEqual(body, "image-content");
 });
 
+test("DELETE /api/projects/[projectId]/media - deletes Android-deleted Drive media and writes tombstone", async () => {
+  setAdminAuthMock({ verifyIdToken: async () => ({ uid: "user-member" }) });
+  setAdminDbMock(projectDbMock(
+    true,
+    { mediaStorageFolderId: "project-folder-123" },
+    { isActive: true },
+    { "photo-delete": { remoteUrl: "https://drive.google.com/uc?export=view&id=file-delete", androidDeletionStatus: "PENDING" } }
+  ));
+  const mockDrive = new MockDrive();
+  setDriveClientMock(mockDrive);
+  mockDrive.db.set("file-delete", { id: "file-delete", name: "photo.jpg", mimeType: "image/jpeg", parents: [] });
+
+  const res = await DELETE(
+    new Request("http://localhost/api/projects/proj-1/media?photoId=photo-delete", { method: "DELETE", headers: { Authorization: "Bearer valid-token" } }) as any,
+    { params: Promise.resolve({ projectId: "proj-1" }) }
+  );
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(mockDrive.db.has("file-delete"), false);
+});
+
 class MockDrive {
   db = new Map<string, { id: string; name: string; mimeType: string; parents: string[] }>();
   fileBodies = new Map<string, { bytes: Buffer; contentType: string }>();
@@ -296,6 +317,10 @@ class MockDrive {
     },
     update: async (params: any) => {
       return { data: { id: params.fileId } };
+    },
+    delete: async (params: any) => {
+      this.db.delete(params.fileId);
+      return { data: {} };
     },
     get: async (params: any, options?: any) => {
       const file = this.fileBodies.get(params.fileId);

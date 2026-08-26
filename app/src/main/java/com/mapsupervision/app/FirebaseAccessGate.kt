@@ -136,6 +136,8 @@ fun AppRoot(
             adminLoading = accessState.adminLoading,
             adminError = accessState.adminError,
             adminBusyRequestId = accessState.adminBusyRequestId,
+            localProjects = accessState.localProjects,
+            activeProjectId = accessState.activeProjectId,
             onRefresh = accessViewModel::refreshProjectCatalog,
             onMigrationRefresh = accessViewModel::refreshMigrationReport,
             onRequestAccess = accessViewModel::requestProjectAccess,

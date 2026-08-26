@@ -3,7 +3,7 @@ id: doc-55dc22c79e4171fd7b402f2f9674c790
 title: Xóa ảnh Android và web đồng bộ Google Drive
 description: Specification for local Android image deletion, web review warning, and confirmed Google Drive deletion.
 createdAt: '2026-08-26T04:51:32.363Z'
-updatedAt: '2026-08-26T04:53:38.541Z'
+updatedAt: '2026-08-26T05:13:50.797Z'
 tags:
   - spec
   - approved

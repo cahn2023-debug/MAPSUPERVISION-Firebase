@@ -460,6 +460,15 @@ export async function downloadDriveFile(fileId: string): Promise<{ stream: Reada
   };
 }
 
+export async function deleteDriveFile(fileId: string): Promise<void> {
+  try {
+    await driveClient().files.delete({ fileId, supportsAllDrives: true });
+  } catch (error: any) {
+    if (Number(error?.response?.status ?? error?.code) === 404) return;
+    throw error;
+  }
+}
+
 // ponytail: test mock hooks
 let uploadMock: any = null;
 

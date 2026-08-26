@@ -158,6 +158,80 @@ class FirebaseAccessViewModelTest {
         assertEquals(1, projectRepo.projects.size)
         assertEquals("New Cloud Proj", projectRepo.projects[0].name)
     }
+
+    @Test
+    fun openOrDownloadProject_syncs_name_and_refreshes_local_presence() = runBlocking {
+        val repository = FakeFirebaseAccessRepository()
+        val projectRepo = FakeProjectRepository()
+        val activeRepo = FakeActiveProjectRepository()
+        val syncRepo = FakeFirebaseSyncRepository()
+        val viewModel = FirebaseAccessViewModel(repository, context, projectRepo, activeRepo, syncRepo)
+
+        val oldLocalProject = Project(
+            id = "project-1",
+            name = "project-1",
+            slug = "p-001",
+            isArchived = false,
+            createdAtEpochMs = 500L,
+            metadataVersion = 1,
+            updatedAtEpochMs = 500L,
+            storageMode = ProjectStorageMode.PROJECT_DB,
+            projectDbPath = "",
+            mediaStorageProvider = "GOOGLE_DRIVE",
+            mediaStorageFolderId = "",
+            mediaStorageFolderUrl = "",
+            mediaStorageUpdatedAtEpochMs = 0L,
+            isDeleted = false,
+            deletedAtEpochMs = null,
+            cloudDataConfirmed = false
+        )
+        projectRepo.importProject(oldLocalProject)
+
+        val entry = FirebaseProjectCatalogEntry(
+            projectId = "project-1",
+            projectName = "Unified Proper Name",
+            projectCode = "p-001",
+            updatedAtEpochMs = 1200L,
+            status = FirebaseProjectCatalogStatus.ACTIVE
+        )
+
+        var opened = false
+        viewModel.openOrDownloadProject(entry) {
+            opened = true
+        }
+
+        assertTrue(opened)
+        assertEquals("project-1", (activeRepo.getActive() as AppResult.Success).data)
+        assertEquals(1, projectRepo.projects.size)
+        assertEquals("Unified Proper Name", projectRepo.projects[0].name)
+        assertEquals(1, viewModel.uiState.value.localProjects.size)
+        assertEquals("project-1", viewModel.uiState.value.activeProjectId)
+    }
+
+    @Test
+    fun openOrDownloadProject_fallback_to_projectCode_when_name_blank() = runBlocking {
+        val repository = FakeFirebaseAccessRepository()
+        val projectRepo = FakeProjectRepository()
+        val activeRepo = FakeActiveProjectRepository()
+        val syncRepo = FakeFirebaseSyncRepository()
+        val viewModel = FirebaseAccessViewModel(repository, context, projectRepo, activeRepo, syncRepo)
+
+        val entry = FirebaseProjectCatalogEntry(
+            projectId = "project-blank-name",
+            projectName = "",
+            projectCode = "PROJ-CODE-XYZ",
+            updatedAtEpochMs = 1000L,
+            status = FirebaseProjectCatalogStatus.ACTIVE
+        )
+
+        var opened = false
+        viewModel.openOrDownloadProject(entry) {
+            opened = true
+        }
+
+        assertTrue(opened)
+        assertEquals("PROJ-CODE-XYZ", projectRepo.projects[0].name)
+    }
 }
 
 private suspend fun waitUntil(condition: () -> Boolean) {

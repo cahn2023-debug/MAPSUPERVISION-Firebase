@@ -140,7 +140,7 @@ class ProjectRepositoryDeletionTest {
     }
 
     @Test
-    fun requestDeletion_uploadedProjectLeavesCloudDecisionPendingAfterLocalPurge() = runBlocking {
+    fun requestDeletion_uploadedProjectPerformsImmediateLocalDeletion() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val database = Room.inMemoryDatabaseBuilder(context, MapSupervisionDatabase::class.java)
             .allowMainThreadQueries()
@@ -167,17 +167,13 @@ class ProjectRepositoryDeletionTest {
             )
 
             assertEquals(
-                com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING,
+                com.mapsupervision.domain.model.ProjectDeletionState.DELETED,
                 (repository.requestDeletion("uploaded", "cloud-request") as AppResult.Success).data
             )
             val project = database.projectDao().get("uploaded")
-            assertTrue(project != null && !project.isDeleted)
-            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.CLOUD_DECISION_PENDING, project?.deletionState)
-            assertEquals("cloud-request", project?.cloudDecisionRequestId)
-
-            assertTrue(repository.markCloudRetained("uploaded", "cloud-request") is AppResult.Success)
-            assertTrue(repository.markRestoreCompleted("uploaded", "cloud-request") is AppResult.Success)
-            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.ACTIVE, database.projectDao().get("uploaded")?.deletionState)
+            assertTrue(project != null && project.isDeleted)
+            assertEquals(com.mapsupervision.domain.model.ProjectDeletionState.DELETED, project?.deletionState)
+            assertEquals("cloud-request", project?.deletionRequestId)
         } finally {
             database.close()
         }

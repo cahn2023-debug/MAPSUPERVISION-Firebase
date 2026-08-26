@@ -52,7 +52,9 @@ data class FirebaseAccessUiState(
     val adminRequests: List<FirebaseProjectAccessRequest> = emptyList(),
     val adminLoading: Boolean = false,
     val adminError: String = "",
-    val adminBusyRequestId: String? = null
+    val adminBusyRequestId: String? = null,
+    val localProjects: List<Project> = emptyList(),
+    val activeProjectId: String? = null
 )
 
 @HiltViewModel
@@ -119,6 +121,20 @@ class FirebaseAccessViewModel @Inject constructor(
                         error = result.throwable.message.orEmpty()
                     )
                 }
+            }
+        }
+        refreshLocalProjects()
+    }
+
+    fun refreshLocalProjects() {
+        viewModelScope.launch {
+            if (projectRepository != null) {
+                val list = (projectRepository.list(true) as? AppResult.Success)?.data.orEmpty()
+                val activeId = (activeProjectRepository?.getActive() as? AppResult.Success)?.data
+                _uiState.value = _uiState.value.copy(
+                    localProjects = list,
+                    activeProjectId = activeId
+                )
             }
         }
     }
@@ -345,6 +361,7 @@ class FirebaseAccessViewModel @Inject constructor(
                     catalogLoading = false,
                     catalogError = ""
                 )
+                refreshLocalProjects()
             }.onFailure { error ->
                 _uiState.value = _uiState.value.copy(
                     catalogLoading = false,
@@ -449,6 +466,7 @@ class FirebaseAccessViewModel @Inject constructor(
                 if (projectRepository != null) {
                     val localProjects = (projectRepository.list(true) as? AppResult.Success)?.data.orEmpty()
                     val existing = localProjects.find { it.id == entry.projectId }
+                    val resolvedName = entry.projectName.ifBlank { entry.projectCode }
                     if (existing == null) {
                         val sanitizedSlug = entry.projectCode.lowercase(java.util.Locale.ROOT)
                             .replace(Regex("[^a-z0-9-]"), "-")
@@ -456,7 +474,7 @@ class FirebaseAccessViewModel @Inject constructor(
                             .ifBlank { entry.projectId.take(8).lowercase(java.util.Locale.ROOT) }
                         val project = Project(
                             id = entry.projectId,
-                            name = entry.projectName,
+                            name = resolvedName,
                             slug = sanitizedSlug,
                             isArchived = entry.status == FirebaseProjectCatalogStatus.ARCHIVED,
                             createdAtEpochMs = entry.updatedAtEpochMs,
@@ -476,6 +494,17 @@ class FirebaseAccessViewModel @Inject constructor(
                             is AppResult.Success -> Unit
                             is AppResult.Error -> throw importRes.throwable
                         }
+                    } else if (resolvedName.isNotBlank() &&
+                        !resolvedName.equals(entry.projectId, ignoreCase = true) &&
+                        (existing.name.isBlank() || existing.name.equals(existing.id, ignoreCase = true) || entry.updatedAtEpochMs >= existing.updatedAtEpochMs)
+                    ) {
+                        val updated = existing.copy(
+                            name = resolvedName,
+                            isArchived = entry.status == FirebaseProjectCatalogStatus.ARCHIVED,
+                            updatedAtEpochMs = maxOf(existing.updatedAtEpochMs, entry.updatedAtEpochMs),
+                            cloudDataConfirmed = true
+                        )
+                        projectRepository.importProject(updated)
                     }
                 }
 
@@ -488,6 +517,7 @@ class FirebaseAccessViewModel @Inject constructor(
                                     is AppResult.Error -> throw pullRes.throwable
                                 }
                             }
+                            refreshLocalProjects()
                             _uiState.value = _uiState.value.copy(isBusy = false, message = "")
                             onSuccess()
                         }
@@ -499,6 +529,7 @@ class FirebaseAccessViewModel @Inject constructor(
                         }
                     }
                 } else {
+                    refreshLocalProjects()
                     _uiState.value = _uiState.value.copy(isBusy = false, message = "")
                     onSuccess()
                 }
@@ -539,6 +570,7 @@ class FirebaseAccessViewModel @Inject constructor(
                                 message = "Đã tạo dự án thành công: ${created.name}"
                             )
                             refreshProjectCatalog()
+                            refreshLocalProjects()
                             onSuccess()
                         }
                         is AppResult.Error -> {
@@ -551,6 +583,7 @@ class FirebaseAccessViewModel @Inject constructor(
                 } else {
                     _uiState.value = _uiState.value.copy(isBusy = false, message = "Đã tạo dự án thành công.")
                     refreshProjectCatalog()
+                    refreshLocalProjects()
                     onSuccess()
                 }
             } catch (e: Exception) {

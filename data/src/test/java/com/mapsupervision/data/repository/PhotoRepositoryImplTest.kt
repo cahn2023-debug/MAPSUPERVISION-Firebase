@@ -20,6 +20,7 @@ import com.mapsupervision.domain.model.ProjectStorageMode
 import com.mapsupervision.domain.model.SitePhoto
 import com.mapsupervision.domain.model.SitePhotoSyncStatus
 import com.mapsupervision.storage.ProjectStorageManager
+import com.mapsupervision.storage.DomainEventBusImpl
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
@@ -59,7 +60,7 @@ class PhotoRepositoryImplTest {
             .allowMainThreadQueries()
             .build()
         provider = ProjectScopedDatabaseProvider(context, sharedDatabase, storageManager)
-        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao(), storageManager)
+        repository = PhotoRepositoryImpl(sharedDatabase.sitePhotoDao(), provider, sharedDatabase.projectDao(), storageManager, DomainEventBusImpl())
     }
 
     @After

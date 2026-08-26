@@ -55,7 +55,7 @@ function parseServiceAccountJson(raw: string): any {
 }
 
 function serviceAccountCandidatePaths(): string[] {
-  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE?.trim();
+  const filePath = (process.env.FIREBASE_SERVICE_ACCOUNT_FILE || process.env.GOOGLE_SERVICE_ACCOUNT_FILE)?.trim();
   return [
     filePath ? path.resolve(process.cwd(), filePath) : null,
     filePath ? path.resolve(filePath) : null,
@@ -67,7 +67,7 @@ function serviceAccountCandidatePaths(): string[] {
 }
 
 function readCredential() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  const raw = (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON)?.trim();
   let jsonError: unknown = null;
   if (raw) {
     try {
@@ -91,7 +91,7 @@ function readCredential() {
   }
 
   if (jsonError) {
-    console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON:", jsonError);
+    console.warn("[FirebaseAdmin] Could not parse FIREBASE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_JSON:", jsonError);
   }
 
   return applicationDefault();

@@ -64,6 +64,8 @@ data class SitePhotoEntity(
     val syncStatus: SitePhotoSyncStatus = SitePhotoSyncStatus.PENDING,
     val remoteUrl: String? = null,
     val syncErrorMessage: String? = null,
+    val androidDeletedAtEpochMs: Long? = null,
+    val androidDeletionStatus: String = "NONE",
     val lastSyncAttemptEpochMs: Long? = null,
     val isDeleted: Boolean = false,
     val deletedAtEpochMs: Long? = null

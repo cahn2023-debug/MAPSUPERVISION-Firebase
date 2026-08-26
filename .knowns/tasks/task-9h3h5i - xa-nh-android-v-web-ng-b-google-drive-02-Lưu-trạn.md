@@ -1,14 +1,15 @@
 ---
 id: 9h3h5i
 title: "[xa-nh-android-v-web-ng-b-google-drive-02] Lưu trạng thái ảnh đã xóa và xóa file Google Drive qua backend"
-status: in-progress
+status: done
 priority: high
 labels:
   - from-spec
   - spec:xa-nh-android-v-web-ng-b-google-drive
   - spec-date:2026-08-26
 createdAt: '2026-08-26T04:53:29.874Z'
-updatedAt: '2026-08-26T05:12:25.304Z'
+updatedAt: '2026-08-26T05:12:58.592Z'
+completedAt: '2026-08-26T05:12:58.592Z'
 timeSpent: 0
 assignee: '@me'
 spec: specs/2026-08-26/xa-nh-android-v-web-ng-b-google-drive
@@ -30,9 +31,9 @@ Mở rộng contract Firebase/backend để nhận sự kiện Android, giữ tr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Backend accepts only authenticated project members/admins for media deletion.
-- [ ] #2 Confirmed deletion removes the Google Drive file idempotently and writes a Firebase tombstone.
-- [ ] #3 Drive failures preserve the pending state and return an actionable error.
+- [x] #1 Backend accepts only authenticated project members/admins for media deletion.
+- [x] #2 Confirmed deletion removes the Google Drive file idempotently and writes a Firebase tombstone.
+- [x] #3 Drive failures preserve the pending state and return an actionable error.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -43,4 +44,11 @@ Mở rộng contract Firebase/backend để nhận sự kiện Android, giữ tr
 3. Cover success, access denial, missing marker, and Drive failure behavior with route tests/build validation.
 4. Record D1-D5 compliance and System Decision Impact.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented authenticated Drive DELETE route with project access checks, Android marker validation, idempotent Drive 404 handling, and Firebase tombstone. Verification: web build and test suite pass. System Decision Impact: none — reuses existing Firebase/Drive auth and sync guidance. Spec Decision Compliance: D1=pass, D2=pass, D3=pass, D4=pass, D5=pass.
+Task completed after review; no blocking P1 findings.
+<!-- SECTION:NOTES:END -->
 

@@ -380,19 +380,44 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
         if (isAdmin && startAfterUpdatedAtEpochMs == null) {
             runCatching {
                 val projectDocs = firestore.collection("projects").get().await().documents
-                val catalogIds = entries.map { it.projectId }.toSet()
-                val missingEntries = mutableListOf<FirebaseProjectCatalogEntry>()
+                val entriesByProjectId = entries.associateBy { it.projectId }.toMutableMap()
+                val toUpsert = mutableListOf<FirebaseProjectCatalogEntry>()
 
                 for (doc in projectDocs) {
-                    val entry = extractCatalogEntryFromProjectDoc(doc.id, doc.data.orEmpty(), fallbackOwnerUid = sessionOwner)
-                    if (entry != null && entry.projectId !in catalogIds) {
-                        missingEntries.add(entry)
+                    val projectEntry = extractCatalogEntryFromProjectDoc(doc.id, doc.data.orEmpty(), fallbackOwnerUid = sessionOwner) ?: continue
+                    val existing = entriesByProjectId[projectEntry.projectId]
+                    if (existing == null) {
+                        toUpsert.add(projectEntry)
+                        entriesByProjectId[projectEntry.projectId] = projectEntry
+                    } else if (existing.projectName.isBlank() ||
+                        existing.projectName.equals(existing.projectId, ignoreCase = true) ||
+                        (projectEntry.projectName.isNotBlank() &&
+                         !projectEntry.projectName.equals(projectEntry.projectId, ignoreCase = true) &&
+                         projectEntry.projectName != existing.projectName)
+                    ) {
+                        val resolvedName = if (projectEntry.projectName.isNotBlank() && !projectEntry.projectName.equals(projectEntry.projectId, ignoreCase = true)) {
+                            projectEntry.projectName
+                        } else {
+                            existing.projectName.ifBlank { projectEntry.projectCode }
+                        }
+                        val resolvedCode = if (existing.projectCode.isNotBlank() && !existing.projectCode.startsWith(existing.projectId.take(8), ignoreCase = true)) {
+                            existing.projectCode
+                        } else {
+                            projectEntry.projectCode
+                        }
+                        val updated = existing.copy(
+                            projectName = resolvedName,
+                            projectCode = resolvedCode,
+                            updatedAtEpochMs = maxOf(existing.updatedAtEpochMs, projectEntry.updatedAtEpochMs)
+                        )
+                        toUpsert.add(updated)
+                        entriesByProjectId[projectEntry.projectId] = updated
                     }
                 }
 
-                if (missingEntries.isNotEmpty()) {
+                if (toUpsert.isNotEmpty()) {
                     val batch = firestore.batch()
-                    missingEntries.forEach { entry ->
+                    toUpsert.forEach { entry ->
                         val catalogDocRef = firestore.collection("projectCatalog").document(entry.projectId)
                         batch.set(
                             catalogDocRef,
@@ -402,11 +427,13 @@ class FirebaseAccessRepositoryImpl @Inject constructor(
                                 "createdByUid" to entry.createdByUid,
                                 "updatedAtEpochMs" to entry.updatedAtEpochMs,
                                 "status" to entry.status.name
-                            )
+                            ),
+                            SetOptions.merge()
                         )
                     }
                     batch.commit().await()
-                    entries.addAll(missingEntries)
+                    entries.clear()
+                    entries.addAll(entriesByProjectId.values)
                     entries.sortByDescending { it.updatedAtEpochMs }
                 }
             }.onFailure { error ->
@@ -729,19 +756,35 @@ internal fun parseFirebaseProjectCatalog(
     val normalizedProjectId = projectId.trim()
     if (normalizedProjectId.isBlank()) return null
 
-    val projectName = ((fields["projectName"] ?: fields["name"]) as? String)?.trim().orEmpty()
-    val slug = (fields["slug"] as? String)?.trim().orEmpty()
-    val projectCode = ((fields["projectCode"] ?: fields["code"]) as? String)?.trim().orEmpty()
+    @Suppress("UNCHECKED_CAST")
+    val dataMap = (fields["data"] as? Map<String, Any?>) ?: (fields["payload"] as? Map<String, Any?>) ?: fields
+
+    val rawName = ((dataMap["projectName"] ?: dataMap["name"] ?: fields["projectName"] ?: fields["name"]) as? String)?.trim().orEmpty()
+    val slug = ((dataMap["slug"] ?: fields["slug"]) as? String)?.trim().orEmpty()
+    val projectCode = ((dataMap["projectCode"] ?: dataMap["code"] ?: fields["projectCode"] ?: fields["code"]) as? String)?.trim().orEmpty()
         .ifBlank { slug.ifBlank { normalizedProjectId.take(8).uppercase(Locale.ROOT) } }
-    val createdByUid = ((fields["createdByUid"] ?: fields["ownerUid"] ?: fields["userId"]) as? String)?.trim()
+
+    val projectName = if (rawName.isBlank() || rawName.equals(normalizedProjectId, ignoreCase = true)) {
+        if (projectCode.isNotBlank() && !projectCode.equals(normalizedProjectId, ignoreCase = true) && !projectCode.startsWith(normalizedProjectId.take(8), ignoreCase = true)) {
+            projectCode
+        } else if (slug.isNotBlank() && !slug.equals(normalizedProjectId, ignoreCase = true)) {
+            slug
+        } else {
+            rawName
+        }
+    } else {
+        rawName
+    }
+
+    val createdByUid = ((dataMap["createdByUid"] ?: dataMap["ownerUid"] ?: dataMap["userId"] ?: fields["createdByUid"] ?: fields["ownerUid"] ?: fields["userId"]) as? String)?.trim()
         ?.takeIf { it.isNotBlank() } ?: fallbackOwnerUid ?: "legacy-owner"
-    val updatedAtEpochMs = when (val value = fields["updatedAtEpochMs"] ?: fields["createdAtEpochMs"]) {
+    val updatedAtEpochMs = when (val value = dataMap["updatedAtEpochMs"] ?: fields["updatedAtEpochMs"] ?: dataMap["createdAtEpochMs"] ?: fields["createdAtEpochMs"]) {
         is Long -> value
         is Int -> value.toLong()
         is Number -> value.toLong()
         else -> 0L
     }
-    val status = when ((fields["status"] as? String)?.trim()?.uppercase(Locale.ROOT)) {
+    val status = when ((dataMap["status"] as? String ?: fields["status"] as? String)?.trim()?.uppercase(Locale.ROOT)) {
         "ARCHIVED" -> FirebaseProjectCatalogStatus.ARCHIVED
         else -> FirebaseProjectCatalogStatus.ACTIVE
     }
@@ -761,29 +804,48 @@ internal fun extractCatalogEntryFromProjectDoc(
     docData: Map<String, Any?>,
     fallbackOwnerUid: String? = null
 ): FirebaseProjectCatalogEntry? {
+    val normalizedProjectId = projectId.trim()
+    if (normalizedProjectId.isBlank()) return null
+
     @Suppress("UNCHECKED_CAST")
-    val payload = (docData["payload"] as? Map<String, Any?>) ?: docData
-    val isDeleted = (payload["isDeleted"] as? Boolean) ?: (docData["isDeleted"] as? Boolean) ?: false
+    val dataMap = (docData["data"] as? Map<String, Any?>) ?: (docData["payload"] as? Map<String, Any?>) ?: docData
+    val isDeleted = (dataMap["isDeleted"] as? Boolean)
+        ?: (docData["isDeleted"] as? Boolean)
+        ?: ((dataMap["isDeleted"] as? Number)?.toInt() == 1)
+        ?: false
     if (isDeleted) return null
-    val name = ((payload["name"] ?: payload["projectName"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim()
-        .orEmpty()
-    val slug = ((payload["slug"] ?: docData["slug"]) as? String)?.trim().orEmpty()
-    val projectCode = ((payload["projectCode"] ?: docData["projectCode"]) as? String)?.trim().orEmpty()
-        .ifBlank { slug.ifBlank { projectId.take(8).uppercase(Locale.ROOT) } }
-    val updatedAt = when (val value = payload["updatedAtEpochMs"] ?: docData["updatedAtEpochMs"] ?: payload["createdAtEpochMs"] ?: docData["createdAtEpochMs"]) {
+
+    val rawName = ((dataMap["name"] ?: dataMap["projectName"] ?: docData["name"] ?: docData["projectName"]) as? String)?.trim().orEmpty()
+    val slug = ((dataMap["slug"] ?: docData["slug"]) as? String)?.trim().orEmpty()
+    val projectCode = ((dataMap["projectCode"] ?: dataMap["code"] ?: docData["projectCode"] ?: docData["code"]) as? String)?.trim().orEmpty()
+        .ifBlank { slug.ifBlank { normalizedProjectId.take(8).uppercase(Locale.ROOT) } }
+
+    val projectName = if (rawName.isBlank() || rawName.equals(normalizedProjectId, ignoreCase = true)) {
+        if (projectCode.isNotBlank() && !projectCode.equals(normalizedProjectId, ignoreCase = true) && !projectCode.startsWith(normalizedProjectId.take(8), ignoreCase = true)) {
+            projectCode
+        } else if (slug.isNotBlank() && !slug.equals(normalizedProjectId, ignoreCase = true)) {
+            slug
+        } else {
+            rawName
+        }
+    } else {
+        rawName
+    }
+
+    val updatedAt = when (val value = dataMap["updatedAtEpochMs"] ?: docData["updatedAtEpochMs"] ?: dataMap["createdAtEpochMs"] ?: docData["createdAtEpochMs"]) {
         is Long -> value
         is Int -> value.toLong()
         is Number -> value.toLong()
         else -> 0L
     }
-    val isArchived = (payload["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
-    val createdByUid = ((payload["createdByUid"] ?: docData["createdByUid"] ?: payload["ownerUid"] ?: docData["ownerUid"]) as? String)?.trim()
+    val isArchived = (dataMap["isArchived"] as? Boolean) ?: (docData["isArchived"] as? Boolean) ?: false
+    val createdByUid = ((dataMap["createdByUid"] ?: dataMap["ownerUid"] ?: dataMap["userId"] ?: docData["createdByUid"] ?: docData["ownerUid"]) as? String)?.trim()
         ?.takeIf { it.isNotBlank() } ?: fallbackOwnerUid ?: "legacy-owner"
     val status = if (isArchived) FirebaseProjectCatalogStatus.ARCHIVED else FirebaseProjectCatalogStatus.ACTIVE
-    if (projectId.isBlank()) return null
+
     return FirebaseProjectCatalogEntry(
-        projectId = projectId.trim(),
-        projectName = name,
+        projectId = normalizedProjectId,
+        projectName = projectName,
         projectCode = projectCode,
         updatedAtEpochMs = updatedAt.coerceAtLeast(0L),
         status = status,
