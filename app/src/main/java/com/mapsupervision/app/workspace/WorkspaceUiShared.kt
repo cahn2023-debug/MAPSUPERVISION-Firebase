@@ -59,6 +59,16 @@ private fun formatDuration(ms: Long): String {
     return String.format(Locale.US, "%02d:%02d", minutes, seconds)
 }
 
+fun toDriveDirectUrl(urlOrId: String, width: Int = 500): String? {
+    val trimmed = urlOrId.trim()
+    if (trimmed.isBlank()) return null
+    val idMatch = Regex("[?&]id=([A-Za-z0-9_-]+)").find(trimmed)
+        ?: Regex("/d/([A-Za-z0-9_-]+)").find(trimmed)
+        ?: Regex("/files?/d/([A-Za-z0-9_-]+)").find(trimmed)
+    val fileId = idMatch?.groupValues?.get(1) ?: if (trimmed.matches(Regex("^[A-Za-z0-9_-]{15,}$"))) trimmed else null
+    return fileId?.let { "https://lh3.googleusercontent.com/d/$it=w$width" }
+}
+
 @Composable
 fun SitePhotoThumb(
     photo: SitePhoto,
@@ -68,6 +78,13 @@ fun SitePhotoThumb(
     val thumbFile = File(photo.thumbnailPath.ifBlank { photo.filePath })
     val context = LocalContext.current
     val theme = MaterialTheme.colorScheme
+    val remoteDriveUrl = photo.remoteUrl?.let { toDriveDirectUrl(it, 400) }
+    val modelToLoad = when {
+        thumbFile.exists() -> thumbFile
+        !remoteDriveUrl.isNullOrBlank() -> remoteDriveUrl
+        else -> null
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
@@ -78,10 +95,10 @@ fun SitePhotoThumb(
                 onClick = onClick
             )
     ) {
-        if (thumbFile.exists()) {
+        if (modelToLoad != null) {
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(thumbFile)
+                    .data(modelToLoad)
                     .crossfade(true)
                     .build(),
                 contentDescription = photo.objectCode,
@@ -99,6 +116,19 @@ fun SitePhotoThumb(
                     .size(24.dp)
             )
         }
+
+        if (!thumbFile.exists() && !photo.remoteUrl.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(3.dp)
+                    .background(Color(0xE6F97316), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 3.dp, vertical = 1.dp)
+            ) {
+                Text("Drive", color = Color.White, fontSize = 8.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            }
+        }
+
         val ts = SimpleDateFormat("dd/MM HH:mm", Locale.US).format(Date(photo.capturedAtEpochMs))
         Box(
             modifier = Modifier

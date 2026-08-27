@@ -5,6 +5,7 @@ import type { FirebaseError } from "firebase/app";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
+import { DriveMediaReconcileModal } from "@/components/DriveMediaReconcileModal";
 import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
 import { driveFileIdFromUrl, googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 import {
@@ -674,6 +675,7 @@ function PhotoLightboxModal({
   onClose,
   onSelectPhoto,
   onPhotoDecision,
+  onOpenDriveScanner,
   photoActionBusy,
   photoActionError
 }: {
@@ -683,6 +685,7 @@ function PhotoLightboxModal({
   onClose: () => void;
   onSelectPhoto: (nextPhoto: SitePhotoRow) => void;
   onPhotoDecision: (photo: SitePhotoRow, decision: "KEEP" | "REMOVE_PROJECT" | "DELETE_DRIVE") => void;
+  onOpenDriveScanner?: () => void;
   photoActionBusy: boolean;
   photoActionError: string;
 }) {
@@ -790,6 +793,29 @@ function PhotoLightboxModal({
                           : "Ứng dụng Android gặp sự cố mạng khi upload lên Google Drive. Vui lòng mở app Android khi có mạng để hoàn tất tải ảnh.")
                       : "Dữ liệu metadata đã ghi nhận nhưng file ảnh gốc chưa được tải lên từ Android."}
                   </p>
+                  {onOpenDriveScanner && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginTop: "16px",
+                        padding: "8px 16px",
+                        borderColor: "#2563eb",
+                        color: "#2563eb",
+                        background: "rgba(37, 99, 235, 0.08)",
+                        borderRadius: "8px",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        cursor: "pointer"
+                      }}
+                      onClick={onOpenDriveScanner}
+                    >
+                      <span>☁️ Quét Drive để tìm / khớp lại ảnh này</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -903,6 +929,27 @@ function PhotoLightboxModal({
                   📁 Mở trên Google Drive
                 </a>
               )}
+              {(!imageUrl || photo.syncStatus === "FAILED") && onOpenDriveScanner && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    width: "100%",
+                    marginBottom: "8px",
+                    borderColor: "#2563eb",
+                    color: "#2563eb",
+                    background: "rgba(37, 99, 235, 0.08)",
+                    fontWeight: "600"
+                  }}
+                  onClick={onOpenDriveScanner}
+                >
+                  <span>☁️ Quét & Khớp ảnh từ Drive</span>
+                </button>
+              )}
               {isAdmin && photo.androidDeletionStatus !== "PENDING" && (
                 <button
                   type="button"
@@ -987,6 +1034,8 @@ export default function HomePage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [firebaseToken, setFirebaseToken] = useState<string>("");
   const [photoSearchKeyword, setPhotoSearchKeyword] = useState("");
   const [selectedTagFilter, setSelectedTagFilter] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
@@ -2322,6 +2371,30 @@ export default function HomePage() {
                     </div>
                     <button
                       type="button"
+                      className="primary-button small"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        backgroundColor: "#2563eb",
+                        color: "#ffffff",
+                        padding: "6px 14px",
+                        borderRadius: "6px",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                        border: "none"
+                      }}
+                      onClick={() => {
+                        void user?.getIdToken().then((t) => setFirebaseToken(t));
+                        setIsDriveModalOpen(true);
+                      }}
+                      title="Quét toàn bộ Google Drive của dự án để phát hiện và bổ sung ảnh còn thiếu"
+                    >
+                      <span>☁️ Quét Drive</span>
+                    </button>
+                    <button
+                      type="button"
                       className="tiny-button"
                       onClick={() => {
                         const allKeys: Record<string, boolean> = {};
@@ -2562,6 +2635,10 @@ export default function HomePage() {
             onClose={() => setActiveLightboxPhoto(null)}
             onSelectPhoto={(next) => setActiveLightboxPhoto(next)}
             onPhotoDecision={handleAndroidPhotoDecision}
+            onOpenDriveScanner={() => {
+              void user?.getIdToken().then((t) => setFirebaseToken(t));
+              setIsDriveModalOpen(true);
+            }}
             photoActionBusy={photoActionBusy}
             photoActionError={photoActionError}
           />
@@ -2666,6 +2743,15 @@ export default function HomePage() {
       }}
       onConfirm={handleDeleteProject}
     />
+
+    {selectedProjectId && (
+      <DriveMediaReconcileModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        projectId={selectedProjectId}
+        token={firebaseToken}
+      />
+    )}
     </div>
   );
 }

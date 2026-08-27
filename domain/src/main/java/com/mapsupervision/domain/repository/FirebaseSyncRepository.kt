@@ -21,10 +21,23 @@ data class SyncBatchResult(
     val failed: Int = 0
 )
 
+data class MediaRestoreResult(
+    val requestedCount: Int = 0,
+    val restoredCount: Int = 0,
+    val failedCount: Int = 0,
+    val failedPhotoIds: List<String> = emptyList()
+)
+
 interface FirebaseSyncRepository {
     suspend fun pushPending(projectId: String): AppResult<SyncBatchResult>
     suspend fun pullChanges(projectId: String, sinceEpochMs: Long? = null): AppResult<SyncBatchResult>
     suspend fun uploadPendingMedia(projectId: String): AppResult<SyncBatchResult>
+    suspend fun restoreMissingMedia(
+        projectId: String,
+        photoIds: List<String> = emptyList()
+    ): AppResult<MediaRestoreResult> =
+        AppResult.Error(UnsupportedOperationException("Media restore is not supported"))
+
     suspend fun requestProjectDeletion(
         projectId: String,
         requestId: String,

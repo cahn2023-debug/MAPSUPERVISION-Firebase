@@ -646,6 +646,99 @@ internal open class DriveMediaUploadClient(
         }
     }
 
+    internal fun extractDriveFileId(value: String): String {
+        val trimmed = value.trim()
+        if (trimmed.isBlank()) return ""
+        if (trimmed.matches(Regex("^[A-Za-z0-9_-]{15,}$"))) return trimmed
+
+        val idParamMatch = Regex("[?&]id=([A-Za-z0-9_-]+)").find(trimmed)
+        if (idParamMatch != null) {
+            return idParamMatch.groupValues[1]
+        }
+        val dPathMatch = Regex("/d/([A-Za-z0-9_-]+)").find(trimmed)
+        if (dPathMatch != null) {
+            return dPathMatch.groupValues[1]
+        }
+        val fileDMatch = Regex("/files?/d/([A-Za-z0-9_-]+)").find(trimmed)
+        if (fileDMatch != null) {
+            return fileDMatch.groupValues[1]
+        }
+        return ""
+    }
+
+    open fun downloadMediaFile(driveFileIdOrUrl: String, targetFile: File): Boolean {
+        val fileId = extractDriveFileId(driveFileIdOrUrl)
+        if (fileId.isBlank()) return false
+
+        targetFile.parentFile?.mkdirs()
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp_${System.currentTimeMillis()}")
+
+        val successViaDriveApi = try {
+            if (directUploadConfig.enabled) {
+                val serviceAccount = decodeServiceAccount()
+                val accessToken = exchangeAccessToken(serviceAccount)
+                val url = "https://www.googleapis.com/drive/v3/files/$fileId?alt=media&supportsAllDrives=true"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $accessToken")
+                    .get()
+                    .build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful && response.body != null) {
+                        response.body!!.byteStream().use { input ->
+                            tempFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        tempFile.exists() && tempFile.length() > 0
+                    } else {
+                        false
+                    }
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+
+        val finalSuccess = if (successViaDriveApi) {
+            true
+        } else {
+            try {
+                val fallbackUrl = "https://lh3.googleusercontent.com/d/$fileId=w2500"
+                val request = Request.Builder().url(fallbackUrl).get().build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful && response.body != null) {
+                        response.body!!.byteStream().use { input ->
+                            tempFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        tempFile.exists() && tempFile.length() > 0
+                    } else {
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        return if (finalSuccess && tempFile.exists() && tempFile.length() > 0) {
+            if (targetFile.exists()) targetFile.delete()
+            val renamed = tempFile.renameTo(targetFile)
+            if (!renamed) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+            true
+        } else {
+            if (tempFile.exists()) tempFile.delete()
+            false
+        }
+    }
+
     private fun publicDriveUrl(fileId: String): String =
         "https://drive.google.com/uc?export=view&id=${urlEncode(fileId)}"
 

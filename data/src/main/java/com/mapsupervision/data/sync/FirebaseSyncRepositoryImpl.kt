@@ -16,8 +16,10 @@ import com.mapsupervision.data.db.ProjectScopedDatabaseProvider
 import com.mapsupervision.data.db.entity.SitePhotoEntity
 import com.mapsupervision.domain.model.SitePhotoSyncStatus
 import com.mapsupervision.domain.repository.FirebaseSyncRepository
+import com.mapsupervision.domain.repository.MediaRestoreResult
 import com.mapsupervision.domain.repository.SyncBatchResult
 import com.mapsupervision.domain.repository.SyncEnvelope
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -225,6 +227,72 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         }.fold(
             onSuccess = { AppResult.Success(it) },
             onFailure = { AppResult.Error(DatabaseException("Failed to submit Cloud project decision", it)) }
+        )
+    }
+
+    override suspend fun restoreMissingMedia(
+        projectId: String,
+        photoIds: List<String>
+    ): AppResult<MediaRestoreResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            restoreMissingMediaInternal(projectId, photoIds)
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Error(DatabaseException(buildSyncFailureMessage("Media restore failed", it), it)) }
+        )
+    }
+
+    internal suspend fun restoreMissingMediaInternal(
+        projectId: String,
+        targetPhotoIds: List<String> = emptyList()
+    ): MediaRestoreResult {
+        val photoDao = scopedDatabase(projectId)?.sitePhotoDao() ?: sharedDatabase.sitePhotoDao()
+        val allPhotos = photoDao.byProjectIncludingDeleted(projectId)
+        val photosToRestore = allPhotos.filter { photo ->
+            !photo.isDeleted &&
+            !photo.remoteUrl.isNullOrBlank() &&
+            (targetPhotoIds.isEmpty() || photo.id in targetPhotoIds) &&
+            (photo.filePath.isBlank() || !File(photo.filePath).exists())
+        }
+
+        if (photosToRestore.isEmpty()) {
+            return MediaRestoreResult(requestedCount = targetPhotoIds.size, restoredCount = 0, failedCount = 0)
+        }
+
+        var restored = 0
+        var failed = 0
+        val failedIds = mutableListOf<String>()
+
+        val storageFolder = File(appContext.getExternalFilesDir(null) ?: appContext.filesDir, "photos/$projectId")
+        storageFolder.mkdirs()
+
+        photosToRestore.forEach { photo ->
+            val remoteUrl = photo.remoteUrl.orEmpty()
+            val extension = if (photo.mediaType == com.mapsupervision.domain.model.MediaType.VIDEO) "mp4" else "jpg"
+            val targetFile = File(storageFolder, "restored_${photo.id}.$extension")
+
+            val success = driveMediaUploadClient.downloadMediaFile(remoteUrl, targetFile)
+            if (success && targetFile.exists() && targetFile.length() > 0) {
+                val now = System.currentTimeMillis()
+                val updated = photo.copy(
+                    filePath = targetFile.absolutePath,
+                    thumbnailPath = if (photo.thumbnailPath.isBlank() || !File(photo.thumbnailPath).exists()) targetFile.absolutePath else photo.thumbnailPath,
+                    syncErrorMessage = null,
+                    updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
+                )
+                upsertSitePhoto(projectId, updated)
+                restored += 1
+            } else {
+                failed += 1
+                failedIds.add(photo.id)
+            }
+        }
+
+        return MediaRestoreResult(
+            requestedCount = photosToRestore.size,
+            restoredCount = restored,
+            failedCount = failed,
+            failedPhotoIds = failedIds
         )
     }
 

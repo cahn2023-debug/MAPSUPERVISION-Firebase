@@ -596,6 +596,49 @@ class FirebaseSyncRepositoryImplTest {
         assertEquals("https://photo-updated.url", updatedPhoto!!.remoteUrl)
     }
 
+    @Test
+    fun restoreMissingMedia_downloadsAndUpdatesLocalPath() = runBlocking {
+        val projectId = "proj-restore"
+        insertProject(projectId)
+
+        val missingPhoto = SitePhotoEntity(
+            id = "photo-missing-1",
+            projectId = projectId,
+            objectCode = "NODE-M1",
+            tagCodesCsv = "",
+            filePath = "/non/existent/path/photo.jpg",
+            thumbnailPath = "",
+            latitude = 21.0,
+            longitude = 105.0,
+            locationAccuracyM = 5f,
+            isGpsMocked = false,
+            locationStatus = com.mapsupervision.domain.model.PhotoLocationStatus.OK,
+            engineer = "Engineer Restore",
+            capturedAtEpochMs = 2000L,
+            matchedAtEpochMs = 0L,
+            matchingTimeOffsetMs = 0L,
+            mediaType = MediaType.IMAGE,
+            mimeType = "image/jpeg",
+            durationMs = 0L,
+            updatedAtEpochMs = 2000L,
+            syncStatus = SitePhotoSyncStatus.DONE,
+            remoteUrl = "https://drive.google.com/uc?export=view&id=drive-missing-1",
+            isDeleted = false
+        )
+        sharedDatabase.sitePhotoDao().upsert(missingPhoto)
+
+        val result = repository.restoreMissingMedia(projectId, listOf("photo-missing-1"))
+        assertTrue(result is com.mapsupervision.core.result.AppResult.Success)
+        val restoreResult = (result as com.mapsupervision.core.result.AppResult.Success).data
+        assertEquals(1, restoreResult.requestedCount)
+        assertEquals(1, restoreResult.restoredCount)
+        assertEquals(0, restoreResult.failedCount)
+
+        val updatedPhoto = sharedDatabase.sitePhotoDao().byProjectIncludingDeleted(projectId).find { it.id == "photo-missing-1" }
+        assertNotNull(updatedPhoto)
+        assertTrue(File(updatedPhoto!!.filePath).exists())
+    }
+
     private class TestFirebaseRuntime(context: Context) : FirebaseRuntime(context) {
         override fun authConfigured(): Boolean = true
         override suspend fun getFirebaseToken(): String = "test-token"
@@ -613,5 +656,13 @@ class FirebaseSyncRepositoryImplTest {
             lastRequest = request
             return uploadResultUrl
         }
+
+        override fun downloadMediaFile(driveFileIdOrUrl: String, targetFile: File): Boolean {
+            if (shouldFail) return false
+            targetFile.parentFile?.mkdirs()
+            targetFile.writeText("restored content for $driveFileIdOrUrl")
+            return true
+        }
     }
 }
+

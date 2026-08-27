@@ -57,3 +57,13 @@ data class SitePhoto(
 
 val SitePhoto.resolvedTagCodes: List<String>
     get() = if (tagCodes.isNotEmpty()) tagCodes else parseCsvList(tagCodesCsv)
+
+val SitePhoto.isLocalFileMissing: Boolean
+    get() {
+        val targetPath = if (mediaType == MediaType.VIDEO) thumbnailPath.ifBlank { filePath } else filePath
+        return targetPath.isBlank() || !java.io.File(targetPath).exists()
+    }
+
+val SitePhoto.hasDriveBackup: Boolean
+    get() = !remoteUrl.isNullOrBlank()
+

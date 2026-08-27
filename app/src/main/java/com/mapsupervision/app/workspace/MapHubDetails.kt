@@ -637,9 +637,11 @@ fun MapPhotoFullscreenDialog(
                     onClick = onDismiss
                 )
         ) {
-            if (displayFile.exists()) {
+            val remoteDriveUrl = photo.remoteUrl?.let { toDriveDirectUrl(it, 2000) }
+            val modelToDisplay = if (displayFile.exists()) displayFile else remoteDriveUrl
+            if (modelToDisplay != null) {
                 Image(
-                    painter = coil.compose.rememberAsyncImagePainter(displayFile),
+                    painter = coil.compose.rememberAsyncImagePainter(modelToDisplay),
                     contentDescription = photo.objectCode,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()

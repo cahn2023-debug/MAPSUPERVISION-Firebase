@@ -349,6 +349,44 @@ class PhotoRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun restoreFromDrive(photo: SitePhoto): AppResult<SitePhoto> = withContext(Dispatchers.IO) {
+        val remoteUrl = photo.remoteUrl?.trim().orEmpty()
+        if (remoteUrl.isBlank()) {
+            return@withContext AppResult.Error(IllegalArgumentException("Photo does not have a Google Drive remote URL"))
+        }
+        runCatching {
+            val project = projectDao.get(photo.projectId)
+            val projectSlug = project?.slug?.trim().orEmpty().ifBlank { photo.projectId }
+            val isRoute = photo.matchedRouteId != null || !photo.matchedRouteCode.isNullOrBlank()
+            val targetDirectory = storageManager.resolveMediaFolder(
+                projectSlug = projectSlug,
+                isRoute = isRoute,
+                objectCode = photo.objectCode,
+                statusTag = photo.statusTag
+            )
+            targetDirectory.mkdirs()
+            val extension = if (photo.mediaType == com.mapsupervision.domain.model.MediaType.VIDEO) "mp4" else "jpg"
+            val targetFile = File(targetDirectory, "restored_${photo.id}.$extension")
+            val client = com.mapsupervision.data.sync.DriveMediaUploadClient()
+            val success = client.downloadMediaFile(remoteUrl, targetFile)
+            if (!success || !targetFile.exists() || targetFile.length() == 0L) {
+                error("Failed to download media file from Google Drive for photo ${photo.id}")
+            }
+            val updated = photo.copy(
+                filePath = targetFile.absolutePath,
+                thumbnailPath = targetFile.absolutePath,
+                syncErrorMessage = null
+            )
+            val database = scopedDatabase(photo.projectId)
+            val photoDao = database?.sitePhotoDao() ?: dao
+            photoDao.upsert(updated.toEntity())
+            updated
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Error(DatabaseException("Failed to restore photo from Google Drive", it)) }
+        )
+    }
+
     private suspend fun dao(projectId: String): SitePhotoDao =
         scopedDatabase(projectId)?.sitePhotoDao() ?: dao
 

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test tests/access-approval.test.ts tests/sync-contract.test.ts tests/google-drive-image.test.ts tests/media-route.test.ts tests/project-deletion.test.ts tests/project-catalog-migration.test.ts tests/performance-benchmark.test.ts tests/public-project.test.ts",
+    "test": "tsx --test tests/access-approval.test.ts tests/sync-contract.test.ts tests/google-drive-image.test.ts tests/media-route.test.ts tests/project-deletion.test.ts tests/project-catalog-migration.test.ts tests/performance-benchmark.test.ts tests/public-project.test.ts tests/media-scanner.test.ts",
     "test:performance": "tsx --test tests/performance-benchmark.test.ts",
     "test:performance:integration": "firebase emulators:exec --only firestore --project performance-benchmark-test \"tsx --test tests/performance-benchmark.test.ts\"",
     "benchmark:backend": "tsx scripts/benchmark-web-backend.ts",

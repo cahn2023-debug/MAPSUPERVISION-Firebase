@@ -13,5 +13,7 @@ interface PhotoRepository {
     suspend fun byProject(projectId: String): AppResult<List<SitePhoto>>
     suspend fun byObjectCode(projectId: String, objectCode: String): AppResult<List<SitePhoto>>
     suspend fun listProjectsWithPendingUploads(): AppResult<List<String>>
+    suspend fun restoreFromDrive(photo: SitePhoto): AppResult<SitePhoto> =
+        AppResult.Error(UnsupportedOperationException("Photo restore is not supported"))
     fun observeByProject(projectId: String): Flow<List<SitePhoto>>
 }

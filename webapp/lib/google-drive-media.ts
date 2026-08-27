@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { google, type drive_v3 } from "googleapis";
 import { sanitizePrivateKey, sanitizeServiceAccount } from "./firebase-admin";
 
+import { driveFileIdFromUrl } from "./google-drive-image";
 export { driveFileIdFromUrl } from "./google-drive-image";
 
 export type DriveMediaObjectType = "NODE" | "ROUTE";
@@ -839,4 +840,172 @@ export async function uploadDriveSnapshot(
 
   return { fileId, fileName };
 }
+
+export type DiscoveredDrivePhoto = {
+  id: string;
+  driveFileId: string;
+  name: string;
+  projectId: string;
+  objectType: DriveMediaObjectType;
+  objectCode: string;
+  statusTag?: string;
+  capturedAtEpochMs: number;
+  address?: string;
+  captureNote?: string;
+  mediaType: DriveMediaType;
+  mimeType: string;
+  remoteUrl: string;
+  drivePath: string;
+};
+
+export type DriveScanResult = {
+  projectId: string;
+  totalDriveFiles: number;
+  matchedCount: number;
+  discoveredPhotos: DiscoveredDrivePhoto[];
+};
+
+export function parseMediaFileName(
+  fileName: string,
+  createdTimeStr?: string
+): {
+  capturedAtEpochMs: number;
+  address?: string;
+  captureNote?: string;
+  extension: string;
+} {
+  const cleanName = fileName.trim();
+  const lastDot = cleanName.lastIndexOf(".");
+  const ext = lastDot > 0 ? cleanName.slice(lastDot + 1).toLowerCase() : "jpg";
+  const baseName = lastDot > 0 ? cleanName.slice(0, lastDot).trim() : cleanName;
+
+  // Match timestamps formatted as "yyyy-MM-dd HH.mm.ss" or "yyyy-MM-dd HH:mm:ss" or "yyyyMMdd_HHmmss"
+  let capturedAtEpochMs = 0;
+  let remaining = baseName;
+
+  const dateMatch = baseName.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2})[.:](\d{2})[.:](\d{2})/);
+  if (dateMatch) {
+    const [fullDateStr, datePart, hour, minute, second] = dateMatch;
+    const isoString = `${datePart}T${hour}:${minute}:${second}Z`;
+    const parsedTime = new Date(isoString).getTime();
+    if (!isNaN(parsedTime) && parsedTime > 0) {
+      capturedAtEpochMs = parsedTime;
+      remaining = baseName.slice(fullDateStr.length).replace(/^[\s-]+/, "").trim();
+    }
+  } else {
+    const compactMatch = baseName.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+    if (compactMatch) {
+      const [fullDateStr, y, m, d, hh, mm, ss] = compactMatch;
+      const isoString = `${y}-${m}-${d}T${hh}:${mm}:${ss}Z`;
+      const parsedTime = new Date(isoString).getTime();
+      if (!isNaN(parsedTime) && parsedTime > 0) {
+        capturedAtEpochMs = parsedTime;
+        remaining = baseName.slice(fullDateStr.length).replace(/^[\s_-]+/, "").trim();
+      }
+    }
+  }
+
+  if (!capturedAtEpochMs && createdTimeStr) {
+    const parsed = new Date(createdTimeStr).getTime();
+    if (!isNaN(parsed) && parsed > 0) {
+      capturedAtEpochMs = parsed;
+    }
+  }
+  if (!capturedAtEpochMs) {
+    capturedAtEpochMs = Date.now();
+  }
+
+  const parts = remaining.split(" - ").map((s) => s.trim()).filter(Boolean);
+  const address = parts[0] || undefined;
+  const captureNote = parts.slice(1).join(" - ") || (parts.length === 1 ? undefined : undefined);
+
+  return { capturedAtEpochMs, address, captureNote, extension: ext };
+}
+
+export async function scanProjectDriveMedia(
+  drive: drive_v3.Drive,
+  projectId: string,
+  rootFolderId: string,
+  projectName: string,
+  existingPhotos: Array<{ id: string; remoteUrl?: string; objectCode?: string; capturedAtEpochMs?: number }> = []
+): Promise<DriveScanResult> {
+  const projectFolderId = await ensureProjectFolder(drive, rootFolderId, projectId, projectName);
+  const existingDriveIds = new Set<string>();
+
+  existingPhotos.forEach((p) => {
+    if (p.remoteUrl) {
+      const extracted = driveFileIdFromUrl(p.remoteUrl);
+      if (extracted) existingDriveIds.add(extracted);
+    }
+  });
+
+  // Query all non-folder files inside or under the project folder
+  const response = await drive.files.list({
+    q: [
+      `mimeType != '${folderMimeType}'`,
+      "trashed = false"
+    ].join(" and "),
+    fields: "files(id,name,mimeType,createdTime,parents)",
+    pageSize: 1000,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+
+  const files = response.data.files || [];
+  const discoveredPhotos: DiscoveredDrivePhoto[] = [];
+  let totalDriveFiles = 0;
+  let matchedCount = 0;
+
+  for (const file of files) {
+    const fileId = file.id;
+    const fileName = file.name || "";
+    const mimeType = file.mimeType || "image/jpeg";
+
+    if (!fileId || !fileName) continue;
+    // Skip snapshots and thumbnails
+    if (fileName.startsWith("snapshot_") || fileName.includes("__thumb") || fileName.includes("- thumbnail")) {
+      continue;
+    }
+
+    const isImage = mimeType.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(fileName);
+    const isVideo = mimeType.startsWith("video/") || /\.(mp4|mov|m4v)$/i.test(fileName);
+    if (!isImage && !isVideo) continue;
+
+    totalDriveFiles += 1;
+
+    if (existingDriveIds.has(fileId)) {
+      matchedCount += 1;
+      continue;
+    }
+
+    const { capturedAtEpochMs, address, captureNote } = parseMediaFileName(fileName, file.createdTime || undefined);
+    const objectCode = sanitizeSegment(fileName.split("-")[0]?.trim() || "GENERAL", "UNKNOWN");
+    const mediaType: DriveMediaType = isVideo ? "VIDEO" : "IMAGE";
+    const remoteUrl = `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=w1000?authuser=0`;
+
+    discoveredPhotos.push({
+      id: `drive_${fileId}`,
+      driveFileId: fileId,
+      name: fileName,
+      projectId,
+      objectType: "NODE",
+      objectCode,
+      capturedAtEpochMs,
+      address,
+      captureNote,
+      mediaType,
+      mimeType,
+      remoteUrl,
+      drivePath: `photos/${objectCode}/${fileName}`
+    });
+  }
+
+  return {
+    projectId,
+    totalDriveFiles,
+    matchedCount,
+    discoveredPhotos
+  };
+}
+
 

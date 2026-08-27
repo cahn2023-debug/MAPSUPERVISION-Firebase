@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
+import { DriveMediaReconcileModal } from "@/components/DriveMediaReconcileModal";
 import { driveFileIdFromUrl, googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 
 type Row = Record<string, unknown>;
@@ -521,6 +522,7 @@ export default function PublicProjectPage() {
   const [selected, setSelected] = useState<SelectedObject>(null);
 
   // Photo tab specific state
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [photoSearchKeyword, setPhotoSearchKeyword] = useState("");
   const [selectedTagFilter, setSelectedTagFilter] = useState("");
   const [photoViewMode, setPhotoViewMode] = useState<PhotoViewMode>("nodes");
@@ -924,6 +926,15 @@ export default function PublicProjectPage() {
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
               </svg>
               <span>{refreshing ? "Đang tải..." : "Làm mới"}</span>
+            </button>
+
+            <button
+              className="public-btn"
+              onClick={() => setIsDriveModalOpen(true)}
+              title="Quét Google Drive để kiểm tra và bổ sung ảnh còn thiếu"
+              style={{ backgroundColor: "rgba(37, 99, 235, 0.15)", color: "var(--primary, #3b82f6)", borderColor: "rgba(37, 99, 235, 0.3)" }}
+            >
+              <span>☁️ Quét Drive</span>
             </button>
 
             <button
@@ -1920,6 +1931,16 @@ export default function PublicProjectPage() {
           <p className="muted">Cổng thông tin trực tuyến dành cho Giám sát, Ban Quản lý, Nhà thầu và Đối tác</p>
         </div>
       </footer>
+
+      {/* DRIVE MEDIA RECONCILIATION MODAL */}
+      <DriveMediaReconcileModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        projectId="6874375a-3366-4457-a978-b8ee71c4e461"
+        onSuccess={() => {
+          void loadData(true);
+        }}
+      />
     </div>
   );
 }

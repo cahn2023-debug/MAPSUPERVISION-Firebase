@@ -278,5 +278,51 @@ class DriveMediaUploadClientTest {
         assertTrue(deletedUrls.any { it.contains("file-6min") })
         assertTrue(deletedUrls.any { it.contains("file-10min") })
     }
+
+    @Test
+    fun extractDriveFileId_parsesVariousFormats() {
+        val client = DriveMediaUploadClient(
+            OkHttpClient(),
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        assertEquals("1A2b3c4D5e6F7g8H9i0J", client.extractDriveFileId("1A2b3c4D5e6F7g8H9i0J"))
+        assertEquals("1A2b3c4D5e6F7g8H9i0J", client.extractDriveFileId("https://drive.google.com/uc?export=view&id=1A2b3c4D5e6F7g8H9i0J"))
+        assertEquals("1A2b3c4D5e6F7g8H9i0J", client.extractDriveFileId("https://drive.google.com/file/d/1A2b3c4D5e6F7g8H9i0J/view"))
+        assertEquals("1A2b3c4D5e6F7g8H9i0J", client.extractDriveFileId("https://lh3.googleusercontent.com/d/1A2b3c4D5e6F7g8H9i0J=w1000"))
+        assertEquals("", client.extractDriveFileId("   "))
+    }
+
+    @Test
+    fun downloadMediaFile_writesFileSuccessfully() {
+        val downloadedContent = "test-image-binary-data"
+        val httpClient = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    val req = chain.request()
+                    Response.Builder()
+                        .request(req)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(downloadedContent.toResponseBody("image/jpeg".toMediaTypeOrNull()))
+                        .build()
+                }
+            )
+            .build()
+
+        val client = DriveMediaUploadClient(
+            httpClient,
+            DriveDirectUploadConfig(enabled = false, rootFolderId = "", serviceAccountJsonBase64 = "")
+        )
+
+        val targetFile = File(tempDir, "restored_photo.jpg")
+        val success = client.downloadMediaFile("1A2b3c4D5e6F7g8H9i0J", targetFile)
+
+        assertTrue(success)
+        assertTrue(targetFile.exists())
+        assertEquals(downloadedContent, targetFile.readText())
+    }
 }
+
 
