@@ -63,6 +63,8 @@ data class SitePhotoEntity(
     val updatedAtEpochMs: Long = capturedAtEpochMs,
     val syncStatus: SitePhotoSyncStatus = SitePhotoSyncStatus.PENDING,
     val remoteUrl: String? = null,
+    val driveFileId: String? = null,
+    val driveThumbnailId: String? = null,
     val syncErrorMessage: String? = null,
     val androidDeletedAtEpochMs: Long? = null,
     val androidDeletionStatus: String = "NONE",

@@ -60,11 +60,21 @@ internal data class DriveDirectUploadConfig(
     }
 }
 
+internal data class DriveMediaUploadResult(
+    val remoteUrl: String,
+    val driveFileId: String,
+    val driveThumbnailId: String? = null,
+    val thumbnailUrl: String? = null
+)
+
 internal open class DriveMediaUploadClient(
     private val httpClient: OkHttpClient = OkHttpClient(),
     private val directUploadConfig: DriveDirectUploadConfig = DriveDirectUploadConfig.fromBuildConfig()
 ) {
-    open fun upload(baseUrl: String, request: DriveMediaUploadRequest): String {
+    open fun upload(baseUrl: String, request: DriveMediaUploadRequest): String =
+        uploadMedia(baseUrl, request).remoteUrl
+
+    open fun uploadMedia(baseUrl: String, request: DriveMediaUploadRequest): DriveMediaUploadResult {
         if (!request.originalFile.exists()) {
             error("Media file does not exist: ${request.originalFile.absolutePath}")
         }
@@ -80,7 +90,7 @@ internal open class DriveMediaUploadClient(
         return uploadViaWebapp(normalizedBaseUrl, request)
     }
 
-    private fun uploadViaWebapp(baseUrl: String, request: DriveMediaUploadRequest): String {
+    private fun uploadViaWebapp(baseUrl: String, request: DriveMediaUploadRequest): DriveMediaUploadResult {
         val bodyBuilder = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("photoId", request.photoId)
@@ -128,15 +138,24 @@ internal open class DriveMediaUploadClient(
             if (json["success"]?.jsonPrimitive?.booleanOrNull != true) {
                 error("Drive media upload failed: $responseText")
             }
-            val url = json["data"]?.jsonObject?.get("remoteUrl")?.jsonPrimitive?.content.orEmpty()
+            val dataObj = json["data"]?.jsonObject
+            val url = dataObj?.get("remoteUrl")?.jsonPrimitive?.content.orEmpty()
             if (url.isBlank()) {
                 error("Drive media upload response missing remoteUrl.")
             }
-            return url
+            val fileId = dataObj?.get("driveFileId")?.jsonPrimitive?.content.orEmpty().ifBlank { extractDriveFileId(url) }
+            val thumbnailUrl = dataObj?.get("thumbnailUrl")?.jsonPrimitive?.content
+            val thumbnailId = if (!thumbnailUrl.isNullOrBlank()) extractDriveFileId(thumbnailUrl) else null
+            return DriveMediaUploadResult(
+                remoteUrl = url,
+                driveFileId = fileId,
+                driveThumbnailId = thumbnailId,
+                thumbnailUrl = thumbnailUrl
+            )
         }
     }
 
-    private fun uploadDirectToDrive(request: DriveMediaUploadRequest): String {
+    private fun uploadDirectToDrive(request: DriveMediaUploadRequest): DriveMediaUploadResult {
         val rootFolderId = request.rootFolderId?.trim().orEmpty().ifBlank { directUploadConfig.rootFolderId.trim() }
         if (rootFolderId.isBlank()) {
             error("GOOGLE_DRIVE_ROOT_FOLDER_ID missing. Set it in .env for direct Drive upload.")
@@ -186,6 +205,8 @@ internal open class DriveMediaUploadClient(
             allowCrossFolderMove = !request.statusTag.isNullOrBlank()
         )
 
+        var thumbnailId: String? = null
+        var thumbnailUrl: String? = null
         val thumbnailFile = request.thumbnailFile
         if (
             request.mediaType == MediaType.IMAGE &&
@@ -200,7 +221,7 @@ internal open class DriveMediaUploadClient(
                 captureNote = listOfNotNull(request.captureNote?.takeIf { it.isNotBlank() }, "thumbnail").joinToString(" - "),
                 extension = thumbnailExtension
             )
-            upsertFile(
+            thumbnailId = upsertFile(
                 accessToken = accessToken,
                 parentId = parentId,
                 photoId = "${request.photoId}__thumb",
@@ -209,9 +230,15 @@ internal open class DriveMediaUploadClient(
                 bytes = thumbnailFile.readBytes(),
                 allowCrossFolderMove = !request.statusTag.isNullOrBlank()
             )
+            thumbnailUrl = publicDriveUrl(thumbnailId)
         }
 
-        return publicDriveUrl(originalId)
+        return DriveMediaUploadResult(
+            remoteUrl = publicDriveUrl(originalId),
+            driveFileId = originalId,
+            driveThumbnailId = thumbnailId,
+            thumbnailUrl = thumbnailUrl
+        )
     }
 
     private fun ensureProjectFolder(

@@ -129,3 +129,56 @@ test("google-drive-media: pruneOldDriveSnapshots preserves newest snapshot and d
   assert.deepEqual(deletedFiles, ["snap-6min-old", "snap-10min-old"]);
 });
 
+test("public-project: reconcileCollections preserves driveFileId and remoteUrl when incoming snapshot misses them", () => {
+  const { reconcileCollections } = require("../lib/public-project");
+  const existing = {
+    site_photos: [
+      {
+        id: "photo-1",
+        objectCode: "NODE-1",
+        driveFileId: "drive-id-123",
+        driveThumbnailId: "thumb-id-123",
+        remoteUrl: "https://drive.google.com/uc?id=drive-id-123",
+        updatedAtEpochMs: 1000
+      },
+      {
+        id: "photo-2",
+        objectCode: "NODE-2",
+        driveFileId: "drive-id-456",
+        updatedAtEpochMs: 1000
+      }
+    ]
+  };
+
+  const incoming = {
+    site_photos: [
+      {
+        id: "photo-1",
+        objectCode: "NODE-1",
+        updatedAtEpochMs: 2000 // Newer timestamp, but missing driveFileId
+      },
+      {
+        id: "photo-3",
+        objectCode: "NODE-3",
+        driveFileId: "drive-id-789",
+        updatedAtEpochMs: 3000
+      }
+    ]
+  };
+
+  const reconciled = reconcileCollections(incoming, existing);
+  assert.equal(reconciled.site_photos.length, 3);
+
+  const photo1 = reconciled.site_photos.find((p: any) => p.id === "photo-1");
+  assert.ok(photo1);
+  assert.equal(photo1.driveFileId, "drive-id-123", "Preserves driveFileId from existing record");
+  assert.equal(photo1.driveThumbnailId, "thumb-id-123", "Preserves driveThumbnailId from existing record");
+  assert.equal(photo1.remoteUrl, "https://drive.google.com/uc?id=drive-id-123", "Preserves remoteUrl from existing record");
+
+  const photo2 = reconciled.site_photos.find((p: any) => p.id === "photo-2");
+  assert.ok(photo2, "Preserves photo-2 which was only in existing");
+
+  const photo3 = reconciled.site_photos.find((p: any) => p.id === "photo-3");
+  assert.ok(photo3, "Includes photo-3 from incoming");
+});
+

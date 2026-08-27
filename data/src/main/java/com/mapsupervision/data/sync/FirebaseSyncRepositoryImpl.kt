@@ -250,7 +250,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         val allPhotos = photoDao.byProjectIncludingDeleted(projectId)
         val photosToRestore = allPhotos.filter { photo ->
             !photo.isDeleted &&
-            !photo.remoteUrl.isNullOrBlank() &&
+            (!photo.driveFileId.isNullOrBlank() || !photo.remoteUrl.isNullOrBlank()) &&
             (targetPhotoIds.isEmpty() || photo.id in targetPhotoIds) &&
             (photo.filePath.isBlank() || !File(photo.filePath).exists())
         }
@@ -267,16 +267,17 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         storageFolder.mkdirs()
 
         photosToRestore.forEach { photo ->
-            val remoteUrl = photo.remoteUrl.orEmpty()
+            val fileIdOrUrl = photo.driveFileId?.takeIf { it.isNotBlank() } ?: photo.remoteUrl.orEmpty()
             val extension = if (photo.mediaType == com.mapsupervision.domain.model.MediaType.VIDEO) "mp4" else "jpg"
             val targetFile = File(storageFolder, "restored_${photo.id}.$extension")
 
-            val success = driveMediaUploadClient.downloadMediaFile(remoteUrl, targetFile)
+            val success = driveMediaUploadClient.downloadMediaFile(fileIdOrUrl, targetFile)
             if (success && targetFile.exists() && targetFile.length() > 0) {
                 val now = System.currentTimeMillis()
                 val updated = photo.copy(
                     filePath = targetFile.absolutePath,
-                    thumbnailPath = if (photo.thumbnailPath.isBlank() || !File(photo.thumbnailPath).exists()) targetFile.absolutePath else photo.thumbnailPath,
+                    thumbnailPath = if (photo.thumbnailPath.isNotBlank() && File(photo.thumbnailPath).exists()) photo.thumbnailPath else targetFile.absolutePath,
+                    syncStatus = SitePhotoSyncStatus.DONE,
                     syncErrorMessage = null,
                     updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
                 )
@@ -324,14 +325,33 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         var uploaded = 0
         var failed = 0
         currentRows
-            .filter { !it.isDeleted && (it.syncStatus != SitePhotoSyncStatus.DONE || it.remoteUrl.isNullOrBlank()) }
+            .filter { photo ->
+                !photo.isDeleted &&
+                photo.syncStatus != SitePhotoSyncStatus.DONE &&
+                photo.driveFileId.isNullOrBlank() &&
+                photo.remoteUrl.isNullOrBlank()
+            }
             .forEach { photo ->
                 val now = System.currentTimeMillis()
+                if (photo.filePath.isBlank() || !File(photo.filePath).exists()) {
+                    // Local physical file not found on this device; cannot upload from here
+                    val updated = photo.copy(
+                        syncStatus = SitePhotoSyncStatus.FAILED,
+                        syncErrorMessage = "Local media file missing on device",
+                        lastSyncAttemptEpochMs = now,
+                        updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
+                    )
+                    upsertSitePhoto(projectId, updated)
+                    failed += 1
+                    return@forEach
+                }
                 try {
-                    val downloadUrl = uploadMediaToDrive(projectId, photo, routes)
+                    val uploadResult = uploadMediaToDrive(projectId, photo, routes)
                     val updated = photo.copy(
                         syncStatus = SitePhotoSyncStatus.DONE,
-                        remoteUrl = downloadUrl,
+                        remoteUrl = uploadResult.remoteUrl,
+                        driveFileId = uploadResult.driveFileId,
+                        driveThumbnailId = uploadResult.driveThumbnailId,
                         syncErrorMessage = null,
                         lastSyncAttemptEpochMs = now,
                         updatedAtEpochMs = maxOf(photo.updatedAtEpochMs, now)
@@ -357,7 +377,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         projectId: String,
         photo: SitePhotoEntity,
         routeCodes: Set<String>
-    ): String {
+    ): DriveMediaUploadResult {
         val token = firebaseRuntime.getFirebaseToken()
         val project = sharedDatabase.projectDao().get(projectId)
         val projectName = project?.name?.trim().orEmpty().ifBlank { projectId }
@@ -368,7 +388,7 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         } else {
             DriveMediaObjectType.NODE
         }
-        return driveMediaUploadClient.upload(
+        return driveMediaUploadClient.uploadMedia(
             BuildConfig.MEDIA_UPLOAD_BASE_URL,
             DriveMediaUploadRequest(
                 projectId = projectId,
@@ -401,7 +421,27 @@ class FirebaseSyncRepositoryImpl @Inject constructor(
         val auth = firebaseRuntime.auth()
         val user = auth.currentUser ?: error("Firebase user is not signed in.")
         val token = user.getIdToken(false).await()
-        if (token.claims["admin"] == true) return
+        if (token.claims["admin"] == true || token.claims["superAdmin"] == true) return
+
+        // Owner/Creator bypasses accessRequests check
+        val projectDoc = runCatching {
+            firebaseRuntime.firestore()
+                .collection("projects")
+                .document(projectId)
+                .get()
+                .await()
+        }.getOrNull()
+        if (projectDoc?.getString("createdByUid") == user.uid || projectDoc?.getString("ownerId") == user.uid) return
+
+        val catalogDoc = runCatching {
+            firebaseRuntime.firestore()
+                .collection("projectCatalog")
+                .document(projectId)
+                .get()
+                .await()
+        }.getOrNull()
+        if (catalogDoc?.getString("createdByUid") == user.uid || catalogDoc?.getString("ownerId") == user.uid) return
+
         val access = firebaseRuntime.firestore()
             .collection("accessRequests")
             .document("${projectId.trim()}__${user.uid}")
@@ -710,10 +750,21 @@ internal fun mergeEnvelopeRow(
     envelope: SyncEnvelope<Map<String, Any?>>
 ): Map<String, Any?> {
     val baseRow = envelope.data + mapOf(table.idColumn to envelope.id)
-    return if (table.tableName == "projects") {
-        baseRow
+    val enrichedRow = if (table.tableName == "site_photos") {
+        val remoteUrl = baseRow["remoteUrl"]?.toString()
+        val driveFileId = baseRow["driveFileId"]?.toString()
+        if (!driveFileId.isNullOrBlank() || !remoteUrl.isNullOrBlank()) {
+            baseRow + mapOf("syncStatus" to SitePhotoSyncStatus.DONE.name)
+        } else {
+            baseRow
+        }
     } else {
-        baseRow + mapOf("projectId" to envelope.projectId)
+        baseRow
+    }
+    return if (table.tableName == "projects") {
+        enrichedRow
+    } else {
+        enrichedRow + mapOf("projectId" to envelope.projectId)
     }
 }
 

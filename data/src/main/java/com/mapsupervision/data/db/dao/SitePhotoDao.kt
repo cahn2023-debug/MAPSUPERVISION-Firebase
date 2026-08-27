@@ -33,6 +33,8 @@ data class SitePhotoProjection(
     val updatedAtEpochMs: Long,
     val syncStatus: SitePhotoSyncStatus,
     val remoteUrl: String?,
+    val driveFileId: String?,
+    val driveThumbnailId: String?,
     val syncErrorMessage: String?,
     val lastSyncAttemptEpochMs: Long?,
     val matchedNodeId: String?,
@@ -79,6 +81,8 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.driveFileId,
+            sp.driveThumbnailId,
             sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
@@ -118,6 +122,8 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.driveFileId,
+            sp.driveThumbnailId,
             sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
@@ -157,6 +163,8 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.driveFileId,
+            sp.driveThumbnailId,
             sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
@@ -196,6 +204,8 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.driveFileId,
+            sp.driveThumbnailId,
             sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
@@ -235,6 +245,8 @@ interface SitePhotoDao {
             sp.updatedAtEpochMs, 
             sp.syncStatus, 
             sp.remoteUrl, 
+            sp.driveFileId,
+            sp.driveThumbnailId,
             sp.syncErrorMessage,
             sp.lastSyncAttemptEpochMs,
             sp.matchedNodeId,
@@ -258,7 +270,9 @@ interface SitePhotoDao {
             FROM site_photos
             WHERE projectId = :projectId
               AND isDeleted = 0
-              AND (syncStatus != 'DONE' OR remoteUrl IS NULL OR TRIM(remoteUrl) = '')
+              AND syncStatus != 'DONE'
+              AND (driveFileId IS NULL OR TRIM(driveFileId) = '')
+              AND (remoteUrl IS NULL OR TRIM(remoteUrl) = '')
             LIMIT 1
         )
         """

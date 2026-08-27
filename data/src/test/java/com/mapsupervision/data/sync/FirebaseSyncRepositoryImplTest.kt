@@ -639,6 +639,57 @@ class FirebaseSyncRepositoryImplTest {
         assertTrue(File(updatedPhoto!!.filePath).exists())
     }
 
+    @Test
+    fun uploadPendingMedia_skipsPhotosAlreadyHavingDriveFileIdOrRemoteUrl() = runBlocking {
+        val projectId = "proj-dedup"
+        insertProject(projectId)
+
+        val photoFile = File(tempDir, "dedup.jpg").apply { writeText("image content") }
+
+        // Photo that has already been uploaded / pulled from remote
+        val photoAlreadyUploaded = SitePhotoEntity(
+            id = "photo-already-uploaded",
+            projectId = projectId,
+            objectCode = "NODE-DEDUP",
+            tagCodesCsv = "",
+            filePath = photoFile.absolutePath,
+            thumbnailPath = photoFile.absolutePath,
+            latitude = 21.0,
+            longitude = 105.0,
+            locationAccuracyM = 5.0f,
+            isGpsMocked = false,
+            locationStatus = com.mapsupervision.domain.model.PhotoLocationStatus.OK,
+            engineer = "Engineer 1",
+            capturedAtEpochMs = 2000L,
+            matchedAtEpochMs = 2050L,
+            matchingTimeOffsetMs = 50L,
+            mediaType = MediaType.IMAGE,
+            mimeType = "image/jpeg",
+            durationMs = 0,
+            address = "Hanoi",
+            captureNote = "already on drive",
+            matchedNodeId = null,
+            matchedRouteId = null,
+            updatedAtEpochMs = 2000L,
+            syncStatus = SitePhotoSyncStatus.PENDING,
+            driveFileId = "existing-drive-file-id",
+            driveThumbnailId = "existing-drive-thumb-id",
+            remoteUrl = "https://drive.google.com/uc?export=view&id=existing-drive-file-id",
+            lastSyncAttemptEpochMs = null,
+            isDeleted = false,
+            deletedAtEpochMs = null
+        )
+        sharedDatabase.sitePhotoDao().upsert(photoAlreadyUploaded)
+
+        val result = repository.uploadPendingMedia(projectId)
+        assertTrue(result is com.mapsupervision.core.result.AppResult.Success)
+        val batchResult = (result as com.mapsupervision.core.result.AppResult.Success).data
+        assertEquals(0, batchResult.uploadedMedia)
+        assertEquals(0, batchResult.failed)
+        // Fake client was never called for already uploaded photo
+        assertEquals(null, fakeClient.lastRequest)
+    }
+
     private class TestFirebaseRuntime(context: Context) : FirebaseRuntime(context) {
         override fun authConfigured(): Boolean = true
         override suspend fun getFirebaseToken(): String = "test-token"
@@ -647,15 +698,25 @@ class FirebaseSyncRepositoryImplTest {
     private class TestDriveMediaUploadClient : DriveMediaUploadClient() {
         var lastRequest: DriveMediaUploadRequest? = null
         var uploadResultUrl: String = "https://drive.google.com/uc?export=view&id=drive-file-1"
+        var uploadResultFileId: String = "drive-file-1"
+        var uploadResultThumbnailId: String? = "drive-thumb-1"
         var shouldFail: Boolean = false
 
-        override fun upload(baseUrl: String, request: DriveMediaUploadRequest): String {
+        override fun uploadMedia(baseUrl: String, request: DriveMediaUploadRequest): DriveMediaUploadResult {
             if (shouldFail) {
                 error("Simulated API upload failure")
             }
             lastRequest = request
-            return uploadResultUrl
+            return DriveMediaUploadResult(
+                remoteUrl = uploadResultUrl,
+                driveFileId = uploadResultFileId,
+                driveThumbnailId = uploadResultThumbnailId,
+                thumbnailUrl = "https://drive.google.com/uc?export=view&id=drive-thumb-1"
+            )
         }
+
+        override fun upload(baseUrl: String, request: DriveMediaUploadRequest): String =
+            uploadMedia(baseUrl, request).remoteUrl
 
         override fun downloadMediaFile(driveFileIdOrUrl: String, targetFile: File): Boolean {
             if (shouldFail) return false

@@ -78,9 +78,9 @@ fun SitePhotoThumb(
     val thumbFile = File(photo.thumbnailPath.ifBlank { photo.filePath })
     val context = LocalContext.current
     val theme = MaterialTheme.colorScheme
-    val remoteDriveUrl = photo.remoteUrl?.let { toDriveDirectUrl(it, 400) }
+    val remoteDriveUrl = (photo.driveThumbnailId ?: photo.driveFileId ?: photo.remoteUrl)?.let { toDriveDirectUrl(it, 400) }
     val modelToLoad = when {
-        thumbFile.exists() -> thumbFile
+        thumbFile.exists() && thumbFile.length() > 0 -> thumbFile
         !remoteDriveUrl.isNullOrBlank() -> remoteDriveUrl
         else -> null
     }

@@ -637,8 +637,8 @@ fun MapPhotoFullscreenDialog(
                     onClick = onDismiss
                 )
         ) {
-            val remoteDriveUrl = photo.remoteUrl?.let { toDriveDirectUrl(it, 2000) }
-            val modelToDisplay = if (displayFile.exists()) displayFile else remoteDriveUrl
+            val remoteDriveUrl = (photo.driveFileId ?: photo.remoteUrl)?.let { toDriveDirectUrl(it, 2000) }
+            val modelToDisplay = if (displayFile.exists() && displayFile.length() > 0) displayFile else remoteDriveUrl
             if (modelToDisplay != null) {
                 Image(
                     painter = coil.compose.rememberAsyncImagePainter(modelToDisplay),

@@ -47,6 +47,10 @@ const CACHE_TTL_MS = 30 * 1000; // 30 seconds cache for near real-time sync with
 
 export function resetPublicProjectCacheForTesting() {
   inMemoryCache = null;
+  try {
+    const p = getCacheFilePath();
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch {}
 }
 
 function getCacheFilePath(): string {
@@ -110,6 +114,79 @@ function isProjectDeleted(data: RecordValue): boolean {
   if (data.deletionState === "DELETED") return true;
   if (data.tombstone === true) return true;
   return false;
+}
+
+export function reconcileCollections(
+  incoming: Record<string, RecordValue[]>,
+  existing?: Record<string, RecordValue[]>
+): Record<string, RecordValue[]> {
+  if (!existing) return incoming;
+  const merged: Record<string, RecordValue[]> = {};
+  const allTables = new Set([...Object.keys(incoming), ...Object.keys(existing)]);
+
+  for (const table of allTables) {
+    const incomingRows = incoming[table] || [];
+    const existingRows = existing[table] || [];
+    const existingMap = new Map<string, RecordValue>();
+    for (const row of existingRows) {
+      if (row.id) existingMap.set(String(row.id), row);
+    }
+
+    const resultMap = new Map<string, RecordValue>();
+    for (const inRow of incomingRows) {
+      const id = String(inRow.id || "");
+      if (!id) continue;
+      const exRow = existingMap.get(id);
+      if (!exRow) {
+        resultMap.set(id, inRow);
+      } else {
+        const inUpdated = Number(inRow.updatedAtEpochMs ?? inRow.capturedAtEpochMs ?? inRow.createdAtEpochMs ?? 0);
+        const exUpdated = Number(exRow.updatedAtEpochMs ?? exRow.capturedAtEpochMs ?? exRow.createdAtEpochMs ?? 0);
+
+        // Preserve driveFileId, driveThumbnailId, and remoteUrl for site_photos if missing in incoming
+        const preservedPhotoProps: Record<string, unknown> = {};
+        if (table === "site_photos") {
+          if (!inRow.driveFileId && exRow.driveFileId) preservedPhotoProps.driveFileId = exRow.driveFileId;
+          if (!inRow.driveThumbnailId && exRow.driveThumbnailId) preservedPhotoProps.driveThumbnailId = exRow.driveThumbnailId;
+          if (!inRow.remoteUrl && exRow.remoteUrl) preservedPhotoProps.remoteUrl = exRow.remoteUrl;
+        }
+
+        if (inUpdated >= exUpdated) {
+          resultMap.set(id, { ...inRow, ...preservedPhotoProps });
+        } else {
+          resultMap.set(id, { ...exRow, ...preservedPhotoProps });
+        }
+      }
+    }
+
+    // Add any existing rows not present in incoming
+    for (const [id, exRow] of existingMap.entries()) {
+      if (!resultMap.has(id)) {
+        resultMap.set(id, exRow);
+      }
+    }
+
+    merged[table] = Array.from(resultMap.values());
+  }
+
+  return merged;
+}
+
+export function reconcileProjectPayload(
+  incoming: PublicProjectPayload,
+  base?: PublicProjectPayload | null
+): PublicProjectPayload {
+  if (!base) return incoming;
+  const mergedCollections = reconcileCollections(incoming.collections, base.collections);
+  const inUpdated = incoming.updatedAtEpochMs ?? 0;
+  const baseUpdated = base.updatedAtEpochMs ?? 0;
+  const project = inUpdated >= baseUpdated ? incoming.project : { ...base.project, ...incoming.project };
+  return {
+    ...incoming,
+    project,
+    collections: mergedCollections,
+    updatedAtEpochMs: Math.max(inUpdated, baseUpdated)
+  };
 }
 
 export async function findPublicProject(slug = PUBLIC_PROJECT_SLUG) {
@@ -212,9 +289,11 @@ export async function readPublicProject(bypassCache = false): Promise<PublicProj
   try {
     const driveSnapshot = await readDriveSnapshot269();
     if (driveSnapshot) {
-      inMemoryCache = { payload: driveSnapshot, timestamp: now };
-      saveDiskCache(driveSnapshot);
-      return driveSnapshot;
+      const base = inMemoryCache?.payload || loadDiskCache();
+      const reconciled = reconcileProjectPayload(driveSnapshot, base);
+      inMemoryCache = { payload: reconciled, timestamp: now };
+      saveDiskCache(reconciled);
+      return reconciled;
     }
   } catch (driveError) {
     console.warn("[readPublicProject] Failed to resolve Google Drive snapshot, falling back:", driveError);
@@ -238,17 +317,20 @@ export async function readPublicProject(bypassCache = false): Promise<PublicProj
       ] as const;
     }));
 
-    const payload = jsonValue({
+    const rawPayload = jsonValue({
       project: project.data,
       collections: Object.fromEntries(entries),
       updatedAtEpochMs: now
     }) as PublicProjectPayload;
 
-    // Cache in memory and disk
-    inMemoryCache = { payload, timestamp: now };
-    saveDiskCache(payload);
+    const base = inMemoryCache?.payload || loadDiskCache();
+    const reconciled = reconcileProjectPayload(rawPayload, base);
 
-    return payload;
+    // Cache in memory and disk
+    inMemoryCache = { payload: reconciled, timestamp: now };
+    saveDiskCache(reconciled);
+
+    return reconciled;
   } catch (error) {
     console.error("[readPublicProject] Firestore query error / Quota Exceeded:", error);
 

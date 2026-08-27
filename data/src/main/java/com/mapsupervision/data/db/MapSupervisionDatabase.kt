@@ -1,71 +1,69 @@
 package com.mapsupervision.data.db
 
+import java.util.UUID
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.mapsupervision.data.db.dao.AiActionLogDao
 import com.mapsupervision.data.db.dao.AiDecisionCacheDao
 import com.mapsupervision.data.db.dao.ChatHistoryDao
 import com.mapsupervision.data.db.dao.DailyLogDao
 import com.mapsupervision.data.db.dao.DailyLogLineDao
 import com.mapsupervision.data.db.dao.DailyLogNodeDao
 import com.mapsupervision.data.db.dao.DailyLogPhotoDao
+import com.mapsupervision.data.db.dao.EventOutboxDao
 import com.mapsupervision.data.db.dao.GisNodeDao
 import com.mapsupervision.data.db.dao.GisRouteDao
-import com.mapsupervision.data.db.dao.ImportedFileDao
 import com.mapsupervision.data.db.dao.ImportAuditDao
 import com.mapsupervision.data.db.dao.ImportConflictDao
 import com.mapsupervision.data.db.dao.ImportSessionDao
 import com.mapsupervision.data.db.dao.ImportVersionDao
-import com.mapsupervision.data.db.dao.EventOutboxDao
+import com.mapsupervision.data.db.dao.ImportedFileDao
+import com.mapsupervision.data.db.dao.MaterialDeclarationDao
+import com.mapsupervision.data.db.dao.MaterialHandoverDao
 import com.mapsupervision.data.db.dao.MaterialProgressDao
 import com.mapsupervision.data.db.dao.MediaStatusTagDao
 import com.mapsupervision.data.db.dao.NodeProgressDao
 import com.mapsupervision.data.db.dao.NoteDao
 import com.mapsupervision.data.db.dao.PhotoTagDao
-import com.mapsupervision.data.db.dao.TaskDao
 import com.mapsupervision.data.db.dao.ProjectDao
-import com.mapsupervision.data.db.dao.SitePhotoDao
-import com.mapsupervision.data.db.dao.ReportDraftDao
 import com.mapsupervision.data.db.dao.RagDocumentEmbeddingDao
+import com.mapsupervision.data.db.dao.ReportDraftDao
+import com.mapsupervision.data.db.dao.SitePhotoDao
+import com.mapsupervision.data.db.dao.TaskDao
 import com.mapsupervision.data.db.dao.WorkCategoryDao
+import com.mapsupervision.data.db.dao.WorkPlanDao
+import com.mapsupervision.data.db.entity.AiActionLogEntity
+import com.mapsupervision.data.db.entity.AiDecisionCacheEntity
+import com.mapsupervision.data.db.entity.ChatHistoryEntity
 import com.mapsupervision.data.db.entity.DailyLogEntity
 import com.mapsupervision.data.db.entity.DailyLogLineEntity
 import com.mapsupervision.data.db.entity.DailyLogNodeEntity
 import com.mapsupervision.data.db.entity.DailyLogPhotoEntity
-import com.mapsupervision.data.db.entity.AiDecisionCacheEntity
-import com.mapsupervision.data.db.entity.ChatHistoryEntity
-import com.mapsupervision.data.db.entity.ReportDraftEntity
+import com.mapsupervision.data.db.entity.EventOutboxEntity
 import com.mapsupervision.data.db.entity.GisNodeEntity
 import com.mapsupervision.data.db.entity.GisRouteEntity
-import com.mapsupervision.data.db.entity.ImportedFileEntity
 import com.mapsupervision.data.db.entity.ImportAuditEntity
 import com.mapsupervision.data.db.entity.ImportConflictEntity
 import com.mapsupervision.data.db.entity.ImportSessionEntity
 import com.mapsupervision.data.db.entity.ImportVersionEntity
-import com.mapsupervision.data.db.entity.EventOutboxEntity
+import com.mapsupervision.data.db.entity.ImportedFileEntity
+import com.mapsupervision.data.db.entity.MaterialDeclarationEntity
+import com.mapsupervision.data.db.entity.MaterialHandoverEntity
 import com.mapsupervision.data.db.entity.MaterialProgressEntity
 import com.mapsupervision.data.db.entity.MediaStatusTagEntity
 import com.mapsupervision.data.db.entity.NodeProgressEntity
 import com.mapsupervision.data.db.entity.NoteEntity
 import com.mapsupervision.data.db.entity.PhotoTagEntity
-import com.mapsupervision.data.db.entity.TaskEntity
 import com.mapsupervision.data.db.entity.ProjectEntity
-import com.mapsupervision.data.db.entity.SitePhotoEntity
-import com.mapsupervision.data.db.entity.WorkCategoryEntity
 import com.mapsupervision.data.db.entity.RagDocumentEmbeddingEntity
-
-import java.util.UUID
-
-import com.mapsupervision.data.db.entity.AiActionLogEntity
-import com.mapsupervision.data.db.dao.AiActionLogDao
-import com.mapsupervision.data.db.dao.MaterialHandoverDao
-import com.mapsupervision.data.db.entity.MaterialHandoverEntity
+import com.mapsupervision.data.db.entity.ReportDraftEntity
+import com.mapsupervision.data.db.entity.SitePhotoEntity
+import com.mapsupervision.data.db.entity.TaskEntity
+import com.mapsupervision.data.db.entity.WorkCategoryEntity
 import com.mapsupervision.data.db.entity.WorkPlanEntity
-import com.mapsupervision.data.db.dao.WorkPlanDao
-import com.mapsupervision.data.db.entity.MaterialDeclarationEntity
-import com.mapsupervision.data.db.dao.MaterialDeclarationDao
 
 @Database(
     entities = [
@@ -99,7 +97,7 @@ import com.mapsupervision.data.db.dao.MaterialDeclarationDao
         MaterialDeclarationEntity::class,
         RagDocumentEmbeddingEntity::class
     ],
-    version = 53,
+    version = 54,
     exportSchema = true
 )
 @TypeConverters(DbTypeConverters::class)
@@ -2981,6 +2979,13 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_53_54 = object : Migration(53, 54) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `site_photos` ADD COLUMN `driveFileId` TEXT")
+                db.execSQL("ALTER TABLE `site_photos` ADD COLUMN `driveThumbnailId` TEXT")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_8_9,
             MIGRATION_9_10,
@@ -3026,7 +3031,8 @@ abstract class MapSupervisionDatabase : RoomDatabase() {
             MIGRATION_49_50,
             MIGRATION_50_51,
             MIGRATION_51_52,
-            MIGRATION_52_53
+            MIGRATION_52_53,
+            MIGRATION_53_54
         )
     }
 }
