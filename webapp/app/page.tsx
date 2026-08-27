@@ -135,11 +135,40 @@ function driveLinkForPhoto(photo: Record<string, unknown>): string | undefined {
 }
 
 function imageUrlForPhoto(photo: Record<string, unknown>, width: number = 1000): string | undefined {
-  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  const explicitId = String(
+    photo.driveFileId ||
+    photo.driveId ||
+    photo.fileId ||
+    photo.thumbnailFileId ||
+    ""
+  ).trim().replace(/^['"]|['"]$/g, "");
+
   if (explicitId) {
     return googleDriveImageUrl(explicitId, width);
   }
-  return imageSourceUrl(String(photo.remoteUrl || photo.url || ""), width);
+
+  const rawUrl = String(
+    photo.remoteUrl ||
+    photo.thumbnailUrl ||
+    photo.url ||
+    photo.photoUrl ||
+    photo.previewUrl ||
+    ""
+  ).trim().replace(/^['"]|['"]$/g, "");
+
+  if (rawUrl) {
+    const urlResult = imageSourceUrl(rawUrl, width);
+    if (urlResult) return urlResult;
+  }
+
+  // Fallback if photo id itself is a drive ID
+  const idStr = String(photo.id || "").trim();
+  if (idStr && (photo.syncStatus === "DONE" || Boolean(photo.remoteUrl))) {
+    const extracted = driveFileIdFromUrl(idStr);
+    if (extracted) return googleDriveImageUrl(extracted, width);
+  }
+
+  return undefined;
 }
 
 function syncLabelForPhoto(photo: SitePhotoRow, driveUrl?: string): string {
@@ -160,10 +189,20 @@ function SitePhotoPreview({
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   if (!src || failedSrc === src) {
-    return <div className="photo-placeholder animate-pulse" />;
+    return <div className="photo-placeholder" />;
   }
 
-  return <img src={src} alt={alt} className={className} onError={() => setFailedSrc(src)} />;
+  return (
+    <img
+      src={src}
+      alt={alt || "Ảnh thực địa"}
+      className={className}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setFailedSrc(src)}
+    />
+  );
 }
 
 function formatDateTime(value: unknown): string {

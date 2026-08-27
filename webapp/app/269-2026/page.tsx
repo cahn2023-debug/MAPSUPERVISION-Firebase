@@ -85,11 +85,40 @@ function driveLinkForPhoto(photo: Row): string | undefined {
 }
 
 function imageUrlForPhoto(photo: Row, width = 1000): string | undefined {
-  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  const explicitId = String(
+    photo.driveFileId ||
+    photo.driveId ||
+    photo.fileId ||
+    photo.thumbnailFileId ||
+    ""
+  ).trim().replace(/^['"]|['"]$/g, "");
+
   if (explicitId) {
     return googleDriveImageUrl(explicitId, width);
   }
-  return imageSourceUrl(String(photo.remoteUrl || photo.url || ""), width);
+
+  const rawUrl = String(
+    photo.remoteUrl ||
+    photo.thumbnailUrl ||
+    photo.url ||
+    photo.photoUrl ||
+    photo.previewUrl ||
+    ""
+  ).trim().replace(/^['"]|['"]$/g, "");
+
+  if (rawUrl) {
+    const urlResult = imageSourceUrl(rawUrl, width);
+    if (urlResult) return urlResult;
+  }
+
+  // Fallback if photo id itself is a drive ID
+  const idStr = String(photo.id || "").trim();
+  if (idStr && (String(photo.syncStatus || "") === "DONE" || Boolean(photo.remoteUrl))) {
+    const extracted = driveFileIdFromUrl(idStr);
+    if (extracted) return googleDriveImageUrl(extracted, width);
+  }
+
+  return undefined;
 }
 
 function extractPhotoTags(photo: Row): string[] {
@@ -276,6 +305,8 @@ function PublicPhotoThumbnail({
             src={src}
             alt={display(photo.objectCode || photo.id)}
             loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
             onError={() => {
               if (src !== proxyUrl) {
                 setSrc(proxyUrl);
@@ -359,6 +390,8 @@ function PublicTagFolderCard({
             src={src}
             alt={display(coverPhoto.objectCode || coverPhoto.id)}
             loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
             onError={() => {
               if (src !== proxyUrl) {
                 setSrc(proxyUrl);
@@ -1091,6 +1124,8 @@ export default function PublicProjectPage() {
                                 src={imageUrlForPhoto(p, 1000) || `/api/public/269-2026/media/${encodeURIComponent(String(p.id))}`}
                                 alt={display(p.objectCode)}
                                 loading="lazy"
+                                decoding="async"
+                                referrerPolicy="no-referrer"
                               />
                               <span className="public-photo-mini-label">{display(p.engineer || p.objectCode)}</span>
                             </button>
@@ -1788,6 +1823,8 @@ export default function PublicProjectPage() {
                   }
                   alt={display(activeLightboxPhoto.objectCode)}
                   className="public-lightbox-img"
+                  referrerPolicy="no-referrer"
+                  decoding="async"
                   style={{ transform: `scale(${lightboxZoom})` }}
                 />
               </div>

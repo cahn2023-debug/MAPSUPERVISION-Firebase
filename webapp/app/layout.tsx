@@ -17,7 +17,8 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "MapSupervision Sync",
-  description: "Web dashboard dong bo du lieu Android qua Firebase"
+  description: "Web dashboard dong bo du lieu Android qua Firebase",
+  referrer: "no-referrer"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
