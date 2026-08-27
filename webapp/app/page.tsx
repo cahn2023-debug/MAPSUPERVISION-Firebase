@@ -6,7 +6,7 @@ import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
 import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
-import { googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
+import { driveFileIdFromUrl, googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 import {
   createDailyLogDocument,
   createNoteDocument,
@@ -125,6 +125,11 @@ function errorMessage(error: unknown): string {
 }
 
 function driveLinkForPhoto(photo: Record<string, unknown>): string | undefined {
+  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  const fileId = explicitId || driveFileIdFromUrl(String(photo.remoteUrl || photo.url || ""));
+  if (fileId) {
+    return googleDriveImageUrl(fileId, 1000);
+  }
   const url = String(photo.remoteUrl || photo.url || "").trim();
   return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
 }

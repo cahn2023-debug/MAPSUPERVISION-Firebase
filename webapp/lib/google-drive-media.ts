@@ -471,7 +471,7 @@ export function buildProjectMediaPreviewUrl(projectId: string, photoId: string):
 }
 
 function publicDriveUrl(fileId: string): string {
-  return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+  return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=w1000?authuser=0`;
 }
 
 export async function downloadDriveFile(fileId: string): Promise<{ stream: Readable; contentType: string }> {

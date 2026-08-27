@@ -187,7 +187,7 @@ test("POST /api/projects/[projectId]/media - Valid request uploads media and ret
   setUploadProjectMediaMock(async (input: any) => {
     receivedInput = input;
     return {
-      remoteUrl: "https://drive.google.com/uc?export=view&id=file-123",
+      remoteUrl: "https://lh3.googleusercontent.com/d/file-123=w1000?authuser=0",
       driveFileId: "file-123",
       drivePath: "proj-1/photos/photo-123"
     };
@@ -211,7 +211,7 @@ test("POST /api/projects/[projectId]/media - Valid request uploads media and ret
   assert.strictEqual(res.status, 200);
   const body = await res.json();
   assert.strictEqual(body.success, true);
-  assert.strictEqual(body.data.remoteUrl, "https://drive.google.com/uc?export=view&id=file-123");
+  assert.strictEqual(body.data.remoteUrl, "https://lh3.googleusercontent.com/d/file-123=w1000?authuser=0");
   assert.strictEqual(receivedInput.rootFolderId, "project-folder-123");
   assert.strictEqual(receivedInput.projectName, "Du an A");
 });

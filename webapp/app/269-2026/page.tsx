@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
-import { googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
+import { driveFileIdFromUrl, googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 
 type Row = Record<string, unknown>;
 
@@ -75,6 +75,11 @@ function getNumericCoordinate(val: unknown): number | null {
 }
 
 function driveLinkForPhoto(photo: Row): string | undefined {
+  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  const fileId = explicitId || driveFileIdFromUrl(String(photo.remoteUrl || photo.url || ""));
+  if (fileId) {
+    return googleDriveImageUrl(fileId, 1000);
+  }
   const url = String(photo.remoteUrl || photo.url || "").trim();
   return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
 }
