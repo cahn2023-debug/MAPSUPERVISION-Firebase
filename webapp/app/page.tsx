@@ -459,6 +459,9 @@ function PhotoCardItem({
   const imageUrl = imageUrlForPhoto(photo, 1000);
   const tags = extractPhotoTags(photo);
   const isDone = photo.syncStatus === "DONE" || Boolean(driveUrl);
+  const isFailed = photo.syncStatus === "FAILED";
+  const syncClass = isDone ? "done" : isFailed ? "failed" : "pending";
+  const syncLabel = isDone ? "SYNCED" : isFailed ? "FAILED" : "PENDING";
 
   return (
     <div className="photo-card-mini" onClick={onClick}>
@@ -471,8 +474,8 @@ function PhotoCardItem({
         ) : (
           <div className="photo-placeholder" />
         )}
-        <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
-          {isDone ? "SYNCED" : "PENDING"}
+        <span className={`photo-card-sync-tag ${syncClass}`}>
+          {syncLabel}
         </span>
         {(isAdmin || photo.androidDeletionStatus === "PENDING") && onDelete ? (
           <button
@@ -528,6 +531,9 @@ function TagFolderCard({
   const driveUrl = coverPhoto ? driveLinkForPhoto(coverPhoto) : undefined;
   const imageUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 1000) : undefined;
   const isDone = coverPhoto ? (coverPhoto.syncStatus === "DONE" || Boolean(driveUrl)) : false;
+  const isFailed = coverPhoto ? (coverPhoto.syncStatus === "FAILED") : false;
+  const syncClass = isDone ? "done" : isFailed ? "failed" : "pending";
+  const syncLabel = isDone ? "SYNCED" : isFailed ? "FAILED" : "PENDING";
 
   return (
     <div className={`tag-folder-card ${isUntagged ? "untagged" : ""}`}>
@@ -553,8 +559,8 @@ function TagFolderCard({
         )}
         <div className="tag-folder-cover-overlay">
           <div className="tag-folder-cover-top">
-            <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
-              {isDone ? "SYNCED" : "PENDING"}
+            <span className={`photo-card-sync-tag ${syncClass}`}>
+              {syncLabel}
             </span>
           </div>
           {coverPhoto && (
@@ -746,7 +752,45 @@ function PhotoLightboxModal({
                   className="photo-lightbox-img"
                 />
               ) : (
-                <div className="photo-placeholder" style={{ height: "100%", minHeight: "360px" }} />
+                <div
+                  className="photo-placeholder-failed"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    minHeight: "360px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "32px 24px",
+                    textAlign: "center",
+                    background: "var(--surface-soft)",
+                    borderRadius: "var(--radius)",
+                    border: "1px dashed var(--line)"
+                  }}
+                >
+                  <span style={{ fontSize: "40px", marginBottom: "12px", lineHeight: 1 }}>
+                    {photo.syncStatus === "FAILED" ? "⚠️" : "⏳"}
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "15px",
+                      color: photo.syncStatus === "FAILED" ? "var(--danger)" : "var(--foreground)",
+                      marginBottom: "8px"
+                    }}
+                  >
+                    {photo.syncStatus === "FAILED"
+                      ? "Ảnh chưa tải lên Google Drive (Lỗi đồng bộ trên điện thoại)"
+                      : "Ảnh đang chờ tải lên Google Drive"}
+                  </strong>
+                  <p style={{ fontSize: "12px", color: "var(--muted)", maxWidth: "420px", lineHeight: "1.6", margin: 0 }}>
+                    {photo.syncStatus === "FAILED"
+                      ? (photo.syncErrorMessage
+                          ? `Chi tiết lỗi từ Android: ${photo.syncErrorMessage}. Vui lòng kiểm tra mạng trên điện thoại Android và mở app MapSupervision để đồng bộ lại ảnh.`
+                          : "Ứng dụng Android gặp sự cố mạng khi upload lên Google Drive. Vui lòng mở app Android khi có mạng để hoàn tất tải ảnh.")
+                      : "Dữ liệu metadata đã ghi nhận nhưng file ảnh gốc chưa được tải lên từ Android."}
+                  </p>
+                </div>
               )}
             </div>
             {hasNext && (

@@ -2513,6 +2513,11 @@ select:focus {
   border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
+.photo-card-sync-tag.failed {
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .photo-card-sync-tag.pending {
   color: var(--warn);
   border: 1px solid rgba(255, 159, 28, 0.4);
