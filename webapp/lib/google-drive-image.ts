@@ -3,7 +3,12 @@ const rawDriveFileIdPattern = /^[A-Za-z0-9_-]+$/;
 function isGoogleDriveUrl(value: string): boolean {
   try {
     const host = new URL(value).hostname.toLowerCase();
-    return host === "drive.google.com" || host === "www.drive.google.com" || host === "docs.google.com";
+    return (
+      host === "drive.google.com" ||
+      host === "www.drive.google.com" ||
+      host === "docs.google.com" ||
+      host.endsWith("googleusercontent.com")
+    );
   } catch {
     return false;
   }
@@ -16,7 +21,7 @@ export function driveFileIdFromUrl(value: string): string {
     const parsed = new URL(trimmed);
     const id = parsed.searchParams.get("id");
     if (id) return id.trim();
-    const pathMatch = parsed.pathname.match(/\/d\/([^/]+)/);
+    const pathMatch = parsed.pathname.match(/\/d\/([^/=]+)/);
     return pathMatch?.[1]?.trim() || "";
   } catch {
     return "";

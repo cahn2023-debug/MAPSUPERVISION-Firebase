@@ -6,7 +6,7 @@ import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
 import { auth, db, firebaseReady, getFirebaseUserAdminClaim, observeAuth, registerWithEmail, sendVerificationEmail, signInWithEmail, signOutCurrentUser, type FirebaseUser } from "@/lib/firebase";
-import { imageSourceUrl } from "@/lib/google-drive-image";
+import { googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 import {
   createDailyLogDocument,
   createNoteDocument,
@@ -129,7 +129,11 @@ function driveLinkForPhoto(photo: Record<string, unknown>): string | undefined {
   return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
 }
 
-function imageUrlForPhoto(photo: Record<string, unknown>, width: number): string | undefined {
+function imageUrlForPhoto(photo: Record<string, unknown>, width: number = 1000): string | undefined {
+  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  if (explicitId) {
+    return googleDriveImageUrl(explicitId, width);
+  }
   return imageSourceUrl(String(photo.remoteUrl || photo.url || ""), width);
 }
 
@@ -408,7 +412,7 @@ function PhotoCardItem({
   isAdmin?: boolean;
 }) {
   const driveUrl = driveLinkForPhoto(photo);
-  const imageUrl = imageUrlForPhoto(photo, 600);
+  const imageUrl = imageUrlForPhoto(photo, 1000);
   const tags = extractPhotoTags(photo);
   const isDone = photo.syncStatus === "DONE" || Boolean(driveUrl);
 
@@ -478,7 +482,7 @@ function TagFolderCard({
 }) {
   const coverPhoto = photos[0];
   const driveUrl = coverPhoto ? driveLinkForPhoto(coverPhoto) : undefined;
-  const imageUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 600) : undefined;
+  const imageUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 1000) : undefined;
   const isDone = coverPhoto ? (coverPhoto.syncStatus === "DONE" || Boolean(driveUrl)) : false;
 
   return (

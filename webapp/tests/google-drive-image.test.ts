@@ -38,6 +38,14 @@ test("invalid image IDs do not create a Google URL", () => {
   assert.strictEqual(imageSourceUrl(""), undefined);
 });
 
-test("driveFileIdFromUrl extracts legacy Drive IDs", () => {
+test("driveFileIdFromUrl extracts legacy Drive IDs and lh3 IDs", () => {
   assert.strictEqual(driveFileIdFromUrl("https://drive.google.com/file/d/file-456/view"), "file-456");
+  assert.strictEqual(
+    driveFileIdFromUrl("https://lh3.googleusercontent.com/d/1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB=w1000?authuser=0"),
+    "1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB"
+  );
+  assert.strictEqual(
+    imageSourceUrl("https://lh3.googleusercontent.com/d/1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB=w600?authuser=0"),
+    "https://lh3.googleusercontent.com/d/1HuIw8yd_XRx3MvTCkPBOokZ97EFxD9uB=w1000?authuser=0"
+  );
 });

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { SelectedObject } from "@/components/GisWebMap";
-import { imageSourceUrl } from "@/lib/google-drive-image";
+import { googleDriveImageUrl, imageSourceUrl } from "@/lib/google-drive-image";
 
 type Row = Record<string, unknown>;
 
@@ -79,7 +79,11 @@ function driveLinkForPhoto(photo: Row): string | undefined {
   return url.startsWith("http://") || url.startsWith("https://") ? url : undefined;
 }
 
-function imageUrlForPhoto(photo: Row, width = 800): string | undefined {
+function imageUrlForPhoto(photo: Row, width = 1000): string | undefined {
+  const explicitId = String(photo.driveFileId || photo.driveId || photo.fileId || "").trim();
+  if (explicitId) {
+    return googleDriveImageUrl(explicitId, width);
+  }
   return imageSourceUrl(String(photo.remoteUrl || photo.url || ""), width);
 }
 
@@ -249,7 +253,7 @@ function PublicPhotoThumbnail({
   photo: Row;
   onClick: () => void;
 }) {
-  const directUrl = imageUrlForPhoto(photo, 400);
+  const directUrl = imageUrlForPhoto(photo, 1000);
   const proxyUrl = `/api/public/269-2026/media/${encodeURIComponent(String(photo.id))}`;
   const [src, setSrc] = useState<string>(directUrl || proxyUrl);
   const [failed, setFailed] = useState(false);
@@ -324,7 +328,7 @@ function PublicTagFolderCard({
   onExpand: () => void;
 }) {
   const coverPhoto = photos[0];
-  const directUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 400) : undefined;
+  const directUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 1000) : undefined;
   const proxyUrl = coverPhoto ? `/api/public/269-2026/media/${encodeURIComponent(String(coverPhoto.id))}` : "";
   const [src, setSrc] = useState<string>(directUrl || proxyUrl);
   const [failed, setFailed] = useState(false);
@@ -1079,7 +1083,7 @@ export default function PublicProjectPage() {
                               onClick={() => openLightbox(p, selectedObjectDetail.photos)}
                             >
                               <img
-                                src={imageUrlForPhoto(p, 400) || `/api/public/269-2026/media/${encodeURIComponent(String(p.id))}`}
+                                src={imageUrlForPhoto(p, 1000) || `/api/public/269-2026/media/${encodeURIComponent(String(p.id))}`}
                                 alt={display(p.objectCode)}
                                 loading="lazy"
                               />
@@ -1774,7 +1778,7 @@ export default function PublicProjectPage() {
               <div className="public-lightbox-image-container">
                 <img
                   src={
-                    imageUrlForPhoto(activeLightboxPhoto, 1600) ||
+                    imageUrlForPhoto(activeLightboxPhoto, 1000) ||
                     `/api/public/269-2026/media/${encodeURIComponent(String(activeLightboxPhoto.id))}`
                   }
                   alt={display(activeLightboxPhoto.objectCode)}
@@ -1850,7 +1854,7 @@ export default function PublicProjectPage() {
                 )}
                 <a
                   href={
-                    imageUrlForPhoto(activeLightboxPhoto, 2000) ||
+                    imageUrlForPhoto(activeLightboxPhoto, 1000) ||
                     `/api/public/269-2026/media/${encodeURIComponent(String(activeLightboxPhoto.id))}`
                   }
                   target="_blank"
