@@ -4423,11 +4423,11 @@ select:focus {
   padding: 16px;
 }
 
-/* TAG COLUMNS (KANBAN CONTAINER) */
+/* TAG COLUMNS & FOLDER CARDS */
 .tag-columns-container {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
-  overflow-x: auto;
   padding-bottom: 8px;
 }
 
@@ -4482,6 +4482,267 @@ select:focus {
   overflow-y: auto;
 }
 
+/* TAG FOLDER COVER CARD */
+.tag-folder-card {
+  flex: 0 0 280px;
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tag-folder-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.tag-folder-card.untagged {
+  border-style: dashed;
+}
+
+.tag-folder-header {
+  padding: 10px 14px;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-folder-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-folder-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  white-space: nowrap;
+}
+
+.tag-folder-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tag-folder-cover img,
+.tag-folder-cover .photo-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.tag-folder-card:hover .tag-folder-cover img {
+  transform: scale(1.04);
+}
+
+.tag-folder-cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.15) 50%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.tag-folder-cover-top {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.tag-folder-cover-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  color: #fff;
+}
+
+.tag-folder-cover-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #fff;
+}
+
+.tag-folder-cover-engineer {
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.tag-folder-cover-time {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.tag-folder-footer {
+  padding: 10px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+}
+
+.tag-expand-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-expand-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border);
+  transform: translateY(-1px);
+}
+
+/* TAG PHOTOS MODAL */
+.tag-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.2s ease;
+}
+
+.tag-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1100px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tag-modal-header {
+  padding: 16px 20px;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tag-modal-title-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tag-modal-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.tag-modal-title-area h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.tag-modal-count-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.tag-modal-close {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-modal-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+  border-color: var(--accent-border);
+}
+
+.tag-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tag-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
 /* PHOTO CARD MINI (KANBAN & GRID) */
 .photo-card-mini {
   background: var(--surface);
@@ -4493,6 +4754,8 @@ select:focus {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  min-height: 180px;
 }
 
 .photo-card-mini:hover {
@@ -4504,18 +4767,17 @@ select:focus {
 .photo-card-thumb-wrap {
   position: relative;
   width: 100%;
-  padding-top: 65%;
+  aspect-ratio: 4 / 3;
   background: #000;
   overflow: hidden;
 }
 
-.photo-card-thumb-wrap img {
-  position: absolute;
-  top: 0;
-  left: 0;
+.photo-card-thumb-wrap img,
+.photo-card-thumb-wrap .photo-placeholder {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
   transition: transform 0.25s ease;
 }
 

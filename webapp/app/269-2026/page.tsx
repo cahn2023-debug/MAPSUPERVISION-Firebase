@@ -310,6 +310,160 @@ function PublicPhotoThumbnail({
   );
 }
 
+function PublicTagFolderCard({
+  tag,
+  photos,
+  isUntagged = false,
+  onOpenCover,
+  onExpand
+}: {
+  tag: string;
+  photos: Row[];
+  isUntagged?: boolean;
+  onOpenCover: (photo: Row) => void;
+  onExpand: () => void;
+}) {
+  const coverPhoto = photos[0];
+  const directUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 400) : undefined;
+  const proxyUrl = coverPhoto ? `/api/public/269-2026/media/${encodeURIComponent(String(coverPhoto.id))}` : "";
+  const [src, setSrc] = useState<string>(directUrl || proxyUrl);
+  const [failed, setFailed] = useState(false);
+
+  const isDone = coverPhoto ? (String(coverPhoto.syncStatus || "") === "DONE" || Boolean(coverPhoto.remoteUrl)) : false;
+
+  return (
+    <div className={`tag-folder-card ${isUntagged ? "untagged" : ""}`}>
+      <div className="tag-folder-header">
+        <span className="tag-folder-title" title={tag}>
+          {isUntagged ? "📁" : "🏷️"} {tag}
+        </span>
+        <span className="tag-folder-count">{photos.length} ảnh</span>
+      </div>
+
+      <div
+        className="tag-folder-cover"
+        onClick={() => coverPhoto && onOpenCover(coverPhoto)}
+        title="Nhấn để xem nhanh ảnh đại diện trên Lightbox"
+      >
+        {coverPhoto && !failed ? (
+          <img
+            src={src}
+            alt={display(coverPhoto.objectCode || coverPhoto.id)}
+            loading="lazy"
+            onError={() => {
+              if (src !== proxyUrl) {
+                setSrc(proxyUrl);
+              } else {
+                setFailed(true);
+              }
+            }}
+          />
+        ) : (
+          <div className="public-photo-placeholder">
+            <span>📷 Không thể tải ảnh</span>
+          </div>
+        )}
+        <div className="tag-folder-cover-overlay">
+          <div className="tag-folder-cover-top">
+            <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
+              {isDone ? "SYNCED" : "PENDING"}
+            </span>
+          </div>
+          {coverPhoto && (
+            <div className="tag-folder-cover-bottom">
+              <div className="tag-folder-cover-engineer">
+                👷 {String(coverPhoto.engineer || "Chưa rõ kỹ sư")}
+              </div>
+              <div className="tag-folder-cover-time">
+                🕒 {formatDate(coverPhoto.capturedAtEpochMs ?? coverPhoto.updatedAtEpochMs ?? coverPhoto.timestamp ?? coverPhoto.createdAt)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="tag-folder-footer">
+        <button
+          type="button"
+          className="tag-expand-btn"
+          onClick={onExpand}
+          title={`Mở rộng xem toàn bộ ${photos.length} ảnh trong thẻ "${tag}"`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+          <span>Mở rộng ({photos.length} ảnh)</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PublicTagPhotosModal({
+  nodeName,
+  nodeCode,
+  tag,
+  photos,
+  isUntagged = false,
+  onClose,
+  onSelectPhoto
+}: {
+  nodeName: string;
+  nodeCode?: string;
+  tag: string;
+  photos: Row[];
+  isUntagged?: boolean;
+  onClose: () => void;
+  onSelectPhoto: (photo: Row) => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="tag-modal-backdrop" onClick={onClose}>
+      <div className="tag-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="tag-modal-header">
+          <div className="tag-modal-title-area">
+            <span className="tag-modal-badge">{isUntagged ? "📁 THƯ MỤC" : "🏷️ THẺ TAG"}</span>
+            <h3>
+              {nodeName} {nodeCode && nodeCode !== nodeName ? `(${nodeCode})` : ""} &gt; {tag}
+            </h3>
+            <span className="tag-modal-count-badge">{photos.length} hình ảnh</span>
+          </div>
+          <button
+            type="button"
+            className="tag-modal-close"
+            onClick={onClose}
+            title="Đóng bảng ảnh (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="tag-modal-body">
+          <div className="tag-modal-grid">
+            {photos.map((photo) => (
+              <PublicPhotoThumbnail
+                key={String(photo.id)}
+                photo={photo}
+                onClick={() => onSelectPhoto(photo)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PublicProjectPage() {
   const [data, setData] = useState<PublicData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -333,6 +487,13 @@ export default function PublicProjectPage() {
   // Lightbox State
   const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<Row | null>(null);
   const [activeLightboxPlaylist, setActiveLightboxPlaylist] = useState<Row[]>([]);
+  const [activeTagModal, setActiveTagModal] = useState<{
+    nodeName: string;
+    nodeCode?: string;
+    tag: string;
+    photos: Row[];
+    isUntagged?: boolean;
+  } | null>(null);
   const [lightboxZoom, setLightboxZoom] = useState(1);
   const lightboxRef = useRef<HTMLDivElement | null>(null);
 
@@ -1095,44 +1256,41 @@ export default function PublicProjectPage() {
                                 const tagPhotos = group.photosByTag[tag] || [];
                                 if (tagPhotos.length === 0) return null;
                                 return (
-                                  <div key={tag} className="tag-column">
-                                    <div className="tag-column-header">
-                                      <span className="tag-column-title" title={tag}>
-                                        🏷️ {tag}
-                                      </span>
-                                      <span className="tag-column-count">{tagPhotos.length}</span>
-                                    </div>
-                                    <div className="tag-column-body">
-                                      {tagPhotos.map((photo) => (
-                                        <PublicPhotoThumbnail
-                                          key={String(photo.id)}
-                                          photo={photo}
-                                          onClick={() => openLightbox(photo, group.allPhotos)}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
+                                  <PublicTagFolderCard
+                                    key={tag}
+                                    tag={tag}
+                                    photos={tagPhotos}
+                                    onOpenCover={(photo) => openLightbox(photo, tagPhotos)}
+                                    onExpand={() => {
+                                      setActiveTagModal({
+                                        nodeName: group.nodeName,
+                                        nodeCode: group.nodeCode,
+                                        tag: tag,
+                                        photos: tagPhotos,
+                                        isUntagged: false
+                                      });
+                                    }}
+                                  />
                                 );
                               })}
 
+                              {/* Untagged photos cover card if any */}
                               {group.untaggedPhotos.length > 0 && (
-                                <div className="tag-column untagged">
-                                  <div className="tag-column-header">
-                                    <span className="tag-column-title">
-                                      📁 Chưa gắn tag
-                                    </span>
-                                    <span className="tag-column-count">{group.untaggedPhotos.length}</span>
-                                  </div>
-                                  <div className="tag-column-body">
-                                    {group.untaggedPhotos.map((photo) => (
-                                      <PublicPhotoThumbnail
-                                        key={String(photo.id)}
-                                        photo={photo}
-                                        onClick={() => openLightbox(photo, group.allPhotos)}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
+                                <PublicTagFolderCard
+                                  tag="Chưa gắn tag"
+                                  photos={group.untaggedPhotos}
+                                  isUntagged={true}
+                                  onOpenCover={(photo) => openLightbox(photo, group.untaggedPhotos)}
+                                  onExpand={() => {
+                                    setActiveTagModal({
+                                      nodeName: group.nodeName,
+                                      nodeCode: group.nodeCode,
+                                      tag: "Chưa gắn tag",
+                                      photos: group.untaggedPhotos,
+                                      isUntagged: true
+                                    });
+                                  }}
+                                />
                               )}
                             </div>
                           ) : (
@@ -1544,6 +1702,21 @@ export default function PublicProjectPage() {
           </section>
         )}
       </main>
+
+      {/* TAG PHOTOS EXPAND MODAL */}
+      {activeTagModal && (
+        <PublicTagPhotosModal
+          nodeName={activeTagModal.nodeName}
+          nodeCode={activeTagModal.nodeCode}
+          tag={activeTagModal.tag}
+          photos={activeTagModal.photos}
+          isUntagged={activeTagModal.isUntagged}
+          onClose={() => setActiveTagModal(null)}
+          onSelectPhoto={(photo) => {
+            openLightbox(photo, activeTagModal.photos);
+          }}
+        />
+      )}
 
       {/* LIGHTBOX MODAL WITH ZOOM, GOOGLE DRIVE LINK & GPS */}
       {activeLightboxPhoto && (

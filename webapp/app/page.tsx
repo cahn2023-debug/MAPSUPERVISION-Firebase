@@ -463,6 +463,156 @@ function PhotoCardItem({
   );
 }
 
+function TagFolderCard({
+  tag,
+  photos,
+  isUntagged = false,
+  onOpenCover,
+  onExpand
+}: {
+  tag: string;
+  photos: SitePhotoRow[];
+  isUntagged?: boolean;
+  onOpenCover: (photo: SitePhotoRow) => void;
+  onExpand: () => void;
+}) {
+  const coverPhoto = photos[0];
+  const driveUrl = coverPhoto ? driveLinkForPhoto(coverPhoto) : undefined;
+  const imageUrl = coverPhoto ? imageUrlForPhoto(coverPhoto, 600) : undefined;
+  const isDone = coverPhoto ? (coverPhoto.syncStatus === "DONE" || Boolean(driveUrl)) : false;
+
+  return (
+    <div className={`tag-folder-card ${isUntagged ? "untagged" : ""}`}>
+      <div className="tag-folder-header">
+        <span className="tag-folder-title" title={tag}>
+          {isUntagged ? "📁" : "🏷️"} {tag}
+        </span>
+        <span className="tag-folder-count">{photos.length} ảnh</span>
+      </div>
+
+      <div
+        className="tag-folder-cover"
+        onClick={() => coverPhoto && onOpenCover(coverPhoto)}
+        title="Nhấn để xem nhanh ảnh đại diện trên Lightbox"
+      >
+        {imageUrl ? (
+          <SitePhotoPreview
+            src={imageUrl}
+            alt={coverPhoto ? text(coverPhoto, "objectCode") || tag : tag}
+          />
+        ) : (
+          <div className="photo-placeholder" />
+        )}
+        <div className="tag-folder-cover-overlay">
+          <div className="tag-folder-cover-top">
+            <span className={`photo-card-sync-tag ${isDone ? "done" : "pending"}`}>
+              {isDone ? "SYNCED" : "PENDING"}
+            </span>
+          </div>
+          {coverPhoto && (
+            <div className="tag-folder-cover-bottom">
+              <div className="tag-folder-cover-engineer">
+                👷 {text(coverPhoto, "engineer") || "Kỹ sư thực địa"}
+              </div>
+              <div className="tag-folder-cover-time">
+                🕒 {formatDateTime(coverPhoto.capturedAtEpochMs ?? coverPhoto.updatedAtEpochMs)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="tag-folder-footer">
+        <button
+          type="button"
+          className="tag-expand-btn"
+          onClick={onExpand}
+          title={`Mở rộng xem toàn bộ ${photos.length} ảnh trong thẻ "${tag}"`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+          <span>Mở rộng ({photos.length} ảnh)</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TagPhotosModal({
+  nodeName,
+  nodeCode,
+  tag,
+  photos,
+  isUntagged = false,
+  isAdmin = false,
+  onClose,
+  onSelectPhoto,
+  onDeletePhoto,
+  deleteBusy = false
+}: {
+  nodeName: string;
+  nodeCode?: string;
+  tag: string;
+  photos: SitePhotoRow[];
+  isUntagged?: boolean;
+  isAdmin?: boolean;
+  onClose: () => void;
+  onSelectPhoto: (photo: SitePhotoRow) => void;
+  onDeletePhoto?: (photo: SitePhotoRow) => void;
+  deleteBusy?: boolean;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="tag-modal-backdrop" onClick={onClose}>
+      <div className="tag-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="tag-modal-header">
+          <div className="tag-modal-title-area">
+            <span className="tag-modal-badge">{isUntagged ? "📁 THƯ MỤC" : "🏷️ THẺ TAG"}</span>
+            <h3>
+              {nodeName} {nodeCode && nodeCode !== nodeName ? `(${nodeCode})` : ""} &gt; {tag}
+            </h3>
+            <span className="tag-modal-count-badge">{photos.length} hình ảnh</span>
+          </div>
+          <button
+            type="button"
+            className="tag-modal-close"
+            onClick={onClose}
+            title="Đóng bảng ảnh (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="tag-modal-body">
+          <div className="tag-modal-grid">
+            {photos.map((photo) => (
+              <PhotoCardItem
+                key={photo.id}
+                photo={photo}
+                isAdmin={isAdmin}
+                onClick={() => onSelectPhoto(photo)}
+                onDelete={onDeletePhoto ? () => onDeletePhoto(photo) : undefined}
+                deleteBusy={deleteBusy}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PhotoLightboxModal({
   photo,
   allPhotos,
@@ -750,6 +900,13 @@ export default function HomePage() {
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<SitePhotoRow | null>(null);
   const [activeLightboxPlaylist, setActiveLightboxPlaylist] = useState<SitePhotoRow[]>([]);
+  const [activeTagModal, setActiveTagModal] = useState<{
+    nodeName: string;
+    nodeCode?: string;
+    tag: string;
+    photos: SitePhotoRow[];
+    isUntagged?: boolean;
+  } | null>(null);
   const [photoActionBusy, setPhotoActionBusy] = useState(false);
   const [photoActionError, setPhotoActionError] = useState("");
   const [appVersion, setAppVersion] = useState("v0.1.0");
@@ -2165,63 +2322,53 @@ export default function HomePage() {
                         {!isCollapsed && (
                           <div className="node-folder-body">
                             {group.hasTags ? (
-                              /* Case A: Node has tags -> Split into Tag Columns (Kanban) */
+                              /* Case A: Node has tags -> Split into Tag Folder Cards with Expand Modal */
                               <div className="tag-columns-container">
                                 {group.tags.map((tag) => {
                                   const tagPhotos = group.photosByTag[tag] || [];
                                   if (tagPhotos.length === 0) return null;
                                   return (
-                                    <div key={tag} className="tag-column">
-                                      <div className="tag-column-header">
-                                        <span className="tag-column-title" title={tag}>
-                                          🏷️ {tag}
-                                        </span>
-                                        <span className="tag-column-count">{tagPhotos.length}</span>
-                                      </div>
-                                      <div className="tag-column-body">
-                                        {tagPhotos.map((photo) => (
-                                          <PhotoCardItem
-                                            key={photo.id}
-                                            photo={photo}
-                                            isAdmin={canManagePhotos}
-                                            onClick={() => {
-                                              setActiveLightboxPhoto(photo);
-                                              setActiveLightboxPlaylist(group.allPhotos);
-                                            }}
-                                            onDelete={() => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
-                                            deleteBusy={photoActionBusy}
-                                          />
-                                        ))}
-                                      </div>
-                                    </div>
+                                    <TagFolderCard
+                                      key={tag}
+                                      tag={tag}
+                                      photos={tagPhotos}
+                                      onOpenCover={(photo) => {
+                                        setActiveLightboxPhoto(photo);
+                                        setActiveLightboxPlaylist(tagPhotos);
+                                      }}
+                                      onExpand={() => {
+                                        setActiveTagModal({
+                                          nodeName: group.nodeName,
+                                          nodeCode: group.nodeCode,
+                                          tag: tag,
+                                          photos: tagPhotos,
+                                          isUntagged: false
+                                        });
+                                      }}
+                                    />
                                   );
                                 })}
 
-                                {/* Untagged photos column if any */}
+                                {/* Untagged photos cover card if any */}
                                 {group.untaggedPhotos.length > 0 && (
-                                  <div className="tag-column untagged">
-                                    <div className="tag-column-header">
-                                      <span className="tag-column-title">
-                                        📁 Chưa gắn tag
-                                      </span>
-                                      <span className="tag-column-count">{group.untaggedPhotos.length}</span>
-                                    </div>
-                                    <div className="tag-column-body">
-                                      {group.untaggedPhotos.map((photo) => (
-                                        <PhotoCardItem
-                                          key={photo.id}
-                                          photo={photo}
-                                          isAdmin={canManagePhotos}
-                                          onClick={() => {
-                                            setActiveLightboxPhoto(photo);
-                                            setActiveLightboxPlaylist(group.allPhotos);
-                                          }}
-                                          onDelete={() => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
-                                          deleteBusy={photoActionBusy}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
+                                  <TagFolderCard
+                                    tag="Chưa gắn tag"
+                                    photos={group.untaggedPhotos}
+                                    isUntagged={true}
+                                    onOpenCover={(photo) => {
+                                      setActiveLightboxPhoto(photo);
+                                      setActiveLightboxPlaylist(group.untaggedPhotos);
+                                    }}
+                                    onExpand={() => {
+                                      setActiveTagModal({
+                                        nodeName: group.nodeName,
+                                        nodeCode: group.nodeCode,
+                                        tag: "Chưa gắn tag",
+                                        photos: group.untaggedPhotos,
+                                        isUntagged: true
+                                      });
+                                    }}
+                                  />
                                 )}
                               </div>
                             ) : (
@@ -2294,6 +2441,25 @@ export default function HomePage() {
                 />
               </Panel>
             </section>
+          )}
+
+          {/* Tag Photos Expand Modal */}
+          {activeTagModal && (
+            <TagPhotosModal
+              nodeName={activeTagModal.nodeName}
+              nodeCode={activeTagModal.nodeCode}
+              tag={activeTagModal.tag}
+              photos={activeTagModal.photos}
+              isUntagged={activeTagModal.isUntagged}
+              isAdmin={canManagePhotos}
+              onClose={() => setActiveTagModal(null)}
+              onSelectPhoto={(photo) => {
+                setActiveLightboxPhoto(photo);
+                setActiveLightboxPlaylist(activeTagModal.photos);
+              }}
+              onDeletePhoto={(photo) => void handleAndroidPhotoDecision(photo, "REMOVE_PROJECT")}
+              deleteBusy={photoActionBusy}
+            />
           )}
 
           {/* Lightbox Modal */}
